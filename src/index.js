@@ -129,7 +129,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		  map ? `Map: ${map}` : null
 		].filter(Boolean).join("  •  ");
 
-		const embed = formatTopEmbed(rows, `Top Players ${titleSuffix}`);
+		const embed = formatTopEmbed(rows, title);
 		embed.footer = { text: `XLRStats • B3 • ${tagBits}` };
 
 		await i.editReply({ embeds: [embed] });
