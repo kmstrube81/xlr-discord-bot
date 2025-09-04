@@ -117,10 +117,10 @@ client.on(Events.InteractionCreate, async (i) => {
 		const rows = await runQuery(sql, params);
 
 		const tagBits = [
-		  `Sort: **${sort}**`,
-		  `Count: **${count}** → returned **${rows.length}**`,
-		  weapon ? `Weapon: **${weapon}**` : null,
-		  map ? `Map: **${map}**` : null
+		  `Sort: ${sort}`,
+		  `Count: ${count} → returned ${rows.length}`,
+		  weapon ? `Weapon: ${weapon}` : null,
+		  map ? `Map: ${map}` : null
 		].filter(Boolean).join("  •  ");
 
 		const embed = formatTopEmbed(rows, `Top Players ${titleSuffix}`);

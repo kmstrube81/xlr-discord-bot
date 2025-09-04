@@ -19,13 +19,20 @@ function orderExpr(sort) {
   }
 }
 
+function toLike(term) {
+  return `%${term}%`;
+}
+
+function toNumericOrNeg1(term) {
+  const n = Number(term);
+  return Number.isInteger(n) ? n : -1; // -1 never matches an id
+}
+
 export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null }) => {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
   const params   = [];
-  let titleSuffix = "by Skill";
 
-  // Base name join (reuse your alias picking logic)
   const nameJoin = `
     JOIN clients c ON c.id = s.client_id
     LEFT JOIN (
@@ -39,52 +46,59 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
     ) a ON a.client_id = c.id
   `;
 
-  let select, from, joins = "", where = "";
+  let titleSuffix = "by Skill";
+  let select, from, joins = "";
 
   if (weapon) {
-    // Weapon-filtered mode
-    titleSuffix = `by Weapon`;
+    titleSuffix = "by Weapon";
+    const like = toLike(weapon);
+    const idEq = toNumericOrNeg1(weapon);
+
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
-             s.skill AS skill,                 
+             s.skill AS skill,
              wu.kills AS kills,
              wu.deaths AS deaths,
              CASE WHEN wu.deaths=0 THEN wu.kills ELSE ROUND(wu.kills / wu.deaths, 2) END AS ratio,
              wu.suicides AS suicides,
-             NULL AS assists,                  
+             NULL AS assists,
              NULL AS rounds
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = `
       ${nameJoin}
-      JOIN xlr_weaponstats ws ON (ws.name = ? OR CAST(ws.id AS CHAR) = ?)
-      JOIN xlr_weaponusage  wu ON wu.weapon_id = ws.id AND wu.player_id = c.id
+      JOIN xlr_weaponstats ws ON (ws.name LIKE ? OR ws.id = ?)
+      JOIN xlr_weaponusage wu ON wu.weapon_id = ws.id AND wu.player_id = c.id
     `;
-    params.push(weapon, weapon);
+    params.push(like, idEq);
+
   } else if (map) {
-    // Map-filtered mode
-    titleSuffix = `by Map`;
+    titleSuffix = "by Map";
+    const like = toLike(map);
+    const idEq = toNumericOrNeg1(map);
+
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
-             s.skill AS skill,                
+             s.skill AS skill,
              pm.kills AS kills,
              pm.deaths AS deaths,
              CASE WHEN pm.deaths=0 THEN pm.kills ELSE ROUND(pm.kills / pm.deaths, 2) END AS ratio,
              pm.suicides AS suicides,
-             NULL AS assists,                  
+             NULL AS assists,
              pm.rounds AS rounds
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = `
       ${nameJoin}
-      JOIN xlr_mapstats   ms ON (ms.name = ? OR CAST(ms.id AS CHAR) = ?)
+      JOIN xlr_mapstats ms ON (ms.name LIKE ? OR ms.id = ?)
       JOIN xlr_playermaps pm ON pm.map_id = ms.id AND pm.player_id = c.id
     `;
-    params.push(map, map);
+    params.push(like, idEq);
+
   } else {
-    // Global mode (no filter)
+    // Global
     titleSuffix = `by ${safeSort.charAt(0).toUpperCase() + safeSort.slice(1)}`;
     select = `
       SELECT c.id AS client_id,
@@ -105,12 +119,11 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
     ${select}
     ${from}
     ${joins}
-    ${where}
     ${orderBy}
     LIMIT ?
   `;
-
   params.push(limit);
+
   return { sql, params, titleSuffix };
 };
 
