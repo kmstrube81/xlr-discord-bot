@@ -3,7 +3,6 @@ const PLAYERSTATS = "xlr_playerstats";
 const PLAYERBODY  = "xlr_playerbody";
 const HEADSHOT_ID = Number(5);
 
-
 export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
 
 function orderExpr(sort) {
@@ -17,25 +16,10 @@ function orderExpr(sort) {
     default:          return "skill DESC";
   }
 }
+const asLike = t => `%${t}%`;
+const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 
-function asLike(term) { 
-	return `%${term}%`; 
-}
-
-function asIdOrNeg1(term) {
-  const n = Number(term);
-  return Number.isInteger(n) ? n : -1;
-}
-
-/**
- * Build dynamic top list:
- * - weapon: pre-resolve ONE weapon (partial name LIKE or exact id), expose ws.name as matched_label
- * - map:    pre-resolve ONE map    (partial name LIKE or exact id), expose ms.name as matched_label
- * - global: no filter
- * Excludes pure-zero rows:
- *   - global: (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)
- *   - weapon/map: (kills > 0 OR deaths > 0)
- */
+/** Robust top list with weapon/map pre-resolution + non-zero filter + matched_label */
 export function topDynamic({ limit, sort = "skill", weapon = null, map = null }) {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
@@ -54,10 +38,9 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
     ) a ON a.client_id = c.id
   `;
 
-  let select, from, joins = "", where = "", matchedLabel = null;
+  let select, from, joins = "", where = "";
 
   if (weapon) {
-    // Pre-resolve a single weapon row so LIKE matching is robust and we get canonical name
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -84,10 +67,8 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
     `;
     params.push(asLike(weapon), asIdOrNeg1(weapon));
     where = `WHERE (wu.kills > 0 OR wu.deaths > 0)`;
-    matchedLabel = 'weapon';
 
   } else if (map) {
-    // Pre-resolve a single map row so LIKE matching is robust and we get canonical name
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -114,10 +95,8 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
     `;
     params.push(asLike(map), asIdOrNeg1(map));
     where = `WHERE (pm.kills > 0 OR pm.deaths > 0)`;
-    matchedLabel = 'map';
 
   } else {
-    // Global
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -145,10 +124,9 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
   `;
   params.push(limit);
 
-  return { sql, params, matchedLabel };
+  return { sql, params };
 }
 
-queries.topDynamic = topDynamic;
 
 
 export const queries = {
