@@ -26,9 +26,6 @@ function asIdOrNeg1(term) {
   return Number.isInteger(n) ? n : -1;
 }
 
-// ===== Robust, filterable "top" query with partial + exact matching =====
-const PLAYERSTATS = "xlr_playerstats"; // reuse your constant
-
 export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
 
 function orderExpr(sort) {
