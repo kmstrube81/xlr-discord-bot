@@ -1,0 +1,16 @@
+{
+  "name": "xlr-discord-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/index.js --register"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "mysql2": "^3.11.3",
+    "dayjs": "^1.11.13"
+  }
+}
