@@ -1,8 +1,12 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed } from "./format.js";
+
+import fs from "fs";
+
+const HEARTBEAT_FILE = "/opt/xlrbot/health/ready";
 
 const {
   DISCORD_TOKEN, APPLICATION_ID, GUILD_ID,
@@ -19,10 +23,35 @@ const pool = mysql.createPool({
 });
 
 const commands = [
-  new SlashCommandBuilder()
-    .setName("xlr-top")
-    .setDescription("Show top players by skill")
-    .addIntegerOption(o => o.setName("count").setDescription("How many (default 10)").setMinValue(1).setMaxValue(25)),
+ new SlashCommandBuilder()
+  .setName("xlr-top")
+  .setDescription("Show top players (global, or filtered by weapon OR map)")
+  .addIntegerOption(o =>
+    o.setName("count")
+     .setDescription("How many rows (0 = all, max 100; default 0)")
+     .setMinValue(0)
+     .setMaxValue(100)
+  )
+  .addStringOption(o =>
+    o.setName("weapon")
+     .setDescription("Filter by weapon name")
+  )
+  .addStringOption(o =>
+    o.setName("map")
+     .setDescription("Filter by map")
+  )
+  .addStringOption(o =>
+    o.setName("sort")
+     .setDescription("Sort by")
+     .addChoices(
+       { name: "skill", value: "skill" },
+       { name: "kills", value: "kills" },
+       { name: "deaths", value: "deaths" },
+       { name: "ratio", value: "ratio" },
+       { name: "suicides", value: "suicides" },
+       { name: "assists", value: "assists" },
+     )
+  ),
   new SlashCommandBuilder()
     .setName("xlr-player")
     .setDescription("Lookup a player by name")
@@ -32,6 +61,9 @@ const commands = [
     .setDescription("Show recently seen players")
     .addIntegerOption(o => o.setName("count").setDescription("How many (default 10)").setMinValue(1).setMaxValue(25))
 ].map(c => c.toJSON());
+
+
+
 
 async function register() {
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
@@ -51,21 +83,56 @@ async function runQuery(sql, params) {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}`);
+client.once(Events.ClientReady, (c) => {
+  console.log(`Logged in as ${c.user.tag}`);
+
+  fs.mkdirSync("/opt/xlrbot/health", { recursive: true });
+  setInterval(() => fs.writeFileSync(HEARTBEAT_FILE, Date.now().toString()), 15000);
 });
 
-client.on("interactionCreate", async (i) => {
+client.on(Events.InteractionCreate, async (i) => {
   if (!i.isChatInputCommand()) return;
 
   try {
-    if (i.commandName === "xlr-top") {
-      await i.deferReply();
-      const count = i.options.getInteger("count") ?? 10;
-      const rows = await runQuery(queries.topBySkill, [count]);
-      const embed = formatTopEmbed(rows, "Top Players by Skill");
-      await i.editReply({ embeds: [embed] });
-    }
+
+	if (i.commandName === "xlr-top") {
+	  await i.deferReply();
+
+	  const count  = i.options.getInteger("count") ?? 0;         // default 0
+	  const weapon = i.options.getString("weapon") || null;
+	  const map    = i.options.getString("map") || null;
+	  const sort   = i.options.getString("sort") || "skill";
+
+	  // Mutual exclusion: weapon and map cannot be used together
+	  if (weapon && map) {
+		return i.editReply("You can filter by **weapon** *or* **map**, but not both at the same time.");
+	  }
+
+	  // Treat 0 as "all (up to 100)"
+	  const limit = count === 0 ? 100 : Math.min(count, 100);
+
+	  try {
+		// Build the SQL & params using the new query builder
+		const { sql, params, titleSuffix } = queries.topDynamic({ limit, sort, weapon, map });
+		const rows = await runQuery(sql, params);
+
+		const tagBits = [
+		  `Sort: **${sort}**`,
+		  `Count: **${count}** → returned **${rows.length}**`,
+		  weapon ? `Weapon: **${weapon}**` : null,
+		  map ? `Map: **${map}**` : null
+		].filter(Boolean).join("  •  ");
+
+		const embed = formatTopEmbed(rows, `Top Players ${titleSuffix}`);
+		embed.footer = { text: `XLRStats • B3 • ${tagBits}` };
+
+		await i.editReply({ embeds: [embed] });
+	  } catch (err) {
+		console.error(err);
+		await i.editReply("Error talking to the stats database.");
+	  }
+	}
+
 
     if (i.commandName === "xlr-player") {
       await i.deferReply();

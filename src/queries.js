@@ -3,6 +3,118 @@ const PLAYERSTATS = "xlr_playerstats";
 const PLAYERBODY  = "xlr_playerbody";
 const HEADSHOT_ID = Number(5);
 
+
+export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
+
+function orderExpr(sort) {
+  // all SELECTs below expose these aliases, so ORDER BY works uniformly
+  switch (sort) {
+    case "kills":     return "kills DESC";
+    case "deaths":    return "deaths DESC";
+    case "ratio":     return "ratio DESC";
+    case "suicides":  return "suicides DESC";
+    case "assists":   return "assists DESC";
+    case "skill":
+    default:          return "skill DESC";
+  }
+}
+
+export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null }) => {
+  const safeSort = SORTABLE.has(sort) ? sort : "skill";
+  const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
+  const params   = [];
+  let titleSuffix = "by Skill";
+
+  // Base name join (reuse your alias picking logic)
+  const nameJoin = `
+    JOIN clients c ON c.id = s.client_id
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
+    ) a ON a.client_id = c.id
+  `;
+
+  let select, from, joins = "", where = "";
+
+  if (weapon) {
+    // Weapon-filtered mode
+    titleSuffix = `by Weapon`;
+    select = `
+      SELECT c.id AS client_id,
+             COALESCE(a.alias, c.name) AS name,
+             s.skill AS skill,                 
+             wu.kills AS kills,
+             wu.deaths AS deaths,
+             CASE WHEN wu.deaths=0 THEN wu.kills ELSE ROUND(wu.kills / wu.deaths, 2) END AS ratio,
+             wu.suicides AS suicides,
+             NULL AS assists,                  
+             NULL AS rounds
+    `;
+    from = `FROM ${PLAYERSTATS} s`;
+    joins = `
+      ${nameJoin}
+      JOIN xlr_weaponstats ws ON (ws.name = ? OR CAST(ws.id AS CHAR) = ?)
+      JOIN xlr_weaponusage  wu ON wu.weapon_id = ws.id AND wu.player_id = c.id
+    `;
+    params.push(weapon, weapon);
+  } else if (map) {
+    // Map-filtered mode
+    titleSuffix = `by Map`;
+    select = `
+      SELECT c.id AS client_id,
+             COALESCE(a.alias, c.name) AS name,
+             s.skill AS skill,                
+             pm.kills AS kills,
+             pm.deaths AS deaths,
+             CASE WHEN pm.deaths=0 THEN pm.kills ELSE ROUND(pm.kills / pm.deaths, 2) END AS ratio,
+             pm.suicides AS suicides,
+             NULL AS assists,                  
+             pm.rounds AS rounds
+    `;
+    from = `FROM ${PLAYERSTATS} s`;
+    joins = `
+      ${nameJoin}
+      JOIN xlr_mapstats   ms ON (ms.name = ? OR CAST(ms.id AS CHAR) = ?)
+      JOIN xlr_playermaps pm ON pm.map_id = ms.id AND pm.player_id = c.id
+    `;
+    params.push(map, map);
+  } else {
+    // Global mode (no filter)
+    titleSuffix = `by ${safeSort.charAt(0).toUpperCase() + safeSort.slice(1)}`;
+    select = `
+      SELECT c.id AS client_id,
+             COALESCE(a.alias, c.name) AS name,
+             s.skill,
+             s.kills,
+             s.deaths,
+             CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio,
+             s.suicides,
+             s.assists,
+             s.rounds
+    `;
+    from = `FROM ${PLAYERSTATS} s`;
+    joins = nameJoin;
+  }
+
+  const sql = `
+    ${select}
+    ${from}
+    ${joins}
+    ${where}
+    ${orderBy}
+    LIMIT ?
+  `;
+
+  params.push(limit);
+  return { sql, params, titleSuffix };
+};
+
+
 export const queries = {
   // Top players by skill (no server_id filter)
   topBySkill: `
@@ -91,5 +203,6 @@ export const queries = {
     WHERE c.time_edit IS NOT NULL
     ORDER BY c.time_edit DESC
     LIMIT ?
-  `
+  `,
+  topDynamic
 };
