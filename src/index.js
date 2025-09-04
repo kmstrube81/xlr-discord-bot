@@ -103,9 +103,9 @@ client.on(Events.InteractionCreate, async (i) => {
 	  const map    = i.options.getString("map") || null;
 	  const sort   = i.options.getString("sort") || "skill";
 
-	  // Mutual exclusion: weapon and map cannot be used together
+	  // Weapon precedence: if both provided, ignore map
 	  if (weapon && map) {
-		return i.editReply("You can filter by **weapon** *or* **map**, but not both at the same time.");
+		map = null; // silently ignored due to precedence
 	  }
 
 	  // Treat 0 as "all (up to 100)"
@@ -115,6 +115,12 @@ client.on(Events.InteractionCreate, async (i) => {
 		// Build the SQL & params using the new query builder
 		const { sql, params, titleSuffix } = queries.topDynamic({ limit, sort, weapon, map });
 		const rows = await runQuery(sql, params);
+
+		 // Title that includes the filter 
+		let title = "Top Players by Skill"; // default
+		if (weapon) title = `Top Players by Weapon: ${weapon}`;
+		else if (map) title = `Top Players by Map: ${map}`;
+		else if (sort && sort !== "skill") title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
 
 		const tagBits = [
 		  `Sort: ${sort}`,

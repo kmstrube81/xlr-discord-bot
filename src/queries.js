@@ -46,13 +46,11 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
     ) a ON a.client_id = c.id
   `;
 
-  let titleSuffix = "by Skill";
-  let select, from, joins = "";
+  let select, from, joins = "", where = "";
 
   if (weapon) {
-    titleSuffix = "by Weapon";
-    const like = toLike(weapon);
-    const idEq = toNumericOrNeg1(weapon);
+    const like = `%${weapon}%`;
+    const idEq = Number.isInteger(Number(weapon)) ? Number(weapon) : -1;
 
     select = `
       SELECT c.id AS client_id,
@@ -72,11 +70,11 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
       JOIN xlr_weaponusage wu ON wu.weapon_id = ws.id AND wu.player_id = c.id
     `;
     params.push(like, idEq);
+    where = `WHERE (wu.kills > 0 OR wu.deaths > 0)`;
 
   } else if (map) {
-    titleSuffix = "by Map";
-    const like = toLike(map);
-    const idEq = toNumericOrNeg1(map);
+    const like = `%${map}%`;
+    const idEq = Number.isInteger(Number(map)) ? Number(map) : -1;
 
     select = `
       SELECT c.id AS client_id,
@@ -96,10 +94,10 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
       JOIN xlr_playermaps pm ON pm.map_id = ms.id AND pm.player_id = c.id
     `;
     params.push(like, idEq);
+    where = `WHERE (pm.kills > 0 OR pm.deaths > 0)`;
 
   } else {
-    // Global
-    titleSuffix = `by ${safeSort.charAt(0).toUpperCase() + safeSort.slice(1)}`;
+    // Global stats
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -113,20 +111,21 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = nameJoin;
+    where = `WHERE (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)`;
   }
 
   const sql = `
     ${select}
     ${from}
     ${joins}
+    ${where}
     ${orderBy}
     LIMIT ?
   `;
   params.push(limit);
 
-  return { sql, params, titleSuffix };
+  return { sql, params };
 };
-
 
 export const queries = {
   // Top players by skill (no server_id filter)
