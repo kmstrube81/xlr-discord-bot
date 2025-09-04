@@ -6,16 +6,15 @@ import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed } from "./format
 
 const {
   DISCORD_TOKEN, APPLICATION_ID, GUILD_ID,
-  XLR_DB_HOST, XLR_DB_PORT, XLR_DB_NAME, XLR_DB_USER, XLR_DB_PASS,
-  XLR_SERVER_ID
+  MYSQL_B3_DB, MYSQL_B3_USER, MYSQL_B3_PASSWORD
 } = process.env;
 
 const pool = mysql.createPool({
-  host: XLR_DB_HOST,
-  port: Number(XLR_DB_PORT || 3306),
-  user: XLR_DB_USER,
-  password: XLR_DB_PASS,
-  database: XLR_DB_NAME,
+  host: db,
+  port: Number(3306),
+  user: MYSQL_B3_USER,
+  password: MYSQL_B3_PASSWORD,
+  database: MYSQL_B3_DB,
   connectionLimit: 5
 });
 
