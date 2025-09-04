@@ -3,7 +3,7 @@ const PLAYERSTATS = "xlr_playerstats";
 const PLAYERBODY  = "xlr_playerbody";
 const HEADSHOT_ID = Number(5);
 
-export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
+export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists", "rounds"]);
 
 function orderExpr(sort) {
   switch (sort) {
@@ -12,10 +12,12 @@ function orderExpr(sort) {
     case "ratio":     return "ratio DESC";
     case "suicides":  return "suicides DESC";
     case "assists":   return "assists DESC";
+    case "rounds":    return "rounds DESC";   // <— new
     case "skill":
     default:          return "skill DESC";
   }
 }
+
 const asLike = t => `%${t}%`;
 const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 

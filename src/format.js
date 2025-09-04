@@ -20,18 +20,39 @@ export function formatPlayerEmbed(p) {
   };
 }
 
-export function formatTopEmbed(rows, title = "Top by Skill") {
+export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
+  const { thumbnail } = opts;
+
   const lines = rows.map((r, i) => {
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
-    return `**${i + 1}. ${r.name}** — Skill: ${r.skill} • K/D: ${kd} • K:${r.kills} D:${r.deaths}`;
+    const parts = [
+      `**${i + 1}. ${r.name}**`,
+      `Skill: ${r.skill}`,
+      `K/D: ${kd}`,
+      `K:${r.kills} D:${r.deaths}`
+    ];
+
+    // append extra stats when present
+    if (typeof r.suicides === "number") parts.push(`S:${r.suicides}`);
+    if (typeof r.assists === "number")  parts.push(`A:${r.assists}`);
+    if (typeof r.rounds === "number")   parts.push(`R:${r.rounds}`);
+
+    return parts.join(" • ");
   }).join("\n");
-  return {
+
+  const embed = {
     color: 0x32d296,
     title: `🏆 ${title}`,
     description: lines || "_No players found_",
     footer: { text: "XLRStats • B3" }
   };
+
+  if (thumbnail) {
+    embed.thumbnail = { url: thumbnail };
+  }
+  return embed;
 }
+
 
 export function formatLastSeenEmbed(rows) {
   const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);

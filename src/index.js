@@ -50,6 +50,7 @@ const commands = [
        { name: "ratio", value: "ratio" },
        { name: "suicides", value: "suicides" },
        { name: "assists", value: "assists" },
+       { name: "rounds", value: "rounds" }
      )
   ),
   new SlashCommandBuilder()
@@ -98,35 +99,69 @@ client.on(Events.InteractionCreate, async (i) => {
 	if (i.commandName === "xlr-top") {
 	  await i.deferReply();
 
-	  // Options
 	  const countIn = i.options.getInteger("count");
 	  const sort    = i.options.getString("sort") || "skill";
 	  let weapon    = i.options.getString("weapon") || null;
 	  let map       = i.options.getString("map") || null;
 
-	  // Count default: 0 => up to 100
+	  // 0 => all (up to 100)
 	  const count = countIn ?? 0;
 	  const limit = count === 0 ? 100 : Math.min(count, 100);
 
-	  // Weapon precedence: if both provided, ignore map
-	  if (weapon && map) {
-		map = null; // silently ignore map when weapon is present
+	  // weapon precedence over map
+	  if (weapon && map) map = null;
+
+	  // Helper: make a Discord custom emoji placeholder from a weapon label
+	  const toEmojiCode = (label) =>
+		`:${String(label || "").toLowerCase().replace(/[^a-z0-9_]/g, "_")}:`;
+
+	  // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
+	  async function getMapImageUrl(label) {
+		try {
+		  // Node 18+: global fetch is available. Adjust endpoint to your cod.pm API if different.
+		  // Example 1: detail endpoint
+		  let res = await fetch(`https://cod.pm/api/maps?name=${encodeURIComponent(label)}`);
+		  if (res.ok) {
+			const data = await res.json();
+			if (Array.isArray(data) && data.length && data[0].image) return data[0].image;
+		  }
+		  // Example 2: direct image by slug/name (fallback guess)
+		  const fallbackGuess = `https://cod.pm/static/maps/${encodeURIComponent(label)}.jpg`;
+		  return fallbackGuess;
+		} catch {
+		  return null;
+		}
 	  }
 
+	  // Default image if no map or fetch fails — set your own brand image here
+	  const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
+		|| "https://i.imgur.com/8z2tH0L.png";
+
 	  try {
-		const { sql, params, matchedLabel } = queries.topDynamic({ limit, sort, weapon, map });
+		const { sql, params } = queries.topDynamic({ limit, sort, weapon, map });
 		const rows = await runQuery(sql, params);
 
-		// Build title with canonical matched label (what actually matched in DB)
+		// figure out canonical matched labels (if any)
+		const matchedLabel = rows.length ? rows[0].matched_label : null;
+
+		// Build title
 		let title = "Top Players by Skill";
 		if (weapon) {
-		  const label = rows.length ? rows[0].matched_label : weapon; // fallback to user input
-		  title = `Top Players by Weapon: ${label}`;
+		  const label = matchedLabel || weapon;
+		  const emoji = toEmojiCode(label);
+		  title = `${emoji} Top Players by Weapon: ${label}`;
 		} else if (map) {
-		  const label = rows.length ? rows[0].matched_label : map;
+		  const label = matchedLabel || map;
 		  title = `Top Players by Map: ${label}`;
 		} else if (sort && sort !== "skill") {
 		  title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
+		}
+
+		// Thumbnail: use map image if querying a map, else default image
+		let thumbUrl = DEFAULT_THUMB;
+		if (map) {
+		  const label = matchedLabel || map;
+		  thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
 		}
 
 		const tags = [
@@ -136,16 +171,15 @@ client.on(Events.InteractionCreate, async (i) => {
 		  map ? `Map: ${map}` : null
 		].filter(Boolean).join("  •  ");
 
-		const embed = formatTopEmbed(rows, title);
-		embed.footer = { text: `XLRStats • B3 • ${tags}` }; // footer is plain text
+		// pass title + thumbnail to formatter
+		const embed = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
+		embed.footer = { text: `XLRStats • B3 • ${tags}` };
 		await i.editReply({ embeds: [embed] });
 	  } catch (err) {
 		console.error(err);
 		await i.editReply("Error talking to the stats database.");
 	  }
 	}
-
-
 
     if (i.commandName === "xlr-player") {
       await i.deferReply();
