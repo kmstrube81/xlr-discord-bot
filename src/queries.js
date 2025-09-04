@@ -7,28 +7,6 @@ const HEADSHOT_ID = Number(5);
 export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
 
 function orderExpr(sort) {
-  // all SELECTs below expose these aliases, so ORDER BY works uniformly
-  switch (sort) {
-    case "kills":     return "kills DESC";
-    case "deaths":    return "deaths DESC";
-    case "ratio":     return "ratio DESC";
-    case "suicides":  return "suicides DESC";
-    case "assists":   return "assists DESC";
-    case "skill":
-    default:          return "skill DESC";
-  }
-}
-
-function asLike(term) { return `%${term}%`; }
-
-function asIdOrNeg1(term) {
-  const n = Number(term);
-  return Number.isInteger(n) ? n : -1;
-}
-
-export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
-
-function orderExpr(sort) {
   switch (sort) {
     case "kills":     return "kills DESC";
     case "deaths":    return "deaths DESC";
