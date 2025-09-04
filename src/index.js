@@ -10,7 +10,7 @@ const {
 } = process.env;
 
 const pool = mysql.createPool({
-  host: db,
+  host: "db",
   port: Number(3306),
   user: MYSQL_B3_USER,
   password: MYSQL_B3_PASSWORD,
