@@ -34,11 +34,11 @@ const commands = [
   )
   .addStringOption(o =>
     o.setName("weapon")
-     .setDescription("Filter by weapon name")
+     .setDescription("Filter by weapon (partial name or exact numeric id)")
   )
   .addStringOption(o =>
     o.setName("map")
-     .setDescription("Filter by map")
+     .setDescription("Filter by map (partial name or exact numeric id)")
   )
   .addStringOption(o =>
     o.setName("sort")
@@ -98,31 +98,38 @@ client.on(Events.InteractionCreate, async (i) => {
 	if (i.commandName === "xlr-top") {
 	  await i.deferReply();
 
-	  const count  = i.options.getInteger("count") ?? 0;         // default 0
-	  const weapon = i.options.getString("weapon") || null;
-	  const map    = i.options.getString("map") || null;
-	  const sort   = i.options.getString("sort") || "skill";
+	  // Options
+	  const countIn = i.options.getInteger("count");
+	  const sort    = i.options.getString("sort") || "skill";
+	  let weapon    = i.options.getString("weapon") || null;
+	  let map       = i.options.getString("map") || null;
+
+	  // Count default: 0 => up to 100
+	  const count = countIn ?? 0;
+	  const limit = count === 0 ? 100 : Math.min(count, 100);
 
 	  // Weapon precedence: if both provided, ignore map
 	  if (weapon && map) {
-		map = null; // silently ignored due to precedence
+		map = null; // silently ignore map when weapon is present
 	  }
 
-	  // Treat 0 as "all (up to 100)"
-	  const limit = count === 0 ? 100 : Math.min(count, 100);
-
 	  try {
-		// Build the SQL & params using the new query builder
-		const { sql, params, titleSuffix } = queries.topDynamic({ limit, sort, weapon, map });
+		const { sql, params, matchedLabel } = queries.topDynamic({ limit, sort, weapon, map });
 		const rows = await runQuery(sql, params);
 
-		 // Title that includes the filter 
-		let title = "Top Players by Skill"; // default
-		if (weapon) title = `Top Players by Weapon: ${weapon}`;
-		else if (map) title = `Top Players by Map: ${map}`;
-		else if (sort && sort !== "skill") title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
+		// Build title with canonical matched label (what actually matched in DB)
+		let title = "Top Players by Skill";
+		if (weapon) {
+		  const label = rows.length ? rows[0].matched_label : weapon; // fallback to user input
+		  title = `Top Players by Weapon: ${label}`;
+		} else if (map) {
+		  const label = rows.length ? rows[0].matched_label : map;
+		  title = `Top Players by Map: ${label}`;
+		} else if (sort && sort !== "skill") {
+		  title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
+		}
 
-		const tagBits = [
+		const tags = [
 		  `Sort: ${sort}`,
 		  `Count: ${count} → returned ${rows.length}`,
 		  weapon ? `Weapon: ${weapon}` : null,
@@ -130,14 +137,14 @@ client.on(Events.InteractionCreate, async (i) => {
 		].filter(Boolean).join("  •  ");
 
 		const embed = formatTopEmbed(rows, title);
-		embed.footer = { text: `XLRStats • B3 • ${tagBits}` };
-
+		embed.footer = { text: `XLRStats • B3 • ${tags}` }; // footer is plain text
 		await i.editReply({ embeds: [embed] });
 	  } catch (err) {
 		console.error(err);
 		await i.editReply("Error talking to the stats database.");
 	  }
 	}
+
 
 
     if (i.commandName === "xlr-player") {

@@ -19,16 +19,49 @@ function orderExpr(sort) {
   }
 }
 
-function toLike(term) {
-  return `%${term}%`;
-}
+function asLike(term) { return `%${term}%`; }
 
-function toNumericOrNeg1(term) {
+function asIdOrNeg1(term) {
   const n = Number(term);
-  return Number.isInteger(n) ? n : -1; // -1 never matches an id
+  return Number.isInteger(n) ? n : -1;
 }
 
-export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null }) => {
+// ===== Robust, filterable "top" query with partial + exact matching =====
+const PLAYERSTATS = "xlr_playerstats"; // reuse your constant
+
+export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists"]);
+
+function orderExpr(sort) {
+  switch (sort) {
+    case "kills":     return "kills DESC";
+    case "deaths":    return "deaths DESC";
+    case "ratio":     return "ratio DESC";
+    case "suicides":  return "suicides DESC";
+    case "assists":   return "assists DESC";
+    case "skill":
+    default:          return "skill DESC";
+  }
+}
+
+function asLike(term) { 
+	return `%${term}%`; 
+}
+
+function asIdOrNeg1(term) {
+  const n = Number(term);
+  return Number.isInteger(n) ? n : -1;
+}
+
+/**
+ * Build dynamic top list:
+ * - weapon: pre-resolve ONE weapon (partial name LIKE or exact id), expose ws.name as matched_label
+ * - map:    pre-resolve ONE map    (partial name LIKE or exact id), expose ms.name as matched_label
+ * - global: no filter
+ * Excludes pure-zero rows:
+ *   - global: (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)
+ *   - weapon/map: (kills > 0 OR deaths > 0)
+ */
+export function topDynamic({ limit, sort = "skill", weapon = null, map = null }) {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
   const params   = [];
@@ -46,12 +79,10 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
     ) a ON a.client_id = c.id
   `;
 
-  let select, from, joins = "", where = "";
+  let select, from, joins = "", where = "", matchedLabel = null;
 
   if (weapon) {
-    const like = `%${weapon}%`;
-    const idEq = Number.isInteger(Number(weapon)) ? Number(weapon) : -1;
-
+    // Pre-resolve a single weapon row so LIKE matching is robust and we get canonical name
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -61,21 +92,27 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
              CASE WHEN wu.deaths=0 THEN wu.kills ELSE ROUND(wu.kills / wu.deaths, 2) END AS ratio,
              wu.suicides AS suicides,
              NULL AS assists,
-             NULL AS rounds
+             NULL AS rounds,
+             wsel.name AS matched_label
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = `
       ${nameJoin}
-      JOIN xlr_weaponstats ws ON (ws.name LIKE ? OR ws.id = ?)
-      JOIN xlr_weaponusage wu ON wu.weapon_id = ws.id AND wu.player_id = c.id
+      JOIN (
+        SELECT id, name
+        FROM xlr_weaponstats
+        WHERE (name LIKE ? OR id = ?)
+        ORDER BY name
+        LIMIT 1
+      ) wsel ON 1=1
+      JOIN xlr_weaponusage wu ON wu.weapon_id = wsel.id AND wu.player_id = c.id
     `;
-    params.push(like, idEq);
+    params.push(asLike(weapon), asIdOrNeg1(weapon));
     where = `WHERE (wu.kills > 0 OR wu.deaths > 0)`;
+    matchedLabel = 'weapon';
 
   } else if (map) {
-    const like = `%${map}%`;
-    const idEq = Number.isInteger(Number(map)) ? Number(map) : -1;
-
+    // Pre-resolve a single map row so LIKE matching is robust and we get canonical name
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -85,19 +122,27 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
              CASE WHEN pm.deaths=0 THEN pm.kills ELSE ROUND(pm.kills / pm.deaths, 2) END AS ratio,
              pm.suicides AS suicides,
              NULL AS assists,
-             pm.rounds AS rounds
+             pm.rounds AS rounds,
+             msel.name AS matched_label
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = `
       ${nameJoin}
-      JOIN xlr_mapstats ms ON (ms.name LIKE ? OR ms.id = ?)
-      JOIN xlr_playermaps pm ON pm.map_id = ms.id AND pm.player_id = c.id
+      JOIN (
+        SELECT id, name
+        FROM xlr_mapstats
+        WHERE (name LIKE ? OR id = ?)
+        ORDER BY name
+        LIMIT 1
+      ) msel ON 1=1
+      JOIN xlr_playermaps pm ON pm.map_id = msel.id AND pm.player_id = c.id
     `;
-    params.push(like, idEq);
+    params.push(asLike(map), asIdOrNeg1(map));
     where = `WHERE (pm.kills > 0 OR pm.deaths > 0)`;
+    matchedLabel = 'map';
 
   } else {
-    // Global stats
+    // Global
     select = `
       SELECT c.id AS client_id,
              COALESCE(a.alias, c.name) AS name,
@@ -107,7 +152,8 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
              CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio,
              s.suicides,
              s.assists,
-             s.rounds
+             s.rounds,
+             NULL AS matched_label
     `;
     from = `FROM ${PLAYERSTATS} s`;
     joins = nameJoin;
@@ -124,8 +170,11 @@ export const topDynamic = ({ limit, sort = "skill", weapon = null, map = null })
   `;
   params.push(limit);
 
-  return { sql, params };
-};
+  return { sql, params, matchedLabel };
+}
+
+queries.topDynamic = topDynamic;
+
 
 export const queries = {
   // Top players by skill (no server_id filter)
