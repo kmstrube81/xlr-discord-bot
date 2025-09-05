@@ -188,7 +188,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		const footerText = `XLRStats • B3 • ${tags}`;
 
 		const ZERO_WIDTH = "⠀"; // U+2800
-		const padLen = Math.min(footerText.length, 2048);
+		const padLen = Math.min(Math.floor(footerText.length * 0.7), 2048);
 		const blankText = ZERO_WIDTH.repeat(padLen);
 
 		// Create embeds
