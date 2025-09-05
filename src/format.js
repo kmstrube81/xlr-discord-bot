@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { EmbedBuilder } from "discord.js";
 
 export function formatPlayerEmbed(p) {
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
