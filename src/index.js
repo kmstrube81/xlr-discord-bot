@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
-import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed } from "./format.js";
+import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed } from "./format.js";
 
 import fs from "fs";
 
@@ -55,8 +55,10 @@ const commands = [
   ),
   new SlashCommandBuilder()
     .setName("xlr-player")
-    .setDescription("Lookup a player by name")
-    .addStringOption(o => o.setName("name").setDescription("Partial name").setRequired(true)),
+    .setDescription("Lookup a player by name (optionally filter by weapon, or compare vs opponent)")
+    .addStringOption(o => o.setName("name").setDescription("Player (partial)").setRequired(true))
+    .addStringOption(o => o.setName("weapon").setDescription("Weapon (partial name or exact id)"))
+    .addStringOption(o => o.setName("vs").setDescription("Opponent player (partial name)")),
   new SlashCommandBuilder()
     .setName("xlr-lastseen")
     .setDescription("Show recently seen players")
@@ -210,15 +212,36 @@ client.on(Events.InteractionCreate, async (i) => {
     if (i.commandName === "xlr-player") {
       await i.deferReply();
       const name = i.options.getString("name");
+	  const weapon = i.options.getString("weapon");
+      const vsName = i.options.getString("vs");
+	  
       const matches = await runQuery(queries.findPlayer, [`%${name}%`, `%${name}%`]);
       if (!matches.length) return i.editReply(`No players found matching **${name}**.`);
 
       // Take the best match and fetch stats row
       const clientId = matches[0].client_id;
+      // precedence: weapon > vs > default player card
+     if (weapon) {
+        const details = await runQuery(queries.playerWeaponCard, [clientId, `%${weapon}%`, Number.isInteger(Number(weapon)) ? Number(weapon) : -1]);
+        if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
+       const embed = formatPlayerWeaponEmbed(details[0]);
+        return i.editReply({ embeds: [embed] });
+      }
+      if (vsName) {
+        const opp = await runQuery(queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
+        if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
+        const opponentId = opp[0].client_id;
+        if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
+        const rows = await runQuery(queries.playerVsCard, [clientId, opponentId, clientId, opponentId]);
+        if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
+        const embed = formatPlayerVsEmbed(rows[0]);
+        return i.editReply({ embeds: [embed] });
+      }
+      // default player card
       const details = await runQuery(queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
       const embed = formatPlayerEmbed(details[0]);
-      await i.editReply({ embeds: [embed] });
+      return i.editReply({ embeds: [embed] });
     }
 
     if (i.commandName === "xlr-lastseen") {

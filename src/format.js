@@ -24,6 +24,39 @@ export function formatPlayerEmbed(p) {
     setFooter({ text: "XLRStats • B3" });
 }
 
+export function formatPlayerWeaponEmbed(row) {
+  const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
+  const lastSeen = row.time_edit ? dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm") : "—";
+  return new EmbedBuilder()
+    .setColor(0x2b7cff)
+    .setDescription(`**${row.name}**`)
+    .addFields(
+      { name: "Skill", value: String(row.skill ?? "—"), inline: true },
+      { name: "Weapon", value: String(row.weapon ?? "—"), inline: true },
+      { name: "\u200B", value: "\u200B", inline: true },
+      { name: "Kills", value: String(row.kills ?? 0), inline: true },
+      { name: "Killed By", value: String(row.deaths ?? 0), inline: true },
+      { name: "Suicides By", value: String(row.suicides ?? 0), inline: true }
+    )
+    .setFooter({ text: "XLRStats • B3" });
+}
+
+export function formatPlayerVsEmbed(row) {
+  return new EmbedBuilder()
+    .setColor(0x2b7cff)
+    .setDescription(`**${row.player_name}** vs. **${row.opponent_name}**`)
+    .addFields(
+      { name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
+      { name: "Skill", value: String(row.player_skill ?? "—"), inline: true },
+      { name: "\u200B", value: "\u200B", inline: true },
+      { name: "Killed By", value: String(row.deaths_vs ?? 0), inline: true },
+      { name: "Opponent Skill", value: String(row.opp_skill ?? "—"), inline: true },
+      { name: "\u200B", value: "\u200B", inline: true }
+    )
+    .setFooter({ text: "XLRStats • B3" });
+}
+
+
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail } = opts;
 

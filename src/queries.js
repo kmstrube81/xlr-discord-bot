@@ -243,6 +243,82 @@ export const queries = {
     WHERE c.id = ?
     LIMIT 1
   `,
+  // Player + specific weapon usage (weapon resolved by LIKE or exact id)
+  playerWeaponCard: `
+    SELECT
+      c.id AS client_id,
+      COALESCE(a.alias, c.name) AS name,
+      s.skill,
+      wsel.name AS weapon,
+      wu.kills,
+      wu.deaths,
+      wu.suicides,
+      c.time_edit
+    FROM clients c
+    JOIN ${PLAYERSTATS} s ON s.client_id = c.id
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
+    ) a ON a.client_id = c.id
+    JOIN xlr_weaponusage wu ON wu.player_id = c.id
+    JOIN (
+      SELECT id, name
+      FROM xlr_weaponstats
+      WHERE (name LIKE ? OR id = ?)
+      ORDER BY name
+      LIMIT 1
+    ) wsel ON wsel.id = wu.weapon_id
+    WHERE c.id = ?
+    LIMIT 1
+  `,
+
+  // Player vs Opponent head-to-head summary from xlr_opponents
+  playerVsCard: `
+    SELECT
+      p.id  AS player_id,
+      COALESCE(pa.alias, p.name) AS player_name,
+      sp.skill AS player_skill,
+      o.id  AS opponent_id,
+      COALESCE(oa.alias, o.name) AS opponent_name,
+      so.skill AS opp_skill,
+      COALESCE(ov.kills_by_player, 0)   AS kills_vs,
+      COALESCE(ov.kills_by_opponent, 0) AS deaths_vs
+    FROM clients p
+    JOIN ${PLAYERSTATS} sp ON sp.client_id = p.id
+    JOIN clients o ON o.id = ?
+    LEFT JOIN ${PLAYERSTATS} so ON so.client_id = o.id
+    LEFT JOIN (
+      SELECT
+        SUM(CASE WHEN killer_id = ? AND target_id = ? THEN kills ELSE 0 END) AS kills_by_player,
+        SUM(CASE WHEN killer_id = ? AND target_id = ? THEN kills ELSE 0 END) AS kills_by_opponent
+      FROM xlr_opponents
+    ) ov ON 1=1
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
+    ) pa ON pa.client_id = p.id
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
+    ) oa ON oa.client_id = o.id
+    WHERE p.id = ?
+    LIMIT 1
+  `,
 
 
 
