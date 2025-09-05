@@ -226,14 +226,12 @@ client.on(Events.InteractionCreate, async (i) => {
         return i.editReply({ embeds: [embed] });
       }
 	  if (mapOpt) {
-		  
-		
-	   //thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
-		
+
        const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
        const details = await runQuery(queries.playerMapCard, [`%${mapOpt}%`, idOrNeg1, clientId]);
        if (!details.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-       const embed = formatPlayerMapEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
+	   thumbUrl = (await getMapImageUrl(details[0].map)) || DEFAULT_THUMB;
+       const embed = formatPlayerMapEmbed(details[0],{ thumbnail: thumbUrl });
        return i.editReply({ embeds: [embed] });
      }
       if (vsName) {

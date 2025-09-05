@@ -1,17 +1,22 @@
 import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
 
+// Helper: make a Discord custom emoji placeholder from a weapon label
+const toEmojiCode = (label) => client.emojis.cache.find(e => e.name === label);
+
+
 export function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
+  
   return new EmbedBuilder().
 	setColor(0x2b7cff).
     setTitle(`**${p.name}**`).
 	setThumbnail(thumbnail).
     addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
-	  { name: "Fav Weapon", value: String(p.fav ?? "—"), inline: true },
+	  { name: "Fav Weapon", value: String(toEmojiCode(p.fav) ?? (p.fav ?? "—")), inline: true },
 	  { name: "Nemesis", value: p.nemesis ? `${p.nemesis}${typeof p.nemesis_kills === "number" ? ` (${p.nemesis_kills})` : ""}` : "—", inline: true },
       { name: "Kills", value: `${p.kills ?? 0}`, inline: true },
 	  { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
@@ -36,7 +41,7 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
     .setDescription(`**${row.name}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
-      { name: "Weapon", value: String(row.weapon ?? "—"), inline: true },
+      { name: "Weapon", value: String(toEmojiCode(row.weapon) ?? (row.weapon ?? "—")), inline: true },
       { name: "\u200B", value: "\u200B", inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
       { name: "Killed By", value: String(row.deaths ?? 0), inline: true },
