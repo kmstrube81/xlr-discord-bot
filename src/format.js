@@ -32,7 +32,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   
   rows.map((r, i) => {
 	  
-	  let embed;
+	let embed;
 	
 	if(i === 0) {
 		
@@ -42,6 +42,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 		
 		embed = new EmbedBuilder()
 			.setColor(0x32d296);
+		embeds.push(embed);
 		
 	}
 	
