@@ -182,7 +182,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
 		// pass title + thumbnail to formatter
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		embeds[embeds.length-1].setFooter(`XLRStats • B3 • ${tags}`);
+		embeds[embeds.length-1].setFooter({text :`XLRStats • B3 • ${tags}`});
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
