@@ -123,8 +123,8 @@ client.on(Events.InteractionCreate, async (i) => {
 
 	  // Helper: make a Discord custom emoji placeholder from a weapon label
 	  const toEmojiCode = (label) =>
-		`:${String(label || "").toLowerCase().replace(/[^a-z0-9_]/g, "_")}:`;
-
+		client.emojis.cache.find(e => e.name === label);
+	  
 	  // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
 	  async function getMapImageUrl(label) {
 		try {
@@ -158,7 +158,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		if (weapon) {
 		  const label = matchedLabel || weapon;
 		  const emoji = toEmojiCode(label);
-		  title = `Top Players by Weapon: ${label} ${emoji}`;
+		  title = `Top Players by Weapon: ${emoji}`;
 		} else if (map) {
 		  const label = matchedLabel || map;
 		  title = `Top Players by Map: ${label}`;
