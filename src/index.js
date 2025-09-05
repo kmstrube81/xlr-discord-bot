@@ -232,7 +232,12 @@ client.on(Events.InteractionCreate, async (i) => {
         if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
         const opponentId = opp[0].client_id;
         if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
-        const rows = await runQuery(queries.playerVsCard, [clientId, opponentId, clientId, opponentId]);
+        const rows = await runQuery(queries.playerVsCard, [
+		  opponentId,           
+		  clientId, opponentId, 
+		  opponentId, clientId, 
+		  clientId              
+		]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const embed = formatPlayerVsEmbed(rows[0]);
         return i.editReply({ embeds: [embed] });
