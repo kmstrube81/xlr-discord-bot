@@ -24,7 +24,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail } = opts;
 
   const embeds = [
-	newEmbedBuilder()
+	new EmbedBuilder()
 	.setColor(0x32d296)
 	.setTitle(`🏆 ${title}`)
   ];
@@ -39,7 +39,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 		
 	} else {
 		
-		embed = newEmbedBuilder()
+		embed = new EmbedBuilder()
 			.setColor(0x32d296);
 		
 	}
