@@ -28,9 +28,9 @@ const commands = [
   .setDescription("Show top players (global, or filtered by weapon OR map)")
   .addIntegerOption(o =>
     o.setName("count")
-     .setDescription("How many rows (0 = all, max 100; default 0)")
+     .setDescription("How many rows (0 = all, max 10; default 0)")
      .setMinValue(0)
-     .setMaxValue(100)
+     .setMaxValue(10)
   )
   .addStringOption(o =>
     o.setName("weapon")

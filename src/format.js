@@ -30,14 +30,15 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   
   rows.map((r, i) => {
 	  
+	  let embed;
 	
 	if(i === 0) {
 		
-		const embed = embeds[0];
+		embed = embeds[0];
 		
 	} else {
 		
-		const embed = { 
+		embed = { 
 			color: 0x32d296
 		};
 		
