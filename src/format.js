@@ -81,7 +81,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 
   });
 
-  embeds[i].setFooter({ text: "XLRStats • B3" });
+  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
 
   if (thumbnail) {
     embeds[0].setThumbnail(thumbnail);
