@@ -50,34 +50,34 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 	embed.addFields(
 		{
 			name : `#${i + 1}.`,
-			value : r.name,
+			value : String(r.name),
 			inline : false
 		},
 		{
 			name : `Skill`,
-			value : r.skill,
+			value : String(r.skill),
 			inline : true
 		},
 		{
 			name : `Kill-Death Ratio`,
-			value : kd,
+			value : String(kd),
 			inline : true
 		},
 		{
 			name : `Kills`,
-			value : r.kills,
+			value : String(r.kills),
 			inline : true
 		},
 		{
 			name : `Deaths`,
-			value : r.deaths,
+			value : String(r.deaths),
 			inline : true
 		}
 	);
         // append extra stats when present
-    if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : r.suicides, inline : true });
-    if (typeof r.assists === "number")  embed.addFields({ name: "Assits", value : r.assists, inline : true });
-    if (typeof r.rounds === "number")   embed.addFields({ name: "Rounds Played", value : r.rounds, inline : true });
+    if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
+    if (typeof r.assists === "number")  embed.addFields({ name: "Assits", value : String(r.assists), inline : true });
+    if (typeof r.rounds === "number")   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
 
   });
 
