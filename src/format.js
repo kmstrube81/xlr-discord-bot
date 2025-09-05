@@ -1,12 +1,14 @@
 import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
 
-export function formatPlayerEmbed(p) {
+export function formatPlayerEmbed(p, opts = {}) {
+  const { thumbnail } = opts;
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   return new EmbedBuilder().
 	setColor(0x2b7cff).
     setTitle(`**${p.name}**`).
+	setThumbnail(thumbnail).
     addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
 	  { name: "Fav Weapon", value: String(p.fav ?? "—"), inline: true },
@@ -24,11 +26,13 @@ export function formatPlayerEmbed(p) {
     setFooter({ text: "XLRStats • B3" });
 }
 
-export function formatPlayerWeaponEmbed(row) {
+export function formatPlayerWeaponEmbed(row, opts = {}) {
+  const { thumbnail } = opts;
   const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
   const lastSeen = row.time_edit ? dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   return new EmbedBuilder()
     .setColor(0x2b7cff)
+	.setThumbnail(thumbnail)
     .setDescription(`**${row.name}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
@@ -41,10 +45,12 @@ export function formatPlayerWeaponEmbed(row) {
     .setFooter({ text: "XLRStats • B3" });
 }
 
-export function formatPlayerVsEmbed(row) {
+export function formatPlayerVsEmbed(row, opts = {}) {
+  const { thumbnail } = opts;
   return new EmbedBuilder()
     .setColor(0x2b7cff)
     .setDescription(`**${row.player_name}** vs. **${row.opponent_name}**`)
+	.setThumbnail(thumbnail)
     .addFields(
       { name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
       { name: "Skill", value: String(row.player_skill ?? "—"), inline: true },
@@ -56,6 +62,25 @@ export function formatPlayerVsEmbed(row) {
     .setFooter({ text: "XLRStats • B3" });
 }
 
+export function formatPlayerMapEmbed(row, opts = {}) {
+  const { thumbnail } = opts;
+  const lastSeen = row.time_edit
+    ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
+    : "—";
+
+  return new EmbedBuilder()
+    .setColor(0x2b7cff)
+	.setThumbnail(thumbnail)
+    .setDescription(`**${row.name}** on **${row.map}**`)
+    .addFields(
+      { name: "Skill", value: String(row.skill ?? "—"), inline: true },
+      { name: "Kills", value: String(row.kills ?? 0), inline: true },
+      { name: "Deaths", value: String(row.deaths ?? 0), inline: true },
+      { name: "Suicides", value: String(row.suicides ?? 0), inline: true },
+      { name: "Rounds Played", value: String(row.rounds ?? 0), inline: true }
+    )
+    .setFooter({ text: "XLRStats • B3 • " + (lastSeen === "—" ? "last seen unknown" : `last seen ${lastSeen}`) });
+}
 
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail } = opts;
@@ -138,10 +163,12 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 }
 
 
-export function formatLastSeenEmbed(rows) {
+export function formatLastSeenEmbed(rows, opts = {}) {
+  const { thumbnail } = opts;
   const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
   return new EmbedBuilder().
     setColor(0xffa500).
+	setThumbnail(thumbnail).
     setTitle("🕒 Recently Seen").
     setDescription(lines.join("\n") || "_No recent players_");
 }

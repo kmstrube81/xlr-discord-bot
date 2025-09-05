@@ -276,6 +276,48 @@ export const queries = {
     WHERE c.id = ?
     LIMIT 1
   `,
+   playerMapCard: `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    s.skill,
+    msel.name AS map,
+    pm.kills,
+    pm.deaths,
+    pm.suicides,
+    pm.rounds,
+    c.time_edit
+  FROM clients c
+  JOIN ${PLAYERSTATS} s ON s.client_id = c.id
+
+  -- preferred alias
+  LEFT JOIN (
+    SELECT aa.client_id, aa.alias
+    FROM aliases aa
+    JOIN (
+      SELECT client_id, MAX(num_used) AS max_used
+      FROM aliases
+      GROUP BY client_id
+    ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
+  ) a ON a.client_id = c.id
+
+  -- map selection (LIKE name or exact id)
+  JOIN (
+    SELECT id, name
+    FROM xlr_mapstats
+    WHERE (name LIKE ? OR id = ?)
+    ORDER BY name
+    LIMIT 1
+  ) msel ON 1=1
+
+  -- player’s stats on that map
+  JOIN xlr_playermaps pm
+    ON pm.player_id = c.id
+   AND pm.map_id    = msel.id
+
+  WHERE c.id = ?
+  LIMIT 1
+`,
 
   // Player vs Opponent head-to-head summary from xlr_opponents
   playerVsCard: `

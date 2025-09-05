@@ -2,12 +2,14 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
-import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed } from "./format.js";
+import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed } from "./format.js";
 
 import fs from "fs";
 
 const HEARTBEAT_FILE = "/opt/xlrbot/health/ready";
-
+// Default image if no map or fetch fails — set your own brand image here
+const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
+	|| "https://cod.pm/mp_maps/unknown.png";
 const {
   DISCORD_TOKEN, APPLICATION_ID, GUILD_ID,
   MYSQL_B3_DB, MYSQL_B3_USER, MYSQL_B3_PASSWORD
@@ -58,6 +60,7 @@ const commands = [
     .setDescription("Lookup a player by name (optionally filter by weapon, or compare vs opponent)")
     .addStringOption(o => o.setName("name").setDescription("Player (partial)").setRequired(true))
     .addStringOption(o => o.setName("weapon").setDescription("Weapon (partial name or exact id)"))
+	.addStringOption(o => o.setName("map").setDescription("Map (partial name or exact id)"))
     .addStringOption(o => o.setName("vs").setDescription("Opponent player (partial name)")),
   new SlashCommandBuilder()
     .setName("xlr-lastseen")
@@ -76,6 +79,25 @@ async function checkUrlFor404(url) {
   } catch (error) {
     return false; 
   }
+}
+// Helper: make a Discord custom emoji placeholder from a weapon label
+const toEmojiCode = (label) => client.emojis.cache.find(e => e.name === label);
+
+// Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
+async function getMapImageUrl(label) {
+	try {
+	  if( await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png")) {
+		  if (await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png")){
+			  return null;
+		  } else {
+			  return "https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png";
+		  }
+	  } else {
+		  return "https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png";
+	  }  
+	} catch {
+	  return null;
+	}
 }
 
 async function register() {
@@ -122,31 +144,6 @@ client.on(Events.InteractionCreate, async (i) => {
 
 	  // weapon precedence over map
 	  if (weapon && map) map = null;
-
-	  // Helper: make a Discord custom emoji placeholder from a weapon label
-	  const toEmojiCode = (label) =>
-		client.emojis.cache.find(e => e.name === label);
-	  
-	  // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
-	  async function getMapImageUrl(label) {
-		try {
-		  if( await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png")) {
-			  if (await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png")){
-				  return null;
-			  } else {
-				  return "https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png";
-			  }
-		  } else {
-			  return "https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png";
-		  }  
-		} catch {
-		  return null;
-		}
-	  }
-
-	  // Default image if no map or fetch fails — set your own brand image here
-	  const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
-		|| "https://cod.pm/mp_maps/unknown.png";
 
 	  try {
 		const { sql, params } = queries.topDynamic({ limit, sort, weapon, map });
@@ -213,6 +210,7 @@ client.on(Events.InteractionCreate, async (i) => {
       await i.deferReply();
       const name = i.options.getString("name");
 	  const weapon = i.options.getString("weapon");
+	  const mapOpt = i.options.getString("map");
       const vsName = i.options.getString("vs");
 	  
       const matches = await runQuery(queries.findPlayer, [`%${name}%`, `%${name}%`]);
@@ -224,9 +222,20 @@ client.on(Events.InteractionCreate, async (i) => {
      if (weapon) {
         const idOrNeg1 = /^\d+$/.test(weapon) ? Number(weapon) : -1;
 		const details = await runQuery(queries.playerWeaponCard, [`%${weapon}%`, idOrNeg1, clientId]);       if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
-        const embed = formatPlayerWeaponEmbed(details[0]);
+        const embed = formatPlayerWeaponEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
+	  if (mapOpt) {
+		  
+		
+	   //thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
+		
+       const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
+       const details = await runQuery(queries.playerMapCard, [`%${mapOpt}%`, idOrNeg1, clientId]);
+       if (!details.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
+       const embed = formatPlayerMapEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
+       return i.editReply({ embeds: [embed] });
+     }
       if (vsName) {
         const opp = await runQuery(queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
         if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
@@ -239,13 +248,13 @@ client.on(Events.InteractionCreate, async (i) => {
 		  clientId              
 		]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        const embed = formatPlayerVsEmbed(rows[0]);
+        const embed = formatPlayerVsEmbed(rows[0],{ thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
       // default player card
       const details = await runQuery(queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
-      const embed = formatPlayerEmbed(details[0]);
+      const embed = formatPlayerEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
     }
 
@@ -253,7 +262,7 @@ client.on(Events.InteractionCreate, async (i) => {
       await i.deferReply();
       const count = i.options.getInteger("count") ?? 10;
       const rows = await runQuery(queries.lastSeen, [count]);
-      const embed = formatLastSeenEmbed(rows);
+      const embed = formatLastSeenEmbed(rows,{ thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
     }
   } catch (err) {
