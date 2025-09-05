@@ -192,9 +192,9 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
 		embeds.forEach(e=>{
-			e.setFooter(text : blankText)
+			e.setFooter({text : blankText})
 		});
-		embeds[embeds.length-1].setFooter({text :footerText});
+		embeds[embeds.length-1].setFooter({text : footerText});
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
