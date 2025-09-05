@@ -167,26 +167,39 @@ export const queries = {
     LIMIT 10
   `,
 
-  // Detailed line for a single player (no server_id join)
-   playerCard: `
+    // Detailed line for a single player, extended with fav weapon, assists, and nemesis
+  playerCard: `
     SELECT
       c.id AS client_id,
       COALESCE(a.alias, c.name) AS name,
       s.skill, s.kills, s.deaths,
-      s.rounds, 
-      s.winstreak, s.losestreak, 
+      s.rounds,
+      s.winstreak, s.losestreak,
+      s.assists,
       COALESCE(pb.headshots, 0) AS headshots,
+
+      
+      fw.fav_weapon AS fav,
+
+      
+      COALESCE(ka.alias, kc.name) AS nemesis,
+      nem.kills AS nemesis_kills,
+
       c.connections,
       c.time_add, c.time_edit
     FROM clients c
     JOIN ${PLAYERSTATS} s
       ON s.client_id = c.id
+
+   
     LEFT JOIN (
       SELECT player_id, SUM(kills) AS headshots
       FROM ${PLAYERBODY}
       WHERE bodypart_id = ${HEADSHOT_ID}
       GROUP BY player_id
     ) pb ON pb.player_id = c.id
+
+    
     LEFT JOIN (
       SELECT aa.client_id, aa.alias
       FROM aliases aa
@@ -196,9 +209,41 @@ export const queries = {
         GROUP BY client_id
       ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
     ) a ON a.client_id = c.id
+
+    
+    LEFT JOIN (
+      SELECT wu.player_id, w.name AS fav_weapon, wu.kills
+      FROM xlr_weaponusage wu
+      JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+      WHERE wu.player_id = ?
+      ORDER BY wu.kills DESC
+      LIMIT 1
+    ) fw ON fw.player_id = c.id
+
+    
+    LEFT JOIN (
+      SELECT o.target_id AS player_id, o.killer_id, SUM(o.kills) AS kills
+      FROM xlr_opponents o
+      WHERE o.target_id = ?
+      GROUP BY o.killer_id
+      ORDER BY kills DESC
+      LIMIT 1
+    ) nem ON nem.player_id = c.id
+    LEFT JOIN clients kc ON kc.id = nem.killer_id
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
+    ) ka ON ka.client_id = kc.id
+
     WHERE c.id = ?
     LIMIT 1
   `,
+
 
 
   // Recently seen players (from clients)

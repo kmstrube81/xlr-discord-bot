@@ -215,7 +215,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
       // Take the best match and fetch stats row
       const clientId = matches[0].client_id;
-      const details = await runQuery(queries.playerCard, [clientId]);
+      const details = await runQuery(queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
       const embed = formatPlayerEmbed(details[0]);
       await i.editReply({ embeds: [embed] });

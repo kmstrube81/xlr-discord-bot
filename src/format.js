@@ -4,21 +4,24 @@ import { EmbedBuilder } from "discord.js";
 export function formatPlayerEmbed(p) {
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
-  return {
-    color: 0x2b7cff,
-    title: `📊 ${p.name}`,
-    fields: [
+  return new EmbedBuilder().
+	setColor(0x2b7cff).
+    setTitle(`**${p.name}**`).
+    addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
-      { name: "K/D", value: String(kd), inline: true },
-      { name: "Kills / Deaths", value: `${p.kills ?? 0} / ${p.deaths ?? 0}`, inline: true },
-	  { name: "Best Kill/Death Streak", value: `${p.winstreak ?? 0}/${p.losestreak ?? 0}`, inline: true },
+	  { name: "Fav Weapon", value: String(p.fav ?? "—"), inline: true },
+	  { name: "Nemesis", value: p.nemesis ? `${p.nemesis}${typeof p.nemesis_kills === "number" ? ` (${p.nemesis_kills})` : ""}` : "—", inline: true },
+      { name: "Kills", value: `${p.kills ?? 0}`, inline: true },
+	  { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
+      { name: "KDR", value: String(kd), inline: true },
+	  { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
+	  { name: "Assists", value: String(p.assists ?? 0), inline: true },
+	  { name: "Deaths", value: String(p.deaths ?? 0), inline: true },
       { name: "Rounds Played", value: `${p.rounds ?? 0}`, inline: true },
-      { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
       { name: "Connections", value: String(p.connections ?? 0), inline: true },
       { name: "Last Seen", value: lastSeen, inline: true }
-    ],
-    footer: { text: "XLRStats • B3" }
-  };
+    ).
+    setFooter({ text: "XLRStats • B3" });
 }
 
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
@@ -56,10 +59,10 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 	  rankDisplay = medals[i];
 	} else {
 	  // Use #<rank> for everything else
-	  rankDisplay = `#${i + 1}`;
+	  rankDisplay = `#${i + 1}.`;
 	}
 
-	embed.setDescription(`**${rankDisplay}. ${r.name}**`);
+	embed.setDescription(`**${rankDisplay} ${r.name}**`);
 	embed.addFields(
 		{
 			name : `Skill`,
@@ -104,9 +107,8 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 
 export function formatLastSeenEmbed(rows) {
   const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
-  return {
-    color: 0xffa500,
-    title: "🕒 Recently Seen",
-    description: lines.join("\n") || "_No recent players_"
-  };
+  return new EmbedBuilder().
+    setColor(0xffa500).
+    setTitle("🕒 Recently Seen").
+    setDescription(lines.join("\n") || "_No recent players_");
 }
