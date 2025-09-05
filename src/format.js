@@ -48,7 +48,18 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 	
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
 	
-	embed.setDescription(`**#${i + 1}. ${r.name}**`);
+	const medals = ["🥇", "🥈", "🥉"];
+
+	let rankDisplay;
+	if (i < 3) {
+	  // Use medal for 1st, 2nd, 3rd
+	  rankDisplay = medals[i];
+	} else {
+	  // Use #<rank> for everything else
+	  rankDisplay = `#${i + 1}`;
+	}
+
+	embed.setDescription(`**${rankDisplay}. ${r.name}**`);
 	embed.addFields(
 		{
 			name : `Skill`,
