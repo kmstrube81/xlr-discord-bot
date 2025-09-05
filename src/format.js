@@ -23,34 +23,72 @@ export function formatPlayerEmbed(p) {
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail } = opts;
 
-  const lines = rows.map((r, i) => {
+  const embeds = [
+  { color : 0x32d296,
+	title : `🏆 ${title}`
+  }];
+  
+  rows.map((r, i) => {
+	  
+	
+	if(i === 0) {
+		
+		const embed = embeds[0];
+		
+	} else {
+		
+		const embed = { 
+			color: 0x32d296
+		};
+		
+	}
+	
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
-    const parts = [
-      `**${i + 1}. ${r.name}**`,
-      `Skill: ${r.skill}`,
-      `K/D: ${kd}`,
-      `K:${r.kills} D:${r.deaths}`
-    ];
+	
+	embed.fields = [
+		{
+			name : `#${i + 1}.`,
+			value : r.name,
+			inline : false
+		},
+		{
+			name : `Skill`,
+			value : r.skill,
+			inline : true
+		},
+		{
+			name : `Kill-Death Ratio`,
+			value : kd,
+			inline : true
+		},
+		{
+			name : `Kills`,
+			value : r.kills,
+			inline : true
+		},
+		{
+			name : `Deaths`,
+			value : r.deaths,
+			inline : true
+		}
+	];
+        // append extra stats when present
+    if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : r.suicides, inline : true });
+    if (typeof r.assists === "number")  embed.addFields({ name: "Assits", value : r.assists, inline : true });
+    if (typeof r.rounds === "number")   embed.addFields({ name: "Rounds Played", value : r.rounds, inline : true });
 
-    // append extra stats when present
-    if (typeof r.suicides === "number") parts.push(`S:${r.suicides}`);
-    if (typeof r.assists === "number")  parts.push(`A:${r.assists}`);
-    if (typeof r.rounds === "number")   parts.push(`R:${r.rounds}`);
+  });
 
-    return parts.join(" • ");
-  }).join("\n");
-
-  const embed = {
-    color: 0x32d296,
-    title: `🏆 ${title}`,
-    description: lines || "_No players found_",
-    footer: { text: "XLRStats • B3" }
-  };
+  embeds[i].footer ={ text: "XLRStats • B3" };
 
   if (thumbnail) {
-    embed.thumbnail = { url: thumbnail };
+    embeds[0].thumbnail = { url: thumbnail };
   }
-  return embed;
+  
+  if(!lines) {
+	embeds[0].description = "_No players found_";
+  }
+  return embeds;
 }
 
 

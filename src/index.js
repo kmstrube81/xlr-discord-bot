@@ -63,8 +63,18 @@ const commands = [
     .addIntegerOption(o => o.setName("count").setDescription("How many (default 10)").setMinValue(1).setMaxValue(25))
 ].map(c => c.toJSON());
 
-
-
+async function checkUrlFor404(url) {
+  try {
+    const response = await fetch(url, { method: 'HEAD' }); 
+    if (response.status === 404) {
+      return true;
+    } else {
+      return false;
+    }
+  } catch (error) {
+    return false; 
+  }
+}
 
 async function register() {
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
@@ -118,16 +128,15 @@ client.on(Events.InteractionCreate, async (i) => {
 	  // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
 	  async function getMapImageUrl(label) {
 		try {
-		  // Node 18+: global fetch is available. Adjust endpoint to your cod.pm API if different.
-		  // Example 1: detail endpoint
-		  let res = await fetch(`https://cod.pm/api/maps?name=${encodeURIComponent(label)}`);
-		  if (res.ok) {
-			const data = await res.json();
-			if (Array.isArray(data) && data.length && data[0].image) return data[0].image;
-		  }
-		  // Example 2: direct image by slug/name (fallback guess)
-		  const fallbackGuess = `https://cod.pm/static/maps/${encodeURIComponent(label)}.jpg`;
-		  return fallbackGuess;
+		  if( await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png")) {
+			  if (await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png")){
+				  return null;
+			  } else {
+				  return "https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png";
+			  }
+		  } else {
+			  return "https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png";
+		  }  
 		} catch {
 		  return null;
 		}
@@ -135,7 +144,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
 	  // Default image if no map or fetch fails — set your own brand image here
 	  const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
-		|| "https://i.imgur.com/8z2tH0L.png";
+		|| "https://cod.pm/mp_maps/unknown.png";
 
 	  try {
 		const { sql, params } = queries.topDynamic({ limit, sort, weapon, map });
@@ -149,7 +158,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		if (weapon) {
 		  const label = matchedLabel || weapon;
 		  const emoji = toEmojiCode(label);
-		  title = `${emoji} Top Players by Weapon: ${label}`;
+		  title = `Top Players by Weapon: ${label} ${emoji}`;
 		} else if (map) {
 		  const label = matchedLabel || map;
 		  title = `Top Players by Map: ${label}`;
@@ -166,15 +175,15 @@ client.on(Events.InteractionCreate, async (i) => {
 
 		const tags = [
 		  `Sort: ${sort}`,
-		  `Count: ${count} → returned ${rows.length}`,
-		  weapon ? `Weapon: ${weapon}` : null,
-		  map ? `Map: ${map}` : null
+		  `Count: ${rows.length}`,
+		  weapon ? `Weapon: ${matchedLabel}` : null,
+		  map ? `Map: ${matchedLabel}` : null
 		].filter(Boolean).join("  •  ");
 
 		// pass title + thumbnail to formatter
-		const embed = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		embed.footer = { text: `XLRStats • B3 • ${tags}` };
-		await i.editReply({ embeds: [embed] });
+		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
+		embeds[embeds.length-1].footer = { text: `XLRStats • B3 • ${tags}` };
+		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
 		await i.editReply("Error talking to the stats database.");
