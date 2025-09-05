@@ -222,9 +222,9 @@ client.on(Events.InteractionCreate, async (i) => {
       const clientId = matches[0].client_id;
       // precedence: weapon > vs > default player card
      if (weapon) {
-        const details = await runQuery(queries.playerWeaponCard, [clientId, `%${weapon}%`, Number.isInteger(Number(weapon)) ? Number(weapon) : -1]);
-        if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
-       const embed = formatPlayerWeaponEmbed(details[0]);
+        const idOrNeg1 = /^\d+$/.test(weapon) ? Number(weapon) : -1;
+		const details = await runQuery(queries.playerWeaponCard, [`%${weapon}%`, idOrNeg1, clientId]);       if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
+        const embed = formatPlayerWeaponEmbed(details[0]);
         return i.editReply({ embeds: [embed] });
       }
       if (vsName) {
