@@ -24,9 +24,10 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail } = opts;
 
   const embeds = [
-  { color : 0x32d296,
-	title : `🏆 ${title}`
-  }];
+	newEmbedBuilder()
+	.setColor(0x32d296)
+	.setTitle(`🏆 ${title}`)
+  ];
   
   rows.map((r, i) => {
 	  
@@ -38,15 +39,14 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 		
 	} else {
 		
-		embed = { 
-			color: 0x32d296
-		};
+		embed = newEmbedBuilder()
+			.setColor(0x32d296);
 		
 	}
 	
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
 	
-	embed.fields = [
+	embed.addFields(
 		{
 			name : `#${i + 1}.`,
 			value : r.name,
@@ -72,7 +72,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 			value : r.deaths,
 			inline : true
 		}
-	];
+	);
         // append extra stats when present
     if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : r.suicides, inline : true });
     if (typeof r.assists === "number")  embed.addFields({ name: "Assits", value : r.assists, inline : true });
@@ -80,14 +80,14 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 
   });
 
-  embeds[i].footer ={ text: "XLRStats • B3" };
+  embeds[i].setFooter({ text: "XLRStats • B3" });
 
   if (thumbnail) {
-    embeds[0].thumbnail = { url: thumbnail };
+    embeds[0].setThumbnail(thumbnail);
   }
   
   if(!lines) {
-	embeds[0].description = "_No players found_";
+	embeds[0].setDescription("_No players found_");
   }
   return embeds;
 }

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed } from "./format.js";
@@ -182,7 +182,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
 		// pass title + thumbnail to formatter
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		embeds[embeds.length-1].footer = { text: `XLRStats • B3 • ${tags}` };
+		embeds[embeds.length-1].setFooter(`XLRStats • B3 • ${tags}`);
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
