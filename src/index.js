@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events} from "discord.js";
 const { EmbedBuilder } = require('discord.js');
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
