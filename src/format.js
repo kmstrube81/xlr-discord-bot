@@ -48,12 +48,8 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 	
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
 	
+	embed.setDescription(`#${i + 1}. {r.name}`);
 	embed.addFields(
-		{
-			name : `#${i + 1}.`,
-			value : String(r.name),
-			inline : false
-		},
 		{
 			name : `Skill`,
 			value : String(r.skill),
