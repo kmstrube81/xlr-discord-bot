@@ -87,7 +87,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
     embeds[0].setThumbnail(thumbnail);
   }
   
-  if(!lines) {
+  if(!rows.length) {
 	embeds[0].setDescription("_No players found_");
   }
   return embeds;
