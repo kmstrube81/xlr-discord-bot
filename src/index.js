@@ -158,7 +158,10 @@ client.on(Events.InteractionCreate, async (i) => {
 		if (weapon) {
 		  const label = matchedLabel || weapon;
 		  const emoji = toEmojiCode(label);
-		  title = `Top Players by Weapon: ${emoji}`;
+		  if(emoji)
+			title = `Top Players by Weapon: ${emoji}`;
+		  else
+			title = `Top Players by Weapon: ${label}`;
 		} else if (map) {
 		  const label = matchedLabel || map;
 		  title = `Top Players by Map: ${label}`;
@@ -181,8 +184,17 @@ client.on(Events.InteractionCreate, async (i) => {
 		].filter(Boolean).join("  •  ");
 
 		// pass title + thumbnail to formatter
+		const blank = '⠀';
+		const footerText = `XLRStats • B3 • ${tags}`;
+		let blankText = '';
+		for(i = 0; i < footerText.length; i++){
+			blankText += blank;
+		}
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		embeds[embeds.length-1].setFooter({text :`XLRStats • B3 • ${tags}`});
+		foreach(embed in embeds){
+			embed.setFooter(text : blankText)
+		}
+		embeds[embeds.length-1].setFooter({text :footerText});
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
