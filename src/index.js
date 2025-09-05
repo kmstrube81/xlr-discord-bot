@@ -176,6 +176,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		  thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
 		}
 
+		// Build tags
 		const tags = [
 		  `Sort: ${sort}`,
 		  `Count: ${rows.length}`,
@@ -183,18 +184,22 @@ client.on(Events.InteractionCreate, async (i) => {
 		  map ? `Map: ${matchedLabel}` : null
 		].filter(Boolean).join("  •  ");
 
-		// pass title + thumbnail to formatter
-		const blank = '⠀';
+		// Footer text
 		const footerText = `XLRStats • B3 • ${tags}`;
-		let blankText = '';
-		for(i = 0; i < footerText.length; i++){
-			blankText += blank;
-		}
+
+		const ZERO_WIDTH = "⠀"; // U+2800
+		const padLen = Math.min(footerText.length, 2048);
+		const blankText = ZERO_WIDTH.repeat(padLen);
+
+		// Create embeds
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		embeds.forEach(e=>{
-			e.setFooter({text : blankText})
-		});
-		embeds[embeds.length-1].setFooter({text : footerText});
+		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+
+		// Apply “invisible” footer to all, then real footer on the last
+		for (const e of embedArr) {
+		  e.setFooter({ text: blankText });
+		}
+		embedArr[embedArr.length - 1].setFooter({ text: footerText });
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
 		console.error(err);
