@@ -191,9 +191,9 @@ client.on(Events.InteractionCreate, async (i) => {
 			blankText += blank;
 		}
 		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		foreach(embed in embeds){
-			embed.setFooter(text : blankText)
-		}
+		embeds.forEach(e=>{
+			e.setFooter(text : blankText)
+		});
 		embeds[embeds.length-1].setFooter({text :footerText});
 		await i.editReply({ embeds: embeds });
 	  } catch (err) {
