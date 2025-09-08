@@ -319,7 +319,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		let title = "Top Players by Skill";
 		if (weapon) {
 		  const label = matchedLabel || weapon;
-		  const emoji = emojiResolver(label);
+		  const emoji = resolveEmoji(label);
 		  if(emoji)
 			title = `Top Players by Weapon: ${emoji}`;
 		  else
