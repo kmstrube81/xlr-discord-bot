@@ -1,9 +1,17 @@
 import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
 
-let emojiResolver = () => null;
+// Shared emoji resolver (injected by index.js at runtime)
+let _emojiResolver = () => null;
+
+/** Allow other modules (index.js) to set how emojis are resolved. */
 export function setEmojiResolver(fn) {
-  if (typeof fn === "function") emojiResolver = fn;
+  if (typeof fn === "function") _emojiResolver = fn;
+}
+
+/** Use the shared resolver. Always returns a string (emoji mention) or null. */
+export function resolveEmoji(label) {
+  try { return _emojiResolver(label) ?? null; } catch { return null; }
 }
 
 
