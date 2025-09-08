@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
-import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed } from "./format.js";
+import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed, setEmojiResolver, resolveEmoji } from "./format.js";
 
 // add near your other imports
 import path from "node:path";
@@ -99,8 +99,6 @@ async function checkUrlFor404(url) {
     return false; 
   }
 }
-// Helper: make a Discord custom emoji placeholder from a weapon label
-const toEmojiCode = (label) => client.emojis.cache.find(e => e.name === label);
 
 // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
 async function getMapImageUrl(label) {
@@ -208,7 +206,13 @@ async function getMapsAll() {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once(Events.ClientReady, (c) => {
+setEmojiResolver((label) => {
+  if (!label) return null;
+  const e = client.emojis.cache.find((x) => x.name === label);
+  return e ? e.toString() : null; // return <:name:id> mention
+});
+
+client.once(Events.ClientReady,  async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
 
   fs.mkdirSync("/opt/xlrbot/health", { recursive: true });
