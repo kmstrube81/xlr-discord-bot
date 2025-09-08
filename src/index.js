@@ -4,8 +4,6 @@ import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed } from "./format.js";
 
-import fs from "fs";
-
 // add near your other imports
 import path from "node:path";
 import fs from "node:fs";
