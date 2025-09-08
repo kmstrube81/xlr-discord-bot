@@ -166,16 +166,6 @@ async function runQuery(sql, params) {
   return rows;
 }
 
-import {
-  renderHomeEmbed,
-  renderLadderEmbeds,
-  renderWeaponsEmbed,
-  renderMapsEmbed,
-} from "./format.js";
-import { queries } from "./queries.js";
-
-// your existing runQuery(...) is reused
-
 async function getHomeTotals() {
   const [[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
     runQuery(queries.ui_totalKills, []),
