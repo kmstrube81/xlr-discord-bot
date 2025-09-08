@@ -1,10 +1,31 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
-import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed } from "./format.js";
+import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed } from "./format.js";
 
 import fs from "fs";
+
+// add near your other imports
+import path from "node:path";
+import fs from "node:fs";
+
+// --- new env-driven UI config + tiny .env updater ---
+const CHANNEL_ID = process.env.CHANNEL_ID?.trim() || "";
+let   UI_MESSAGE_ID = process.env.UI_MESSAGE_ID?.trim() || "";
+
+function upsertEnv(key, value) {
+  // persist back to .env so we can edit the same message next boot
+  const ENV_PATH = path.resolve(process.cwd(), ".env");
+  const lines = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf8").split(/\r?\n/) : [];
+  const idx = lines.findIndex(l => l.startsWith(`${key}=`));
+  if (idx >= 0) lines[idx] = `${key}=${value}`;
+  else lines.push(`${key}=${value}`);
+  fs.writeFileSync(ENV_PATH, lines.join("\n"), "utf8");
+  process.env[key] = value;
+  if (key === "UI_MESSAGE_ID") UI_MESSAGE_ID = value;
+}
+
 
 const HEARTBEAT_FILE = "/opt/xlrbot/health/ready";
 // Default image if no map or fetch fails — set your own brand image here
@@ -100,6 +121,42 @@ async function getMapImageUrl(label) {
 	}
 }
 
+// ===== App "tabs"
+const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps" });
+
+// Button custom-id helpers
+const navRow = (active) => {
+  const mk = (id, label, primary) => new ButtonBuilder()
+    .setCustomId(`ui:${id}`)
+    .setLabel(label)
+    .setStyle(active === id ? ButtonStyle.Primary : ButtonStyle.Secondary);
+  return new ActionRowBuilder().addComponents(
+    mk(VIEWS.HOME, "Home"),
+    mk(VIEWS.LADDER, "Ladder"),
+    mk(VIEWS.WEAPONS, "Weapons"),
+    mk(VIEWS.MAPS, "Maps")
+  );
+};
+
+const pagerRow = (view, page, hasPrev, hasNext) => new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+  new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext)
+);
+
+// parse customId -> { view, page }
+function parseCustomId(customId) {
+  const parts = customId.split(":");
+  if (parts[0] !== "ui") return null;
+  if (parts.length === 2) return { view: parts[1], page: 0 };
+  if (parts.length === 4) {
+    const [_, view, dir, pageStr] = parts;
+    const cur = Math.max(0, parseInt(pageStr, 10) || 0);
+    return { view, page: dir === "next" ? cur + 1 : Math.max(0, cur - 1) };
+  }
+  return null;
+}
+
+
 async function register() {
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
   if (GUILD_ID) {
@@ -116,6 +173,41 @@ async function runQuery(sql, params) {
   return rows;
 }
 
+async function getHomeTotals() {
+  const [[{ totalKills = 0 } = {}], [{ totalRounds = 0 } = {}], [favW = {}], [favM = {}]] = await Promise.all([
+    runQuery(queries.ui_totalKills, []),
+    runQuery(queries.ui_totalRounds, []),
+    runQuery(queries.ui_favoriteWeapon, []),
+    runQuery(queries.ui_favoriteMap, []),
+  ]);
+
+  return {
+    totalKills: Number(totalKills) || 0,
+    totalRounds: Number(totalRounds) || 0,
+    favoriteWeapon: { label: favW?.label || "—", kills: Number(favW?.kills) || 0 },
+    favoriteMap: { label: favM?.label || "—", rounds: Number(favM?.rounds) || 0 },
+  };
+}
+
+async function getLadderSlice(offset = 0, limit = 10) {
+  const { sql, params } = queries.ui_ladderSlice(limit, offset);
+  const rows = await runQuery(sql, params);
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+}
+
+async function getLadderCount() {
+  const [{ cnt = 0 } = {}] = await runQuery(queries.ui_ladderCount, []);
+  return Number(cnt) || 0;
+}
+
+async function getWeaponsAll() {
+  return await runQuery(queries.ui_weaponsAll, []);
+}
+
+async function getMapsAll() {
+  return await runQuery(queries.ui_mapsAll, []);
+}
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once(Events.ClientReady, (c) => {
@@ -123,9 +215,29 @@ client.once(Events.ClientReady, (c) => {
 
   fs.mkdirSync("/opt/xlrbot/health", { recursive: true });
   setInterval(() => fs.writeFileSync(HEARTBEAT_FILE, Date.now().toString()), 15000);
+  
+  await ensureUiMessage(client);
+
 });
 
 client.on(Events.InteractionCreate, async (i) => {
+  // Handle UI button interactions first
+	if (i.isButton()) {
+	  const parsed = parseCustomId(i.customId);
+	  if (!parsed) return;
+	  const { view, page } = parsed;
+	  try {
+		const payload = await buildViewPayload(view, page);
+		await i.update(payload);
+	  } catch (e) {
+		console.error("[ui] button error", e);
+		if (i.deferred || i.replied) await i.followUp({ content: "Something went wrong.", ephemeral: true });
+		else await i.reply({ content: "Something went wrong.", ephemeral: true });
+	  }
+	  return;
+	}
+
+	
   if (!i.isChatInputCommand()) return;
 
   try {
@@ -279,3 +391,74 @@ if (process.argv.includes("--register")) {
 } else {
   client.login(DISCORD_TOKEN);
 }
+
+async function buildViewPayload(view, page = 0) {
+  switch (view) {
+    case VIEWS.HOME: {
+      const totals = await getHomeTotals();
+      const embeds = renderHomeEmbed({ totals }); // from format.js
+      return { embeds, components: [navRow(VIEWS.HOME)] };
+    }
+    case VIEWS.LADDER: {
+      const pageSize = 10;
+      const offset = page * pageSize;
+      const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
+      const hasPrev = page > 0;
+      const hasNext = offset + pageSize < total;
+
+      // Optional: you can pass a custom title/thumbnail if you have them handy
+      const embeds = renderLadderEmbeds({ rows, page });
+
+      return { embeds, components: [navRow(VIEWS.LADDER), pagerRow(VIEWS.LADDER, page, hasPrev, hasNext)] };
+    }
+    case VIEWS.WEAPONS: {
+      const items = await getWeaponsAll();
+      const embeds = renderWeaponsEmbed({ items, page, perPage: 50 });
+      const start = page * 50;
+      const hasPrev = page > 0;
+      const hasNext = start + 50 < items.length;
+      return { embeds, components: [navRow(VIEWS.WEAPONS), pagerRow(VIEWS.WEAPONS, page, hasPrev, hasNext)] };
+    }
+    case VIEWS.MAPS: {
+      const items = await getMapsAll();
+      const embeds = renderMapsEmbed({ items, page, perPage: 50 });
+      const start = page * 50;
+      const hasPrev = page > 0;
+      const hasNext = start + 50 < items.length;
+      return { embeds, components: [navRow(VIEWS.MAPS), pagerRow(VIEWS.MAPS, page, hasPrev, hasNext)] };
+    }
+    default:
+      return buildViewPayload(VIEWS.HOME, 0);
+  }
+}
+
+
+async function ensureUiMessage(client) {
+  if (!CHANNEL_ID) {
+    console.warn("[ui] CHANNEL_ID blank; skipping app UI (slash commands still active).");
+    return null;
+  }
+  const channel = await client.channels.fetch(CHANNEL_ID).catch(() => null);
+  if (!channel || channel.type !== ChannelType.GuildText) {
+    console.warn("[ui] CHANNEL_ID not found or not a text channel; skipping app UI.");
+    return null;
+  }
+
+  // try to fetch & refresh existing
+  if (UI_MESSAGE_ID) {
+    const msg = await channel.messages.fetch(UI_MESSAGE_ID).catch(() => null);
+    if (msg) {
+      const payload = await buildViewPayload(VIEWS.HOME, 0);
+      await msg.edit(payload);
+      return msg;
+    }
+  }
+
+  // create a fresh UI message on HOME
+  const payload = await buildViewPayload(VIEWS.HOME, 0);
+  const created = await channel.send(payload);
+  upsertEnv("UI_MESSAGE_ID", created.id);
+  console.log(`[ui] Created UI message ${created.id} in #${channel.name}`);
+  return created;
+}
+

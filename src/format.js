@@ -177,3 +177,71 @@ export function formatLastSeenEmbed(rows, opts = {}) {
     setTitle("🕒 Recently Seen").
     setDescription(lines.join("\n") || "_No recent players_");
 }
+
+// === App UI renderers ===
+// Keep components (buttons) outside; these return only embeds so index.js can add rows.
+
+export function renderHomeEmbed({ totals }) {
+  const { totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
+  return [
+    new EmbedBuilder()
+      .setColor(0x2b7cff)
+      .setTitle("📊 Server Overview")
+      .setDescription("High-level stats at a glance")
+      .addFields(
+        { name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
+        { name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
+        { name: "\u200b", value: "\u200b", inline: true },
+        { name: "Favorite Weapon (by kills)", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()}**`, inline: true },
+        { name: "Favorite Map (by rounds)", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()}**`, inline: true },
+      )
+      .setFooter({ text: "XLR App • Home" })
+  ];
+}
+
+export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
+  // Reuse your existing multi-embed pack so it matches /xlr-top exactly
+  const embeds = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail });
+  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
+  if (embeds.length) {
+    const last = embeds[embeds.length - 1];
+    const footer = last.data.footer?.text || "XLRStats • B3";
+    last.setFooter({ text: `${footer} • Ladder page ${page + 1}` });
+  }
+  return embeds;
+}
+
+function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
+  const start = page * perPage;
+  const slice = items.slice(start, start + perPage);
+  const text = slice
+    .map((it, i) => `**${start + i + 1}.** ${it.label} — ${Number(it[unitKey] ?? 0).toLocaleString()} ${unitLabel}`)
+    .join("\n") || "_No data_";
+
+  return [
+    new EmbedBuilder()
+      .setColor(0x2b7cff)
+      .setTitle(title)
+      .setDescription(text)
+      .setFooter({ text: `XLR App • Page ${page + 1}` })
+  ];
+}
+
+export function renderWeaponsEmbed({ items, page, perPage = 50 }) {
+  return chunkedListEmbed({
+    title: "🔫 Weapons by Kills",
+    items, page, perPage,
+    unitKey: "kills",
+    unitLabel: "kills",
+  });
+}
+
+export function renderMapsEmbed({ items, page, perPage = 50 }) {
+  return chunkedListEmbed({
+    title: "🗺️ Maps by Rounds Played",
+    items, page, perPage,
+    unitKey: "rounds",
+    unitLabel: "rounds",
+  });
+}
+

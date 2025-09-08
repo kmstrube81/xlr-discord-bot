@@ -129,7 +129,83 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
   return { sql, params };
 }
 
+const ui_totalKills = `
+  SELECT SUM(kills) AS totalKills
+  FROM xlr_playerstats
+`;
 
+const ui_totalRounds = `
+  SELECT SUM(rounds) AS totalRounds
+  FROM xlr_playerstats
+`;
+
+const ui_favoriteWeapon = `
+  SELECT w.name AS label, SUM(wu.kills) AS kills
+  FROM xlr_weaponusage wu
+  JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+  GROUP BY w.id, w.name
+  ORDER BY kills DESC
+  LIMIT 1
+`;
+
+const ui_favoriteMap = `
+  SELECT m.name AS label, SUM(pm.rounds) AS rounds
+  FROM xlr_playermaps pm
+  JOIN xlr_mapstats m ON m.id = pm.map_id
+  GROUP BY m.id, m.name
+  ORDER BY rounds DESC
+  LIMIT 1
+`;
+
+// LADDER — 10-per “sheet” like /xlr-top (mirrors alias join order)
+function ui_ladderSlice(limit = 10, offset = 0) {
+  const sql = `
+    SELECT c.id AS client_id,
+           COALESCE(a.alias, c.name) AS name,
+           s.skill, s.kills, s.deaths,
+           CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio,
+           s.suicides, s.assists, s.rounds
+    FROM ${PLAYERSTATS} s
+    JOIN clients c ON c.id = s.client_id
+    LEFT JOIN (
+      SELECT aa.client_id, aa.alias
+      FROM aliases aa
+      JOIN (
+        SELECT client_id, MAX(num_used) AS max_used
+        FROM aliases
+        GROUP BY client_id
+      ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
+    ) a ON a.client_id = c.id
+    WHERE (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)
+    ORDER BY s.skill DESC
+    LIMIT ? OFFSET ?
+  `;
+  return { sql, params: [limit, offset] };
+}
+
+const ui_ladderCount = `
+  SELECT COUNT(*) AS cnt
+  FROM ${PLAYERSTATS} s
+  WHERE (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)
+`;
+
+// WEAPONS — all by kills
+const ui_weaponsAll = `
+  SELECT w.name AS label, SUM(wu.kills) AS kills
+  FROM xlr_weaponusage wu
+  JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+  GROUP BY w.id, w.name
+  ORDER BY kills DESC
+`;
+
+// MAPS — all by rounds
+const ui_mapsAll = `
+  SELECT m.name AS label, SUM(pm.rounds) AS rounds
+  FROM xlr_playermaps pm
+  JOIN xlr_mapstats m ON m.id = pm.map_id
+  GROUP BY m.id, m.name
+  ORDER BY rounds DESC
+`;
 
 export const queries = {
   // Top players by skill (no server_id filter)
@@ -400,5 +476,18 @@ export const queries = {
     ORDER BY c.time_edit DESC
     LIMIT ?
   `,
-  topDynamic
+  topDynamic,
+  // UI — Home
+  ui_totalKills,
+  ui_totalRounds,
+  ui_favoriteWeapon,
+  ui_favoriteMap,
+
+  // UI — Ladder
+  ui_ladderSlice,   // function -> { sql, params }
+  ui_ladderCount,
+
+  // UI — Weapons/Maps
+  ui_weaponsAll,
+  ui_mapsAll
 };
