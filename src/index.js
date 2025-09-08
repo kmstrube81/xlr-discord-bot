@@ -223,7 +223,7 @@ client.once(Events.ClientReady,  async (c) => {
   fs.mkdirSync("/opt/xlrbot/health", { recursive: true });
   setInterval(() => fs.writeFileSync(HEARTBEAT_FILE, Date.now().toString()), 15000);
   
-  await ensureUiMessage(client);
+  await ensureUiMessages(client);
 
 });
 
