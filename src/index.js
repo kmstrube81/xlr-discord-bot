@@ -118,45 +118,37 @@ async function getMapImageUrl(label) {
 	}
 }
 
-// ===== App "tabs"
+
 const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps" });
 
-// Button custom-id helpers
-const navRow = (active) => {
-  const mk = (id, label, primary) => new ButtonBuilder()
-    .setCustomId(`ui:${id}`)
-    .setLabel(label)
-    .setStyle(active === id ? ButtonStyle.Primary : ButtonStyle.Secondary);
-  return new ActionRowBuilder().addComponents(
-    mk(VIEWS.HOME, "Home"),
-    mk(VIEWS.LADDER, "Ladder"),
-    mk(VIEWS.WEAPONS, "Weapons"),
-    mk(VIEWS.MAPS, "Maps")
+const navRow = (active) =>
+  new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ui:${VIEWS.HOME}`).setLabel("Home").setStyle(active==="home"?ButtonStyle.Primary:ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`ui:${VIEWS.LADDER}`).setLabel("Ladder").setStyle(active==="ladder"?ButtonStyle.Primary:ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`ui:${VIEWS.WEAPONS}`).setLabel("Weapons").setStyle(active==="weapons"?ButtonStyle.Primary:ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`ui:${VIEWS.MAPS}`).setLabel("Maps").setStyle(active==="maps"?ButtonStyle.Primary:ButtonStyle.Secondary),
   );
-};
+
+const pagerRow = (view, page, hasPrev, hasNext) =>
+  new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
+  );
 
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
 }
 
-const pagerRow = (view, page, hasPrev, hasNext) => new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
-  new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext)
-);
-
-// parse customId -> { view, page }
-function parseCustomId(customId) {
-  const parts = customId.split(":");
-  if (parts[0] !== "ui") return null;
-  if (parts.length === 2) return { view: parts[1], page: 0 };
-  if (parts.length === 4) {
-    const [_, view, dir, pageStr] = parts;
-    const cur = Math.max(0, parseInt(pageStr, 10) || 0);
-    return { view, page: dir === "next" ? cur + 1 : Math.max(0, cur - 1) };
+function parseCustomId(id) {
+  const p = id.split(":");
+  if (p[0]!=="ui") return null;
+  if (p.length===2) return { view: p[1], page: 0 };
+  if (p.length===4) {
+    const cur = Math.max(0, parseInt(p[3], 10) || 0);
+    return { view: p[1], page: p[2]==="next" ? cur+1 : Math.max(0, cur-1) };
   }
   return null;
 }
-
 
 async function register() {
   const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
@@ -174,39 +166,73 @@ async function runQuery(sql, params) {
   return rows;
 }
 
+import {
+  renderHomeEmbed,
+  renderLadderEmbeds,
+  renderWeaponsEmbed,
+  renderMapsEmbed,
+} from "./format.js";
+import { queries } from "./queries.js";
+
+// your existing runQuery(...) is reused
+
 async function getHomeTotals() {
-  const [[{ totalKills = 0 } = {}], [{ totalRounds = 0 } = {}], [favW = {}], [favM = {}]] = await Promise.all([
+  const [[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
     runQuery(queries.ui_totalKills, []),
     runQuery(queries.ui_totalRounds, []),
     runQuery(queries.ui_favoriteWeapon, []),
     runQuery(queries.ui_favoriteMap, []),
   ]);
-
   return {
-    totalKills: Number(totalKills) || 0,
-    totalRounds: Number(totalRounds) || 0,
-    favoriteWeapon: { label: favW?.label || "—", kills: Number(favW?.kills) || 0 },
-    favoriteMap: { label: favM?.label || "—", rounds: Number(favM?.rounds) || 0 },
+    totalKills: +totalKills || 0,
+    totalRounds: +totalRounds || 0,
+    favoriteWeapon: { label: favW?.label ?? "—", kills: +(favW?.kills ?? 0) },
+    favoriteMap: { label: favM?.label ?? "—", rounds: +(favM?.rounds ?? 0) },
   };
 }
-
-async function getLadderSlice(offset = 0, limit = 10) {
+async function getLadderSlice(offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQuery(sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 })); // absolute rank for page 2 => 11..20
 }
-
 async function getLadderCount() {
-  const [{ cnt = 0 } = {}] = await runQuery(queries.ui_ladderCount, []);
-  return Number(cnt) || 0;
+  const [{ cnt=0 }={}] = await runQuery(queries.ui_ladderCount, []);
+  return +cnt || 0;
 }
+const getWeaponsAll = () => runQuery(queries.ui_weaponsAll, []);
+const getMapsAll    = () => runQuery(queries.ui_mapsAll,   []);
 
-async function getWeaponsAll() {
-  return await runQuery(queries.ui_weaponsAll, []);
-}
-
-async function getMapsAll() {
-  return await runQuery(queries.ui_mapsAll, []);
+/** Build the payload pieces for a given view/page. */
+async function buildView(view, page=0) {
+  const nav = [navRow(view)];
+  switch (view) {
+    case VIEWS.HOME: {
+      const totals = await getHomeTotals();
+      const embeds = renderHomeEmbed({ totals });
+      return { embeds, nav, pager: [] };
+    }
+    case VIEWS.LADDER: {
+      const pageSize = 10, offset = page * pageSize;
+      const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
+      const embeds = renderLadderEmbeds({ rows, page }); // uses absolute r.rank for numbering
+      const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + pageSize < total)];
+      return { embeds, nav, pager };
+    }
+    case VIEWS.WEAPONS: {
+      const items = await getWeaponsAll();
+      const embeds = renderWeaponsEmbed({ items, page, perPage: 50 });
+      const start = page*50, pager = [pagerRow(VIEWS.WEAPONS, page, page>0, start+50<items.length)];
+      return { embeds, nav, pager };
+    }
+    case VIEWS.MAPS: {
+      const items = await getMapsAll();
+      const embeds = renderMapsEmbed({ items, page, perPage: 50 });
+      const start = page*50, pager = [pagerRow(VIEWS.MAPS, page, page>0, start+50<items.length)];
+      return { embeds, nav, pager };
+    }
+    default:
+      return buildView(VIEWS.HOME, 0);
+  }
 }
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -228,50 +254,44 @@ client.once(Events.ClientReady,  async (c) => {
 });
 
 client.on(Events.InteractionCreate, async (i) => {
+  if (!i.isButton()) return;
+
+  
+});
+
+
+client.on(Events.InteractionCreate, async (i) => {
   try {
     if (i.isButton()) {
-      const parsed = parseCustomId(i.customId); // you already have this
-      if (!parsed) return;
+      const parsed = parseCustomId(i.customId);
+	  if (!parsed) return;
+	  const { view, page } = parsed;
 
-      const { view, page } = parsed;
+	  // NAV toolbar clicked
+	  if (i.message.id === UI_NAV_MESSAGE_ID) {
+		const payload = await buildView(view, page);
+		const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+		const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
+		await Promise.all([
+		  i.message.edit({ content: "", embeds: [], components: payload.nav }),
+		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+		]);
+		await i.deferUpdate();
+		return;
+	  }
 
-      // Toolbar button clicked?
-      if (i.message.id === UI_NAV_MESSAGE_ID) {
-        // Build new view + update the content message (bottom)
-        const payload = await buildViewPayload(view, page);
-        const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-        const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
-        // Strip nav row (pager only in content)
-        const pagerOnly = payload.components.filter(r =>
-          r.components?.some(c => c.customId?.includes(":prev") || c.customId?.includes(":next"))
-        );
-        await contentMsg.edit({ embeds: payload.embeds, components: pagerOnly });
+	  // PAGER clicked in content message
+	  if (i.message.id === UI_CONTENT_MESSAGE_ID) {
+		const payload = await buildView(view, page);
+		await i.update({ embeds: payload.embeds, components: payload.pager });
 
-        // Refresh toolbar highlight
-        await i.message.edit(toolbarPayload(view));
-
-        // No visible change to the toolbar message itself
-        await i.deferUpdate();
-        return;
-      }
-
-      // Pager button clicked in content message?
-      if (i.message.id === UI_CONTENT_MESSAGE_ID) {
-        const payload = await buildViewPayload(view, page);
-        // Keep pager only in content
-        const pagerOnly = payload.components.filter(r =>
-          r.components?.some(c => c.customId?.includes(":prev") || c.customId?.includes(":next"))
-        );
-        await i.update({ embeds: payload.embeds, components: pagerOnly });
-
-        // Optionally also refresh toolbar highlight (view doesn’t change on prev/next, but harmless)
-        if (UI_NAV_MESSAGE_ID) {
-          const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-          const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
-          await navMsg.edit(toolbarPayload(view));
-        }
-        return;
-      }
+		// keep toolbar highlight synced (optional, cheap)
+		if (UI_NAV_MESSAGE_ID) {
+		  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+		  const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
+		  await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+		}
+	  }
     }
   } catch (e) {
 		console.error("[ui] button error", e);
@@ -433,97 +453,33 @@ if (process.argv.includes("--register")) {
   client.login(DISCORD_TOKEN);
 }
 
-async function buildViewPayload(view, page = 0) {
-  switch (view) {
-    case VIEWS.HOME: {
-      const totals = await getHomeTotals();
-      const embeds = renderHomeEmbed({ totals }); // from format.js
-      return { embeds, components: [navRow(VIEWS.HOME)] };
-    }
-    case VIEWS.LADDER: {
-      const pageSize = 10;
-      const offset = page * pageSize;
-      const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
-      const hasPrev = page > 0;
-      const hasNext = offset + pageSize < total;
-
-      // Optional: you can pass a custom title/thumbnail if you have them handy
-      const embeds = renderLadderEmbeds({ rows, page });
-
-      return { embeds, components: [navRow(VIEWS.LADDER), pagerRow(VIEWS.LADDER, page, hasPrev, hasNext)] };
-    }
-    case VIEWS.WEAPONS: {
-      const items = await getWeaponsAll();
-      const embeds = renderWeaponsEmbed({ items, page, perPage: 50 });
-      const start = page * 50;
-      const hasPrev = page > 0;
-      const hasNext = start + 50 < items.length;
-      return { embeds, components: [navRow(VIEWS.WEAPONS), pagerRow(VIEWS.WEAPONS, page, hasPrev, hasNext)] };
-    }
-    case VIEWS.MAPS: {
-      const items = await getMapsAll();
-      const embeds = renderMapsEmbed({ items, page, perPage: 50 });
-      const start = page * 50;
-      const hasPrev = page > 0;
-      const hasNext = start + 50 < items.length;
-      return { embeds, components: [navRow(VIEWS.MAPS), pagerRow(VIEWS.MAPS, page, hasPrev, hasNext)] };
-    }
-    default:
-      return buildViewPayload(VIEWS.HOME, 0);
-  }
-}
-
+// Ensure both messages exist and are populated
 async function ensureUiMessages(client) {
-  if (!CHANNEL_ID) {
-    console.warn("[ui] CHANNEL_ID blank; skipping app UI (slash commands still active).");
-    return null;
-  }
+  if (!CHANNEL_ID) { console.warn("[ui] No CHANNEL_ID; skipping UI."); return null; }
 
   const channel = await client.channels.fetch(CHANNEL_ID).catch(() => null);
-  if (!channel || channel.type !== ChannelType.GuildText) {
-    console.warn("[ui] CHANNEL_ID not a text channel; skipping UI.");
-    return null;
-  }
+  if (!channel || channel.type !== ChannelType.GuildText) { console.warn("[ui] Bad CHANNEL_ID"); return null; }
 
-  // Ensure NAV (toolbar) message
-  let navMsg = UI_NAV_MESSAGE_ID
-    ? await channel.messages.fetch(UI_NAV_MESSAGE_ID).catch(() => null)
-    : null;
+  const initial = await buildView(VIEWS.HOME, 0);
 
+  // NAV (top)
+  let navMsg = UI_NAV_MESSAGE_ID ? await channel.messages.fetch(UI_NAV_MESSAGE_ID).catch(()=>null) : null;
   if (!navMsg) {
-    navMsg = await channel.send(toolbarPayload("home"));
+    navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
     upsertEnv("UI_NAV_MESSAGE_ID", navMsg.id);
     try { await navMsg.pin(); } catch {}
+  } else {
+    await navMsg.edit({ content: "", embeds: [], components: initial.nav });
   }
 
-  // Ensure CONTENT message (the one with embeds + Prev/Next)
-  let contentMsg = UI_CONTENT_MESSAGE_ID
-    ? await channel.messages.fetch(UI_CONTENT_MESSAGE_ID).catch(() => null)
-    : null;
-
+  // CONTENT (bottom)
+  let contentMsg = UI_CONTENT_MESSAGE_ID ? await channel.messages.fetch(UI_CONTENT_MESSAGE_ID).catch(()=>null) : null;
   if (!contentMsg) {
-    const homePayload = await buildViewPayload("home", 0);
-    // strip nav from the content; only pager belongs here
-    const { embeds, components } = homePayload;
-    const pagerOnly = components.filter(r =>
-      r.components?.some(c => ["ui:ladder", "ui:weapons", "ui:maps", "ui:home"].includes(c.customId))
-        ? false : true
-    );
-    contentMsg = await channel.send({ embeds, components: pagerOnly });
+    contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
     upsertEnv("UI_CONTENT_MESSAGE_ID", contentMsg.id);
   } else {
-    // refresh to HOME on boot
-    const payload = await buildViewPayload("home", 0);
-    const { embeds, components } = payload;
-    const pagerOnly = components.filter(r =>
-      r.components?.some(c => c.customId?.startsWith("ui:") && !c.customId?.includes(":prev") && !c.customId?.includes(":next"))
-        ? false : true
-    );
-    await contentMsg.edit({ embeds, components: pagerOnly });
+    await contentMsg.edit({ embeds: initial.embeds, components: initial.pager });
   }
-
-  // Make sure toolbar shows the active tab styling
-  await navMsg.edit(toolbarPayload("home"));
 
   return { navMsg, contentMsg };
 }
