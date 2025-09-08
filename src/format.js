@@ -100,7 +100,7 @@ export function formatPlayerMapEmbed(row, opts = {}) {
     .setFooter({ text: "XLRStats • B3 • " + (lastSeen === "—" ? "last seen unknown" : `last seen ${lastSeen}`) });
 }
 
-export function formatTopEmbed(rows, title = "Top by Skill", offset, opts = {}) {
+export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
 
   const embeds = [
@@ -209,7 +209,7 @@ export function renderHomeEmbed({ totals }) {
 
 export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
   // Reuse your existing multi-embed pack so it matches /xlr-top exactly
-  const embeds = formatTopEmbed(rows, `🏆 ${title}`, page * 10, { thumbnail });
+  const embeds = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, page * 10 });
   // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
   if (embeds.length) {
     const last = embeds[embeds.length - 1];
