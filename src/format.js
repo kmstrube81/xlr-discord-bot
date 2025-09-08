@@ -101,17 +101,15 @@ export function formatPlayerMapEmbed(row, opts = {}) {
 }
 
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
-  const { thumbnail } = opts;
+  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
 
   const embeds = [
-	new EmbedBuilder()
-	.setColor(0x32d296)
-	.setTitle(`🏆 ${title}`)
+    new EmbedBuilder().setColor(0x32d296).setTitle(`🏆 ${title}`)
   ];
-  
+
   rows.map((r, i) => {
 	  
-	let embed;
+    let embed;
 	
 	if(i === 0) {
 		
@@ -126,20 +124,18 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 	}
 	
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
-	
-	const medals = ["🥇", "🥈", "🥉"];
+    const medals = ["🥇", "🥈", "🥉"];
 
-	let rankDisplay;
-	if (i < 3) {
-	  // Use medal for 1st, 2nd, 3rd
-	  rankDisplay = medals[i];
-	} else {
-	  // Use #<rank> for everything else
-	  rankDisplay = `#${i + 1}.`;
-	}
+    const absoluteIndex = offset + i;               // <— absolute rank
+    let rankDisplay;
+    if (absoluteIndex < 3) {                        // medals only for 1–3 overall
+      rankDisplay = medals[absoluteIndex];
+    } else {
+      rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
+    }
 
-	embed.setDescription(`**${rankDisplay} ${r.name}**`);
-	embed.addFields(
+    embed.setDescription(`**${rankDisplay} ${r.name}**`);
+  embed.addFields(
 		{
 			name : `Skill`,
 			value : String(r.skill),
@@ -179,6 +175,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   }
   return embeds;
 }
+
 
 
 export function formatLastSeenEmbed(rows, opts = {}) {
