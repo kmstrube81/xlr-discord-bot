@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { EmbedBuilder } from "discord.js";
+import { Client, EmbedBuilder } from "discord.js";
 
 // Helper: make a Discord custom emoji placeholder from a weapon label
 const toEmojiCode = (label) => client.emojis.cache.find(e => e.name === label);
