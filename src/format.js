@@ -20,7 +20,7 @@ export function formatPlayerEmbed(p, opts = {}) {
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   const favWeapEmoji = resolveEmoji(p.fav);
-  const favWeap = favWeapEmoji ? "${favWeapEmoji} ${p.fav}" : p.fav;
+  const favWeap = favWeapEmoji ? `${favWeapEmoji} ${p.fav}` : p.fav;
   return new EmbedBuilder().
 	setColor(0x2b7cff).
     setTitle(`**${p.name}**`).
@@ -47,7 +47,7 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
   const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
   const lastSeen = row.time_edit ? dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   const weapEmoji = resolveEmoji(row.weapon);
-  const weap = weapEmoji ? "${weapEmoji} ${row.weapon}" : row.weapon;
+  const weap = weapEmoji ? `${weapEmoji} ${row.weapon}` : row.weapon;
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
