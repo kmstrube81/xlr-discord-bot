@@ -138,9 +138,9 @@ client.on(Events.InteractionCreate, async (i) => {
 	  let weapon    = i.options.getString("weapon") || null;
 	  let map       = i.options.getString("map") || null;
 
-	  // 0 => all (up to 100)
+	  // 0 => all (up to 10)
 	  const count = countIn ?? 0;
-	  const limit = count === 0 ? 100 : Math.min(count, 100);
+	  const limit = count === 0 ? 10 : Math.min(count, 10);
 
 	  // weapon precedence over map
 	  if (weapon && map) map = null;
