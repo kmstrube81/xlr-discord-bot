@@ -208,8 +208,10 @@ export function renderHomeEmbed({ totals }) {
 }
 
 export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
-  // Reuse your existing multi-embed pack so it matches /xlr-top exactly
-  const embeds = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, page * 10 });
+  
+  const offset = page * 10;
+  
+  const embeds = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset });
   // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
   if (embeds.length) {
     const last = embeds[embeds.length - 1];
