@@ -10,10 +10,10 @@ import fs from "node:fs";
 
 // --- new env-driven UI config + tiny .env updater ---
 const CHANNEL_ID = process.env.CHANNEL_ID?.trim() || "";
-let   UI_MESSAGE_ID = process.env.UI_MESSAGE_ID?.trim() || "";
+let UI_NAV_MESSAGE_ID     = process.env.UI_NAV_MESSAGE_ID?.trim() || "";
+let UI_CONTENT_MESSAGE_ID = process.env.UI_CONTENT_MESSAGE_ID?.trim() || "";
 
 function upsertEnv(key, value) {
-  // persist back to .env so we can edit the same message next boot
   const ENV_PATH = path.resolve(process.cwd(), ".env");
   const lines = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf8").split(/\r?\n/) : [];
   const idx = lines.findIndex(l => l.startsWith(`${key}=`));
@@ -21,7 +21,8 @@ function upsertEnv(key, value) {
   else lines.push(`${key}=${value}`);
   fs.writeFileSync(ENV_PATH, lines.join("\n"), "utf8");
   process.env[key] = value;
-  if (key === "UI_MESSAGE_ID") UI_MESSAGE_ID = value;
+  if (key === "UI_NAV_MESSAGE_ID") UI_NAV_MESSAGE_ID = value;
+  if (key === "UI_CONTENT_MESSAGE_ID") UI_CONTENT_MESSAGE_ID = value;
 }
 
 
@@ -134,6 +135,10 @@ const navRow = (active) => {
   );
 };
 
+function toolbarPayload(activeView) {
+  return { content: "", embeds: [], components: [navRow(activeView)] };
+}
+
 const pagerRow = (view, page, hasPrev, hasNext) => new ActionRowBuilder().addComponents(
   new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
   new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext)
@@ -223,23 +228,57 @@ client.once(Events.ClientReady,  async (c) => {
 });
 
 client.on(Events.InteractionCreate, async (i) => {
-  // Handle UI button interactions first
-	if (i.isButton()) {
-	  const parsed = parseCustomId(i.customId);
-	  if (!parsed) return;
-	  const { view, page } = parsed;
-	  try {
-		const payload = await buildViewPayload(view, page);
-		await i.update(payload);
-	  } catch (e) {
+  try {
+    if (i.isButton()) {
+      const parsed = parseCustomId(i.customId); // you already have this
+      if (!parsed) return;
+
+      const { view, page } = parsed;
+
+      // Toolbar button clicked?
+      if (i.message.id === UI_NAV_MESSAGE_ID) {
+        // Build new view + update the content message (bottom)
+        const payload = await buildViewPayload(view, page);
+        const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+        const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
+        // Strip nav row (pager only in content)
+        const pagerOnly = payload.components.filter(r =>
+          r.components?.some(c => c.customId?.includes(":prev") || c.customId?.includes(":next"))
+        );
+        await contentMsg.edit({ embeds: payload.embeds, components: pagerOnly });
+
+        // Refresh toolbar highlight
+        await i.message.edit(toolbarPayload(view));
+
+        // No visible change to the toolbar message itself
+        await i.deferUpdate();
+        return;
+      }
+
+      // Pager button clicked in content message?
+      if (i.message.id === UI_CONTENT_MESSAGE_ID) {
+        const payload = await buildViewPayload(view, page);
+        // Keep pager only in content
+        const pagerOnly = payload.components.filter(r =>
+          r.components?.some(c => c.customId?.includes(":prev") || c.customId?.includes(":next"))
+        );
+        await i.update({ embeds: payload.embeds, components: pagerOnly });
+
+        // Optionally also refresh toolbar highlight (view doesn’t change on prev/next, but harmless)
+        if (UI_NAV_MESSAGE_ID) {
+          const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+          const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
+          await navMsg.edit(toolbarPayload(view));
+        }
+        return;
+      }
+    }
+  } catch (e) {
 		console.error("[ui] button error", e);
 		if (i.deferred || i.replied) await i.followUp({ content: "Something went wrong.", ephemeral: true });
 		else await i.reply({ content: "Something went wrong.", ephemeral: true });
 	  }
-	  return;
-	}
 
-	
   if (!i.isChatInputCommand()) return;
 
   try {
@@ -434,33 +473,57 @@ async function buildViewPayload(view, page = 0) {
   }
 }
 
-
-async function ensureUiMessage(client) {
+async function ensureUiMessages(client) {
   if (!CHANNEL_ID) {
     console.warn("[ui] CHANNEL_ID blank; skipping app UI (slash commands still active).");
     return null;
   }
+
   const channel = await client.channels.fetch(CHANNEL_ID).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildText) {
-    console.warn("[ui] CHANNEL_ID not found or not a text channel; skipping app UI.");
+    console.warn("[ui] CHANNEL_ID not a text channel; skipping UI.");
     return null;
   }
 
-  // try to fetch & refresh existing
-  if (UI_MESSAGE_ID) {
-    const msg = await channel.messages.fetch(UI_MESSAGE_ID).catch(() => null);
-    if (msg) {
-      const payload = await buildViewPayload(VIEWS.HOME, 0);
-      await msg.edit(payload);
-      return msg;
-    }
+  // Ensure NAV (toolbar) message
+  let navMsg = UI_NAV_MESSAGE_ID
+    ? await channel.messages.fetch(UI_NAV_MESSAGE_ID).catch(() => null)
+    : null;
+
+  if (!navMsg) {
+    navMsg = await channel.send(toolbarPayload("home"));
+    upsertEnv("UI_NAV_MESSAGE_ID", navMsg.id);
+    try { await navMsg.pin(); } catch {}
   }
 
-  // create a fresh UI message on HOME
-  const payload = await buildViewPayload(VIEWS.HOME, 0);
-  const created = await channel.send(payload);
-  upsertEnv("UI_MESSAGE_ID", created.id);
-  console.log(`[ui] Created UI message ${created.id} in #${channel.name}`);
-  return created;
-}
+  // Ensure CONTENT message (the one with embeds + Prev/Next)
+  let contentMsg = UI_CONTENT_MESSAGE_ID
+    ? await channel.messages.fetch(UI_CONTENT_MESSAGE_ID).catch(() => null)
+    : null;
 
+  if (!contentMsg) {
+    const homePayload = await buildViewPayload("home", 0);
+    // strip nav from the content; only pager belongs here
+    const { embeds, components } = homePayload;
+    const pagerOnly = components.filter(r =>
+      r.components?.some(c => ["ui:ladder", "ui:weapons", "ui:maps", "ui:home"].includes(c.customId))
+        ? false : true
+    );
+    contentMsg = await channel.send({ embeds, components: pagerOnly });
+    upsertEnv("UI_CONTENT_MESSAGE_ID", contentMsg.id);
+  } else {
+    // refresh to HOME on boot
+    const payload = await buildViewPayload("home", 0);
+    const { embeds, components } = payload;
+    const pagerOnly = components.filter(r =>
+      r.components?.some(c => c.customId?.startsWith("ui:") && !c.customId?.includes(":prev") && !c.customId?.includes(":next"))
+        ? false : true
+    );
+    await contentMsg.edit({ embeds, components: pagerOnly });
+  }
+
+  // Make sure toolbar shows the active tab styling
+  await navMsg.edit(toolbarPayload("home"));
+
+  return { navMsg, contentMsg };
+}
