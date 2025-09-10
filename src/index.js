@@ -14,6 +14,11 @@ const CHANNEL_ID = process.env.CHANNEL_ID?.trim() || "";
 let UI_NAV_MESSAGE_ID     = process.env.UI_NAV_MESSAGE_ID?.trim() || "";
 let UI_CONTENT_MESSAGE_ID = process.env.UI_CONTENT_MESSAGE_ID?.trim() || "";
 
+// --- inactivity / auto-home ---
+const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes
+let uiCollector = null;              // channel-level collector for our UI buttons
+
+
 function upsertEnv(key, value) {
   const ENV_PATH = path.resolve(process.cwd(), ".env");
   const lines = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf8").split(/\r?\n/) : [];
@@ -234,6 +239,48 @@ async function buildView(view, page=0) {
   }
 }
 
+async function startUiInactivitySession(channel) {
+  // Stop an old one if it exists
+  if (uiCollector) {
+    try { uiCollector.stop('restart'); } catch {}
+    uiCollector = null;
+  }
+
+  // Only collect our UI buttons in the target channel + for our 2 UI messages
+  uiCollector = channel.createMessageComponentCollector({
+    idle: INACTIVITY_MS,
+    filter: (i) =>
+      i.customId?.startsWith('ui:') &&
+      (i.message?.id === UI_NAV_MESSAGE_ID || i.message?.id === UI_CONTENT_MESSAGE_ID)
+  });
+
+  uiCollector.on('end', async (_collected, reason) => {
+    if (reason === 'idle') {
+      try {
+        // Auto-refresh Home on idle, even if already on Home
+        const payload = await buildView(VIEWS.HOME, 0);
+
+        // Update toolbar + content
+        const [navMsg, contentMsg] = await Promise.all([
+          channel.messages.fetch(UI_NAV_MESSAGE_ID),
+          channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+        ]);
+
+        await Promise.all([
+          navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+          contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+        ]);
+      } catch (e) {
+        console.error("[ui] idle refresh failed:", e);
+      } finally {
+        // Restart the idle watcher
+        startUiInactivitySession(channel);
+      }
+    }
+  });
+}
+
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 setEmojiResolver((label) => {
@@ -253,13 +300,6 @@ client.once(Events.ClientReady,  async (c) => {
 });
 
 client.on(Events.InteractionCreate, async (i) => {
-  if (!i.isButton()) return;
-
-  
-});
-
-
-client.on(Events.InteractionCreate, async (i) => {
   try {
     if (i.isButton()) {
       const parsed = parseCustomId(i.customId);
@@ -276,6 +316,10 @@ client.on(Events.InteractionCreate, async (i) => {
 		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
 		]);
 		await i.deferUpdate();
+		
+		// reset inactivity timer
+		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+  
 		return;
 	  }
 
@@ -290,6 +334,8 @@ client.on(Events.InteractionCreate, async (i) => {
 		  const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
 		  await navMsg.edit({ content: "", embeds: [], components: payload.nav });
 		}
+		// reset inactivity timer
+		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 	  }
     }
   } catch (e) {
