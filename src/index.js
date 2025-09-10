@@ -297,6 +297,13 @@ client.once(Events.ClientReady,  async (c) => {
   
   await ensureUiMessages(client);
 
+  // kick off idle watcher
+	try {
+	  const channel = await client.channels.fetch(CHANNEL_ID);
+	  if (channel) startUiInactivitySession(channel);
+	} catch (e) {
+	  console.warn("[ui] could not start inactivity session:", e);
+	}
 });
 
 client.on(Events.InteractionCreate, async (i) => {
