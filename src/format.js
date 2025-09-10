@@ -15,6 +15,18 @@ export function resolveEmoji(label) {
   try { return _emojiResolver(label) ?? null; } catch { return null; }
 }
 
+function pad(str, len) {
+  str = str.toString();
+  return str.length >= len ? str.slice(0, len - 1) + " " : str + " ".repeat(len - str.length);
+}
+
+function sanitize(name) {
+  return name
+    .replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
+    .replace(/\|/g, "")   // remove pipes
+    .replace(/`/g, "'");  // replace backticks with apostrophes
+}
+
 
 export function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
