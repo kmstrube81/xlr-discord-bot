@@ -3,6 +3,8 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, E
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed, setEmojiResolver, resolveEmoji } from "./format.js";
+import axios from "axios";
+import { formatEmbed } from "./formatMessage.js";
 
 // add near your other imports
 import path from "node:path";
@@ -32,7 +34,8 @@ const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
 	|| "https://cod.pm/mp_maps/unknown.png";
 const {
   DISCORD_TOKEN, APPLICATION_ID, GUILD_ID,
-  MYSQL_B3_DB, MYSQL_B3_USER, MYSQL_B3_PASSWORD
+  MYSQL_B3_DB, MYSQL_B3_USER, MYSQL_B3_PASSWORD,
+  B3_RCON_IP, B3_RCON_PORT, TZ
 } = process.env;
 
 const pool = mysql.createPool({
@@ -87,6 +90,12 @@ const commands = [
     .setDescription("Show recently seen players")
     .addIntegerOption(o => o.setName("count").setDescription("How many (default 10)").setMinValue(1).setMaxValue(25))
 ].map(c => c.toJSON());
+
+async function fetchServerStatus() {
+  const url = `https://api.cod.pm/getstatus/${B3_RCON_IP}/${B3_RCON_PORT`;
+  const res = await axios.get(url);
+  return res.data;
+}
 
 async function checkUrlFor404(url) {
   try {
@@ -198,7 +207,8 @@ async function buildView(view, page=0) {
   switch (view) {
     case VIEWS.HOME: {
       const totals = await getHomeTotals();
-      const embeds = renderHomeEmbed({ totals });
+	  const status = await fetchServerStatus();
+      const embeds = renderHomeEmbed({ totals }, status, TZ);
       return { embeds, nav, pager: [] };
     }
     case VIEWS.LADDER: {

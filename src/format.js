@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
+import { DateTime } from "luxon";
 
 // Shared emoji resolver (injected by index.js at runtime)
 let _emojiResolver = () => null;
@@ -189,22 +190,94 @@ export function formatLastSeenEmbed(rows, opts = {}) {
 // === App UI renderers ===
 // Keep components (buttons) outside; these return only embeds so index.js can add rows.
 
-export function renderHomeEmbed({ totals }) {
+export function renderHomeEmbed({ totals }, data, tz) {
+  const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
   const { totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
-  return [
-    new EmbedBuilder()
+  
+  const map = serverinfo?.mapname || "unknown";
+  const mode = serverinfo?.g_gametype || "N/A";
+  const hostname = serverinfo?.sv_hostname || "Unnamed Server";
+  const playerCount = playerinfo?.length || 0;
+  const maxPlayers = serverinfo?.sv_maxclients || "?";
+
+  const timezone = tz || "UTC";
+  const updatedTime = DateTime.fromSeconds(Number(time_retrieved)).setZone(timezone).toLocaleString(DateTime.DATETIME_MED_WITH_SECONDS);
+
+  const imageUrl = `https://cod.pm/mp_maps/${mapimage}`;
+  
+  
+  const embed1 = new EmbedBuilder()
       .setColor(0x2b7cff)
-      .setTitle("📊 Server Overview")
-      .setDescription("High-level stats at a glance")
+      .setTitle(hostname)
+	  .setImage(imageUrl)
       .addFields(
         { name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
         { name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
         { name: "\u200b", value: "\u200b", inline: true },
-        { name: "Favorite Weapon (by kills)", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()}**`, inline: true },
-        { name: "Favorite Map (by rounds)", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()}**`, inline: true },
+        { name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
+        { name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
       )
-      .setFooter({ text: "XLR App • Home" })
-  ];
+	  .setFooter({ text: `${mode} — ${map} — ${playerCount}/${maxPlayers} players` });
+      
+	
+  const embed2 = new EmbedBuilder()
+	.setColor(0x2b7cff)
+	.setFooter({ text: ` ${updatedTime} | XLR App • Home` });
+	
+	if(playerCount){
+
+	  const namePad = 30;
+	  const scorePad = 6;
+	  const pingPad = 6;
+	  
+	  const footer = "[See All Players...](https://cod.pm/server/" + config.serverIP + "/" + config.serverPort + ")"; 
+	  
+	  let chars = namePad + scorePad + pingPad + footer.length + 18;
+
+	  const header = pad("Name", namePad) + pad("Score", scorePad) + pad("Ping", pingPad);
+	  
+	  playerinfo.sort((a,b) => b.score - a.score );
+		  
+	  const lines = playerinfo.map(p =>
+		pad(sanitize(p.name), namePad) + pad(p.score, scorePad) + pad(p.ping, pingPad)
+	  );
+	  let flag = false;
+	  let rows = "";
+	  lines.forEach((line) => {
+		let join = line + '\n';
+		chars += 44;
+		if(chars < 1024){
+			rows += join;
+		} else {
+			flag = true;
+		}
+	  });
+	  
+	  let footerMd = flag ? footer : "";
+
+	  const table = [header, "-".repeat(header.length), rows].join("\n");
+
+	  
+		
+	  embed2.addFields({
+		  name: `/connect ${config.serverIP}:${config.serverPort}`,
+		  value: `\`\`\`\n${table}\n\`\`\`\n${footerMd}`
+		});
+		
+		
+		
+		
+		
+	}
+	else {  
+	
+		embed2.addFields({
+		  name: `/connect ${config.serverIP}:${config.serverPort}`,
+		  value: "Server is empty"
+		});
+	
+	}
+  return [embed1, embed2];
 }
 
 export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
