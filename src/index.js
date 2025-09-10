@@ -193,15 +193,31 @@ async function getHomeTotals() {
     favoriteMap: { label: favM?.label ?? "—", rounds: +(favM?.rounds ?? 0) },
   };
 }
+
 async function getLadderSlice(offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQuery(sql, params);
   return rows.map((r, i) => ({ ...r, rank: offset + i + 1 })); // absolute rank for page 2 => 11..20
 }
+
+async function getWeaponsSlice(offset=0, limit=10) {
+  const { sql, params } = queries.ui_weaponsSlice(limit, offset);
+  const rows = await runQuery(sql, params);
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 })); // absolute rank for page 2 => 11..20
+}
+
 async function getLadderCount() {
   const [{ cnt=0 }={}] = await runQuery(queries.ui_ladderCount, []);
   return +cnt || 0;
 }
+
+
+async function getWeaponsCount() {
+  const [{ cnt=0 }={}] = await runQuery(queries.ui_weaponsCount, []);
+  return +cnt || 0;
+}
+
+
 const getWeaponsAll = () => runQuery(queries.ui_weaponsAll, []);
 const getMapsAll    = () => runQuery(queries.ui_mapsAll,   []);
 
@@ -223,9 +239,10 @@ async function buildView(view, page=0) {
       return { embeds, nav, pager };
     }
     case VIEWS.WEAPONS: {
-      const items = await getWeaponsAll();
-      const embeds = renderWeaponsEmbed({ items, page, perPage: 50 });
-      const start = page*50, pager = [pagerRow(VIEWS.WEAPONS, page, page>0, start+50<items.length)];
+	  const pageSize = 10, offset = page * pageSize;
+      const [rows, total] = await Promise.all([getWeaponsSlice(offset, pageSize), getWeaponsCount()]);
+      const embeds = renderWeaponsEmbeds({ rows, page }); // uses absolute r.rank for numbering
+      const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + pageSize < total)];
       return { embeds, nav, pager };
     }
     case VIEWS.MAPS: {

@@ -183,20 +183,79 @@ function ui_ladderSlice(limit = 10, offset = 0) {
   return { sql, params: [limit, offset] };
 }
 
+function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
+	
+  const sql = `
+   SELECT c.id AS client_id,
+             COALESCE(a.alias, c.name) AS name,
+             s.skill AS skill,
+             wu.kills AS kills,
+             wu.deaths AS deaths,
+             CASE WHEN wu.deaths=0 THEN wu.kills ELSE ROUND(wu.kills / wu.deaths, 2) END AS ratio,
+             wu.suicides AS suicides,
+             NULL AS assists,
+             NULL AS rounds,
+             wsel.name AS matched_label
+   FROM ${PLAYERSTATS} s
+   JOIN clients c ON c.id = s.client_id
+		LEFT JOIN (
+		  SELECT aa.client_id, aa.alias
+		  FROM aliases aa
+		  JOIN (
+			SELECT client_id, MAX(num_used) AS max_used
+			FROM aliases
+			GROUP BY client_id
+		  ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
+		) a ON a.client_id = c.id
+   JOIN (
+        SELECT id, name
+        FROM xlr_weaponstats
+        WHERE (name LIKE ? OR id = ?)
+        ORDER BY name
+        LIMIT 1
+      ) wsel ON 1=1
+   JOIN xlr_weaponusage wu ON wu.weapon_id = wsel.id AND wu.player_id = c.id
+   WHERE (wu.kills > 0 OR wu.deaths > 0)
+   ORDER BY kill DESC
+   LIMIT ? OFFSET ?
+  `;
+  return { sql, params: [asLike(weapon), asIdOrNeg1(weapon), limit, offset] };
+}
+
+function ui_weaponsSlice(limit = 10, offset = 0) {
+	// WEAPONS — all by kills
+	const sql = `
+	  SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
+	  FROM xlr_weaponusage wu
+	  JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+	  GROUP BY w.id, w.name
+	  ORDER BY kills DESC
+	  LIMIT ? OFFSET ?
+	`;
+	return { sql, params: [limit, offset] };
+}
+
 const ui_ladderCount = `
   SELECT COUNT(*) AS cnt
   FROM ${PLAYERSTATS} s
   WHERE (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)
 `;
 
+const ui_weaponsCount = `
+  SELECT COUNT(*) AS cnt
+  FROM xlr_weaponstats s
+`;
+
 // WEAPONS — all by kills
 const ui_weaponsAll = `
-  SELECT w.name AS label, SUM(wu.kills) AS kills
+  SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
   FROM xlr_weaponusage wu
   JOIN xlr_weaponstats w ON w.id = wu.weapon_id
   GROUP BY w.id, w.name
   ORDER BY kills DESC
 `;
+
+
 
 // MAPS — all by rounds
 const ui_mapsAll = `

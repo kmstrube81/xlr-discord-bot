@@ -322,18 +322,23 @@ function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
   ];
 }
 
-export function renderWeaponsEmbed({ items, page, perPage = 50 }) {
-  return chunkedListEmbed({
-    title: "🔫 Weapons by Kills",
-    items, page, perPage,
-    unitKey: "kills",
-    unitLabel: "kills",
-  });
+export function renderWeaponsEmbed({ items, page, thumbnail = null }) {
+	
+  const offset = page * 10;
+  
+  const embeds = formatTopEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset });
+  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
+  if (embeds.length) {
+    const last = embeds[embeds.length - 1];
+    const footer = last.data.footer?.text || "XLRStats • B3";
+    last.setFooter({ text: `${footer} • Weapons page ${page + 1}` });
+  }
+  return embeds;
 }
 
 export function renderMapsEmbed({ items, page, perPage = 50 }) {
   return chunkedListEmbed({
-    title: "🗺️ Maps by Rounds Played",
+    title: "🗺️ Top Maps by Rounds Played",
     items, page, perPage,
     unitKey: "rounds",
     unitLabel: "rounds",
