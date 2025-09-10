@@ -190,7 +190,7 @@ export function formatLastSeenEmbed(rows, opts = {}) {
 // === App UI renderers ===
 // Keep components (buttons) outside; these return only embeds so index.js can add rows.
 
-export function renderHomeEmbed({ totals }, data, tz) {
+export function renderHomeEmbed({ totals }, data, tz, ip, port) {
   const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
   const { totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
   
@@ -230,7 +230,7 @@ export function renderHomeEmbed({ totals }, data, tz) {
 	  const scorePad = 6;
 	  const pingPad = 6;
 	  
-	  const footer = "[See All Players...](https://cod.pm/server/" + config.serverIP + "/" + config.serverPort + ")"; 
+	  const footer = `[See All Players...](https://cod.pm/server/${ip}/${port})`; 
 	  
 	  let chars = namePad + scorePad + pingPad + footer.length + 18;
 
@@ -260,7 +260,7 @@ export function renderHomeEmbed({ totals }, data, tz) {
 	  
 		
 	  embed2.addFields({
-		  name: `/connect ${config.serverIP}:${config.serverPort}`,
+		  name: `/connect ${ip}:${port}`,
 		  value: `\`\`\`\n${table}\n\`\`\`\n${footerMd}`
 		});
 		
@@ -272,7 +272,7 @@ export function renderHomeEmbed({ totals }, data, tz) {
 	else {  
 	
 		embed2.addFields({
-		  name: `/connect ${config.serverIP}:${config.serverPort}`,
+		  name: `/connect ${ip}:${port}`,
 		  value: "Server is empty"
 		});
 	

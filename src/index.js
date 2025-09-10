@@ -207,7 +207,7 @@ async function buildView(view, page=0) {
     case VIEWS.HOME: {
       const totals = await getHomeTotals();
 	  const status = await fetchServerStatus();
-      const embeds = renderHomeEmbed({ totals }, status, TZ);
+      const embeds = renderHomeEmbed({ totals }, status, TZ, B3_RCON_IP, B3_RCON_PORT);
       return { embeds, nav, pager: [] };
     }
     case VIEWS.LADDER: {
