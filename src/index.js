@@ -313,22 +313,28 @@ client.on(Events.InteractionCreate, async (i) => {
 	  if (!parsed) return;
 	  const { view, page } = parsed;
 
-	  // NAV toolbar clicked
-	  if (i.message.id === UI_NAV_MESSAGE_ID) {
-		const payload = await buildView(view, page);
-		const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-		const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
-		await Promise.all([
-		  i.message.edit({ content: "", embeds: [], components: payload.nav }),
-		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
-		]);
-		await i.deferUpdate();
-		
-		// reset inactivity timer
-		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-  
-		return;
-	  }
+	// NAV toolbar clicked
+	if (i.message.id === UI_NAV_MESSAGE_ID) {
+	  const parsed = parseCustomId(i.customId);
+	  if (!parsed) return;
+	  const { view, page } = parsed;
+
+	  const payload = await buildView(view, page);
+	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+	  const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
+
+	  // Ack immediately by updating the nav message, and in parallel edit the content message
+	  await Promise.all([
+		i.update({ content: "", embeds: [], components: payload.nav }), // ACK happens here
+		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+	  ]);
+
+	  // reset inactivity timer if present
+	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+
+	  return;
+	}
+
 
 	  // PAGER clicked in content message
 	  if (i.message.id === UI_CONTENT_MESSAGE_ID) {
@@ -346,10 +352,19 @@ client.on(Events.InteractionCreate, async (i) => {
 	  }
     }
   } catch (e) {
-		console.error("[ui] button error", e);
-		if (i.deferred || i.replied) await i.followUp({ content: "Something went wrong.", ephemeral: true });
-		else await i.reply({ content: "Something went wrong.", ephemeral: true });
+	  console.error("[ui] button error", e);
+	  try {
+		if (i.deferred || i.replied) {
+		  await i.followUp({ content: "Something went wrong.", flags: 64 });
+		} else {
+		  await i.reply({ content: "Something went wrong.", flags: 64 });
+		}
+	  } catch (e2) {
+		// Interaction might already be invalid/expired; swallow to avoid crashing
+		console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
 	  }
+	}
+
 
   if (!i.isChatInputCommand()) return;
 
