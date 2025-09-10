@@ -92,7 +92,7 @@ const commands = [
 ].map(c => c.toJSON());
 
 async function fetchServerStatus() {
-  const url = `https://api.cod.pm/getstatus/${B3_RCON_IP}/${B3_RCON_PORT`;
+  const url = `https://api.cod.pm/getstatus/${B3_RCON_IP}/${B3_RCON_PORT}`;
   const res = await axios.get(url);
   return res.data;
 }
