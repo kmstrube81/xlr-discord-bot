@@ -22,7 +22,7 @@ const asLike = t => `%${t}%`;
 const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 
 /** Robust top list with weapon/map pre-resolution + non-zero filter + matched_label */
-export function topDynamic({ limit, sort = \"skill\", weapon = null, map = null, offset = 0 }) {
+export function topDynamic({ limit, sort = "skill", weapon = null, map = null, offset = 0 }) {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
   const params   = [];
