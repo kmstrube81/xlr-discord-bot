@@ -22,7 +22,7 @@ const asLike = t => `%${t}%`;
 const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 
 /** Robust top list with weapon/map pre-resolution + non-zero filter + matched_label */
-export function topDynamic({ limit, sort = "skill", weapon = null, map = null }) {
+export function topDynamic({ limit, sort = \"skill\", weapon = null, map = null, offset = 0 }) {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
   const params   = [];
@@ -122,10 +122,9 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
     ${joins}
     ${where}
     ${orderBy}
-    LIMIT ?
+    LIMIT ? OFFSET ?
   `;
-  params.push(limit);
-
+  params.push(limit, offset);
   return { sql, params };
 }
 
@@ -191,7 +190,7 @@ const ui_ladderCount = `
 
 // WEAPONS — all by kills
 const ui_weaponsAll = `
-  SELECT w.name AS label, SUM(wu.kills) AS kills
+  SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
   FROM xlr_weaponusage wu
   JOIN xlr_weaponstats w ON w.id = wu.weapon_id
   GROUP BY w.id, w.name
@@ -200,7 +199,11 @@ const ui_weaponsAll = `
 
 // MAPS — all by rounds
 const ui_mapsAll = `
-  SELECT m.name AS label, SUM(pm.rounds) AS rounds
+  SELECT m.name AS label,
+         SUM(pm.kills) AS kills,
+         SUM(pm.deaths) AS deaths,
+         SUM(pm.suicides) AS suicides,
+         SUM(pm.rounds) AS rounds
   FROM xlr_playermaps pm
   JOIN xlr_mapstats m ON m.id = pm.map_id
   GROUP BY m.id, m.name

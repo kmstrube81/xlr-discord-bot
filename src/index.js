@@ -132,7 +132,7 @@ async function getMapImageUrl(label) {
 }
 
 
-const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps" });
+const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps", LADDER_FILTER: "ladderf" });
 
 const navRow = (active) =>
   new ActionRowBuilder().addComponents(
@@ -142,23 +142,46 @@ const navRow = (active) =>
     new ButtonBuilder().setCustomId(`ui:${VIEWS.MAPS}`).setLabel("Maps").setStyle(active==="maps"?ButtonStyle.Primary:ButtonStyle.Secondary),
   );
 
-const pagerRow = (view, page, hasPrev, hasNext) =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
-    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
+const pagerRow = (view, page, hasPrev, hasNext, extra = "") => {
+  const prevId = extra ? `ui:${view}:prev:${page}:${extra}` : `ui:${view}:prev:${page}`;
+  const nextId = extra ? `ui:${view}:next:${page}:${extra}` : `ui:${view}:next:${page}`;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(prevId).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+    new ButtonBuilder().setCustomId(nextId).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
   );
+};
+
+function selectRow(view, page, count) {
+  const row = new ActionRowBuilder();
+  for (let i = 0; i < count; i++) {
+    row.addComponents(new ButtonBuilder().setCustomId(`ui:${view}:pick:${page}:${i}`).setLabel(String(i + 1)).setStyle(ButtonStyle.Primary));
+  }
+  return row;
+}
 
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
 }
 
 function parseCustomId(id) {
+  function enc(s){ return encodeURIComponent(String(s)); }
+  function dec(s){ try { return decodeURIComponent(s); } catch { return s; } }
   const p = id.split(":");
   if (p[0]!=="ui") return null;
   if (p.length===2) return { view: p[1], page: 0 };
   if (p.length===4) {
     const cur = Math.max(0, parseInt(p[3], 10) || 0);
     return { view: p[1], page: p[2]==="next" ? cur+1 : Math.max(0, cur-1) };
+  }
+  if (p.length===5 && p[2]==="pick") {
+    return { view: p[1], action: "pick", page: Math.max(0, parseInt(p[3],10)||0), index: Math.max(0, parseInt(p[4],10)||0) };
+  }
+  if (p.length>=6 && p[1]===VIEWS.LADDER_FILTER) {
+    const cur = Math.max(0, parseInt(p[3],10)||0);
+    const page = p[2]==="next" ? cur+1 : Math.max(0, cur-1);
+    const type = p[4];
+    const labelEnc = p.slice(5).join(":");
+    return { view: p[1], page, type, labelEnc };
   }
   return null;
 }
@@ -224,15 +247,50 @@ async function buildView(view, page=0) {
     }
     case VIEWS.WEAPONS: {
       const items = await getWeaponsAll();
-      const embeds = renderWeaponsEmbed({ items, page, perPage: 50 });
-      const start = page*50, pager = [pagerRow(VIEWS.WEAPONS, page, page>0, start+50<items.length)];
-      return { embeds, nav, pager };
+      const per = 10;
+      const embeds = renderWeaponsEmbed({ items, page, perPage: per });
+      const start = page*per;
+      const hasNext = start + per < items.length;
+      const count = Math.min(per, Math.max(0, items.length - start));
+      const controls = [selectRow(VIEWS.WEAPONS, page, count), pagerRow(VIEWS.WEAPONS, page, page>0, hasNext)];
+      return { embeds, nav, pager: controls };
     }
     case VIEWS.MAPS: {
       const items = await getMapsAll();
-      const embeds = renderMapsEmbed({ items, page, perPage: 50 });
-      const start = page*50, pager = [pagerRow(VIEWS.MAPS, page, page>0, start+50<items.length)];
-      return { embeds, nav, pager };
+      const per = 10;
+      const embeds = renderMapsEmbed({ items, page, perPage: per });
+      const start = page*per;
+      const hasNext = start + per < items.length;
+      const count = Math.min(per, Math.max(0, items.length - start));
+      const controls = [selectRow(VIEWS.MAPS, page, count), pagerRow(VIEWS.MAPS, page, page>0, hasNext)];
+      return { embeds, nav, pager: controls };
+    }
+    case VIEWS.LADDER_FILTER: {
+      const { type, label } = extra || {};
+      const pageSize = 10, offset = page * pageSize;
+      const isWeapon = type === "weapon";
+      const { sql, params } = queries.topDynamic({
+        limit: pageSize,
+        sort: "skill",
+        weapon: isWeapon ? label : null,
+        map:    !isWeapon ? label : null,
+        offset
+      });
+      const rows = await runQuery(sql, params);
+      let title;
+      let thumbUrl = DEFAULT_THUMB;
+      if (isWeapon) {
+        const emoji = resolveEmoji(label);
+        title = emoji ? `Top Players by Weapon: ${emoji} ${label}` : `Top Players by Weapon: ${label}`;
+      } else {
+        title = `Top Players by Map: ${label}`;
+        const t = await getMapImageUrl(label);
+        if (t) thumbUrl = t;
+      }
+      const embeds = renderLadderEmbeds({ rows, page, title, thumbnail: thumbUrl });
+      const extraTag = `${type}:${enc(label)}`;
+      const pager = [pagerRow(VIEWS.LADDER_FILTER, page, page>0, rows.length===pageSize, extraTag)];
+      return { embeds, nav: [navRow(VIEWS.LADDER)], pager };
     }
     default:
       return buildView(VIEWS.HOME, 0);
@@ -336,10 +394,33 @@ client.on(Events.InteractionCreate, async (i) => {
 	}
 
 
-	  // PAGER clicked in content message
+	  // PAGER / SELECT clicked in content message
 	  if (i.message.id === UI_CONTENT_MESSAGE_ID) {
-		const payload = await buildView(view, page);
-		await i.update({ embeds: payload.embeds, components: payload.pager });
+		if (parsed.action === "pick" && (view===VIEWS.WEAPONS || view===VIEWS.MAPS)) {
+        const list = view===VIEWS.WEAPONS ? await getWeaponsAll() : await getMapsAll();
+        const per = 10;
+        const start = parsed.page * per;
+        const row = list[start + parsed.index];
+        if (!row) { await i.deferUpdate(); return; }
+        const type = (view===VIEWS.WEAPONS) ? "weapon" : "map";
+        const label = row.label;
+        const payload = await buildView(VIEWS.LADDER_FILTER, 0, { type, label });
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+        if (UI_NAV_MESSAGE_ID) {
+          const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+          const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
+          await navMsg.edit({ content: "", embeds: [], components: [navRow(VIEWS.LADDER)] });
+        }
+      } else if (view === VIEWS.LADDER_FILTER) {
+        const p = parseCustomId(i.customId);
+        const type = p?.type;
+        const label = dec(p?.labelEnc || "");
+        const payload = await buildView(VIEWS.LADDER_FILTER, page, { type, label });
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+      } else {
+        const payload = await buildView(view, page);
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+      }
 
 		// keep toolbar highlight synced (optional, cheap)
 		if (UI_NAV_MESSAGE_ID) {
