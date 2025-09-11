@@ -216,7 +216,7 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
       ) wsel ON 1=1
    JOIN xlr_weaponusage wu ON wu.weapon_id = wsel.id AND wu.player_id = c.id
    WHERE (wu.kills > 0 OR wu.deaths > 0)
-   ORDER BY kill DESC
+   ORDER BY kills DESC
    LIMIT ? OFFSET ?
   `;
   return { sql, params: [asLike(weapon), asIdOrNeg1(weapon), limit, offset] };
@@ -255,7 +255,28 @@ const ui_weaponsAll = `
   ORDER BY kills DESC
 `;
 
-
+const ui_playerWeaponCount = `
+   SELECT COUNT(*) AS cnt
+   FROM ${PLAYERSTATS} s
+   JOIN clients c ON c.id = s.client_id
+		LEFT JOIN (
+		  SELECT aa.client_id, aa.alias
+		  FROM aliases aa
+		  JOIN (
+			SELECT client_id, MAX(num_used) AS max_used
+			FROM aliases
+			GROUP BY client_id
+		  ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
+		) a ON a.client_id = c.id
+   JOIN (
+        SELECT id, name
+        FROM xlr_weaponstats
+        WHERE (name LIKE ? OR id = ?)
+        ORDER BY name
+        LIMIT 1
+      ) wsel ON 1=1
+   JOIN xlr_weaponusage wu ON wu.weapon_id = wsel.id AND wu.player_id = c.id
+   WHERE (wu.kills > 0 OR wu.deaths > 0)`;
 
 // MAPS — all by rounds
 const ui_mapsAll = `
@@ -545,7 +566,9 @@ export const queries = {
   // UI — Ladder
   ui_ladderSlice,   // function -> { sql, params }
   ui_ladderCount,
-
+  ui_playerWeaponSlice,
+  ui_weaponsSlice,
+  ui_weaponsCount,
   // UI — Weapons/Maps
   ui_weaponsAll,
   ui_mapsAll

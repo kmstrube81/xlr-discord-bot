@@ -322,7 +322,7 @@ function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
   ];
 }
 
-export function renderWeaponsEmbed({ items, page, thumbnail = null }) {
+export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
 	
   const offset = page * 10;
   
