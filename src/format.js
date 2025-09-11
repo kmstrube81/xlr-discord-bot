@@ -117,7 +117,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
 
   const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(`🏆 ${title}`)
+    new EmbedBuilder().setColor(0x32d296).setTitle(title)
   ];
 
   rows.map((r, i) => {
@@ -185,6 +185,63 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
   
   if(!rows.length) {
 	embeds[0].setDescription("_No players found_");
+  }
+  return embeds;
+}
+
+export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
+  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
+
+  const embeds = [
+    new EmbedBuilder().setColor(0x32d296).setTitle(title)
+  ];
+
+  rows.map((r, i) => {
+	  
+	const weapEmoji = resolveEmoji(r.matched_label);
+	const weap = weapEmoji ? `${weapEmoji} ${r.matched_label}` : r.matched_label;
+	  
+    let embed;
+	
+	if(i === 0) {
+		
+		embed = embeds[0];
+		
+	} else {
+		
+		embed = new EmbedBuilder()
+			.setColor(0x32d296);
+		embeds.push(embed);
+		
+	}
+	
+    const absoluteIndex = offset + i;               // <— absolute rank
+    let rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
+    
+
+    embed.setDescription(`**${rankDisplay} ${weap}**`);
+  embed.addFields(
+		{
+			name : `Kills`,
+			value : String(r.kills),
+			inline : true
+		},
+		{
+			name : `Suicides`,
+			value : String(r.suicides),
+			inline : true
+		}
+	);
+  });
+
+  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
+
+  if (thumbnail) {
+    embeds[0].setThumbnail(thumbnail);
+  }
+  
+  if(!rows.length) {
+	embeds[0].setDescription("_No weapons found_");
   }
   return embeds;
 }
