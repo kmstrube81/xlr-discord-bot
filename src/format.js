@@ -198,8 +198,8 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 
   rows.map((r, i) => {
 	  
-	const weapEmoji = resolveEmoji(r.matched_label);
-	const weap = weapEmoji ? `${weapEmoji} ${r.matched_label}` : r.matched_label;
+	const weapEmoji = resolveEmoji(r.label);
+	const weap = weapEmoji ? `${weapEmoji} ${r.label}` : r.label;
 	  
     let embed;
 	
