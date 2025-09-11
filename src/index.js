@@ -173,6 +173,21 @@ function weaponSelectRowForPage(rows, page, selectedLabel = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+function mapSelectRowForPage(rows, page, selectedLabel = null) {
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ui:maps:select:${page}`) // carry the page number
+    .setPlaceholder("Select Map to View More Stats...")
+    .addOptions(
+      ...rows.map((w) => ({
+        label: w.label,            // human label
+        value: w.label,            // we resolve by name in SQL
+        default: selectedLabel ? w.label === selectedLabel : false,
+      }))
+    );
+
+  return new ActionRowBuilder().addComponents(menu);
+}
 
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
@@ -266,6 +281,12 @@ async function getPlayerWeaponCount(weapon) {
   return +cnt || 0;
 }
 
+async function getPlayerMapCount(map) {
+  const [{ cnt = 0 } = {}] = await runQuery(queries.ui_playerMapsCount, [ `%${map}%`, /^\d+$/.test(map) ? Number(map) : -1 ]);
+  return +cnt || 0;
+}
+
+
 const getWeaponsAll = () => runQuery(queries.ui_weaponsAll, []);
 const getMapsAll    = () => runQuery(queries.ui_mapsAll,   []);
 
@@ -306,6 +327,47 @@ async function buildWeaponPlayersView(weaponLabel, playerPage = 0, weaponsPage =
 
   // Keep tabs on “Weapons” and keep the SAME 10-option select (with current weapon preselected)
   const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weaponLabel)];
+
+  return { embeds, nav, pager };
+}
+
+async function buildMapPlayersView(mapLabel, playerPage = 0, mapsPage = 0) {
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+
+  const [rows, total, mapsRows] = await Promise.all([
+    // players for a given weapon
+    (async () => {
+      const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
+      const data = await runQuery(sql, params);
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+    })(),
+    // total players for this weapon
+    (async () => {
+      const [{ cnt = 0 } = {}] = await runQuery(queries.ui_playerMapsCount, [ `%${mapLabel}%`, /^\d+$/.test(mapLabel) ? Number(mapLabel) : -1 ]);
+      return +cnt || 0;
+    })(),
+    // the same 10 weapons the user saw on that weapons page
+    getWeaponsSlice(mapsPage * pageSize, pageSize),
+  ]);
+
+  // Title + embeds (reuse your formatter; pass offset for absolute ranking)
+  const thumbUrl = (await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
+  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+
+  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
+  const ZERO = "⠀";
+  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
+  const blank  = ZERO.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blank });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Map page ${playerPage + 1}` });
+
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
+
+  // Keep tabs on “Weapons” and keep the SAME 10-option select (with current weapon preselected)
+  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapsLabel)];
 
   return { embeds, nav, pager };
 }
@@ -486,7 +548,21 @@ client.on(Events.InteractionCreate, async (i) => {
 		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 		  return;
 		}
+		
+		if (parsed.view === VIEWS.MAPS_PLAYERS) {
+		  const payload = await buildMapPlayersView(parsed.param, parsed.page, parsed.mapsPage ?? 0);
+		  await i.update({ embeds: payload.embeds, components: payload.pager });
 
+		  // keep toolbar synced so the select stays on the same 10 weapons
+		  if (UI_NAV_MESSAGE_ID) {
+			const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+			const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
+			await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+		  }
+		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+		  return;
+		}
+		
 		const payload = await buildView(view, page);
 		await i.update({ embeds: payload.embeds, components: payload.pager });
 
