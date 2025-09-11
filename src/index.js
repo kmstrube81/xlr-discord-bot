@@ -259,10 +259,26 @@ async function getWeaponsSlice(offset=0, limit=10) {
   return rows.map((r, i) => ({ ...r, rank: offset + i + 1 })); // absolute rank for page 2 => 11..20
 }
 
-async function getMapsSlice(offset=0, limit=10) {
+async function getMapsSlice(offset = 0, limit = 10) {
   const { sql, params } = queries.ui_mapsSlice(limit, offset);
   const rows = await runQuery(sql, params);
-  let slice = await rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: getMapImageUrl(r.label) || DEFAULT_THUMB })); // absolute rank for page 2 => 11..20
+
+  const slice = await Promise.all(
+    rows.map(async (r, i) => {
+      let url;
+      try {
+        url = await getMapImageUrl(r.label); // ensure it resolves
+      } catch (e) {
+        url = DEFAULT_THUMB;
+      }
+
+      return {
+        ...r,
+        rank: offset + i + 1,
+        thumbnail: url || DEFAULT_THUMB
+      };
+    })
+  );
 
   return slice;
 }
