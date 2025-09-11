@@ -383,7 +383,7 @@ export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
 	
   const offset = page * 10;
   
-  const embeds = formatTopEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset });
+  const embeds = formatTopWeaponEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset });
   // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
   if (embeds.length) {
     const last = embeds[embeds.length - 1];
