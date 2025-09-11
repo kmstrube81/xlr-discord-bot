@@ -333,7 +333,7 @@ const ui_playerWeaponCount = `
 
 // MAPS — all by rounds
 const ui_mapsAll = `
-  SELECT m.name AS label, SUM(pm.rounds) AS rounds
+  SELECT m.name AS label, SUM(pm.rounds) AS rounds, SUM(pm.kills) AS kills, SUM(pm.suicides) AS suicides
   FROM xlr_playermaps pm
   JOIN xlr_mapstats m ON m.id = pm.map_id
   GROUP BY m.id, m.name
