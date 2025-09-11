@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, StringSelectMenuBuilder } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbeds, renderMapsEmbed, setEmojiResolver, resolveEmoji } from "./format.js";
@@ -132,7 +132,7 @@ async function getMapImageUrl(label) {
 }
 
 
-const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps" });
+const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps", WEAPON_PLAYERS: "weaponPlayers" });
 
 const navRow = (active) =>
   new ActionRowBuilder().addComponents(
@@ -148,18 +148,56 @@ const pagerRow = (view, page, hasPrev, hasNext) =>
     new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
   );
 
+function pagerRowWithParams(view, page, hasPrev, hasNext, weaponLabel, weaponsPage) {
+  const encWeap = encodeURIComponent(weaponLabel);
+  const encPage = String(weaponsPage);
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}:${encWeap}:${encPage}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}:${encWeap}:${encPage}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
+  );
+}
+
+function weaponSelectRowForPage(rows, page, selectedLabel = null) {
+
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ui:weapons:select:${page}`) // carry the page number
+    .setPlaceholder("Select Weapon to View More Stats...")
+    .addOptions(
+      ...rows.map((w) => ({
+        label: w.label,            // human label
+        value: w.label,            // we resolve by name in SQL
+        default: selectedLabel ? w.label === selectedLabel : false,
+      }))
+    );
+
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
 }
 
 function parseCustomId(id) {
   const p = id.split(":");
-  if (p[0]!=="ui") return null;
-  if (p.length===2) return { view: p[1], page: 0 };
-  if (p.length===4) {
+  if (p[0] !== "ui") return null;
+
+  if (p.length === 2) return { view: p[1], page: 0 };
+
+  // ui:<view>:prev|next:<page>
+  if (p.length === 4) {
     const cur = Math.max(0, parseInt(p[3], 10) || 0);
-    return { view: p[1], page: p[2]==="next" ? cur+1 : Math.max(0, cur-1) };
+    return { view: p[1], page: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1) };
   }
+
+  // ui:<view>:prev|next:<page>:<weaponLabel>:<weaponsPage>
+  if (p.length === 6) {
+    const cur = Math.max(0, parseInt(p[3], 10) || 0);
+    const param = decodeURIComponent(p[4]);
+    const weaponsPage = Math.max(0, parseInt(p[5], 10) || 0);
+    return { view: p[1], page: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1), param, weaponsPage };
+  }
+
   return null;
 }
 
@@ -217,11 +255,61 @@ async function getWeaponsCount() {
   return +cnt || 0;
 }
 
+async function getPlayerWeaponSlice(weapon, offset = 0, limit = 10) {
+  const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
+  const rows = await runQuery(sql, params);
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+}
+
+async function getPlayerWeaponCount(weapon) {
+  const [{ cnt = 0 } = {}] = await runQuery(queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
+  return +cnt || 0;
+}
 
 const getWeaponsAll = () => runQuery(queries.ui_weaponsAll, []);
 const getMapsAll    = () => runQuery(queries.ui_mapsAll,   []);
 
-/** Build the payload pieces for a given view/page. */
+async function buildWeaponPlayersView(weaponLabel, playerPage = 0, weaponsPage = 0) {
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+
+  const [rows, total, weaponsRows] = await Promise.all([
+    // players for a given weapon
+    (async () => {
+      const { sql, params } = queries.ui_playerWeaponSlice(weaponLabel, pageSize, offset);
+      const data = await runQuery(sql, params);
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+    })(),
+    // total players for this weapon
+    (async () => {
+      const [{ cnt = 0 } = {}] = await runQuery(queries.ui_playerWeaponCount, [ `%${weaponLabel}%`, /^\d+$/.test(weaponLabel) ? Number(weaponLabel) : -1 ]);
+      return +cnt || 0;
+    })(),
+    // the same 10 weapons the user saw on that weapons page
+    getWeaponsSlice(weaponsPage * pageSize, pageSize),
+  ]);
+
+  // Title + embeds (reuse your formatter; pass offset for absolute ranking)
+  const titleLabel = resolveEmoji(weaponLabel) ? `${resolveEmoji(weaponLabel)} ${weaponLabel}` : weaponLabel;
+  const embeds = formatTopEmbed(rows, `Top Players by Weapon: ${titleLabel}`, { thumbnail: null, offset });
+
+  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
+  const ZERO = "⠀";
+  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
+  const blank  = ZERO.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blank });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
+
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weaponLabel, weaponsPage)];
+
+  // Keep tabs on “Weapons” and keep the SAME 10-option select (with current weapon preselected)
+  const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weaponLabel)];
+
+  return { embeds, nav, pager };
+}
+
 async function buildView(view, page=0) {
   const nav = [navRow(view)];
   switch (view) {
@@ -268,6 +356,10 @@ async function buildView(view, page=0) {
 	    e.setFooter({ text: blankText });
 	  }
 	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
+	  
+	  const selectRow = weaponSelectRowForPage(rows, page);
+	  const nav = [navRow(VIEWS.WEAPONS), selectRow];
+	  
       return { embeds, nav, pager };
     }
     case VIEWS.MAPS: {
@@ -380,6 +472,21 @@ client.on(Events.InteractionCreate, async (i) => {
 
 	  // PAGER clicked in content message
 	  if (i.message.id === UI_CONTENT_MESSAGE_ID) {
+		  
+		if (parsed.view === VIEWS.WEAPON_PLAYERS) {
+		  const payload = await buildWeaponPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+		  await i.update({ embeds: payload.embeds, components: payload.pager });
+
+		  // keep toolbar synced so the select stays on the same 10 weapons
+		  if (UI_NAV_MESSAGE_ID) {
+			const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+			const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
+			await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+		  }
+		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+		  return;
+		}
+
 		const payload = await buildView(view, page);
 		await i.update({ embeds: payload.embeds, components: payload.pager });
 
@@ -391,8 +498,35 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 		// reset inactivity timer
 		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+		return;
 	  }
     }
+	// Handle weapon select (customId: ui:weapons:select:<page>)
+	if (i.isStringSelectMenu() && i.customId.startsWith("ui:weapons:select:")) {
+	  const parts = i.customId.split(":"); // ["ui","weapons","select","<page>"]
+	  const page  = Math.max(0, parseInt(parts[3], 10) || 0);
+	  const weaponLabel = i.values?.[0];
+	  if (!weaponLabel) return i.reply({ content: "No weapon selected.", ephemeral: true });
+
+	  // Build “Top Players by Weapon …” view for page 0 initially
+	  const payload = await buildWeaponPlayersView(weaponLabel, 0, page);
+
+	  // Update the NAV (tabs + same-page select) and CONTENT (embeds + pager)
+	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+	  const [navMsg, contentMsg] = await Promise.all([
+		channel.messages.fetch(UI_NAV_MESSAGE_ID),
+		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
+	  ]);
+
+	  await Promise.all([
+		i.update({ content: "", embeds: [], components: payload.nav }), // ACK on the nav message
+		contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+	  ]);
+
+	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+	  return;
+	}
+
   } catch (e) {
 	  console.error("[ui] button error", e);
 	  try {
