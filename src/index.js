@@ -132,7 +132,7 @@ async function getMapImageUrl(label) {
 }
 
 
-const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps", WEAPON_PLAYERS: "weaponPlayers" });
+const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps", WEAPON_PLAYERS: "weaponPlayers", MAPS_PLAYERS: "mapsPlayers" });
 
 const navRow = (active) =>
   new ActionRowBuilder().addComponents(
@@ -259,6 +259,12 @@ async function getWeaponsSlice(offset=0, limit=10) {
   return rows.map((r, i) => ({ ...r, rank: offset + i + 1 })); // absolute rank for page 2 => 11..20
 }
 
+async function getMapsSlice(offset=0, limit=10) {
+  const { sql, params } = queries.ui_mapsSlice(limit, offset);
+  const rows = await runQuery(sql, params);
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: getMapImageUrl(r.label) })); // absolute rank for page 2 => 11..20
+}
+
 async function getLadderCount() {
   const [{ cnt=0 }={}] = await runQuery(queries.ui_ladderCount, []);
   return +cnt || 0;
@@ -267,6 +273,11 @@ async function getLadderCount() {
 
 async function getWeaponsCount() {
   const [{ cnt=0 }={}] = await runQuery(queries.ui_weaponsCount, []);
+  return +cnt || 0;
+}
+
+async function getMapsCount() {
+  const [{ cnt=0 }={}] = await runQuery(queries.ui_mapsCount, []);
   return +cnt || 0;
 }
 
@@ -408,7 +419,7 @@ async function buildView(view, page=0) {
       const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + pageSize < total)];
 	  
 	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-	  const footerText = embedArr[embedArr.length - 1].data.footer.text;
+	  const footerText = embedArr[embedArr.length - 1].data.footer?.text;
 	  const ZERO_WIDTH = "⠀"; // U+2800
 	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
 	  const blankText = ZERO_WIDTH.repeat(padLen);
@@ -425,9 +436,26 @@ async function buildView(view, page=0) {
       return { embeds, nav, pager };
     }
     case VIEWS.MAPS: {
-      const items = await getMapsAll();
-      const embeds = renderMapsEmbed({ items, page, perPage: 50 });
-      const start = page*50, pager = [pagerRow(VIEWS.MAPS, page, page>0, start+50<items.length)];
+      const pageSize = 10, offset = page * pageSize;
+      const [rows, total] = await Promise.all([getMapsSlice(offset, pageSize), getMapsCount()]);
+      const embeds = renderMapsEmbeds({ rows, page }); // uses absolute r.rank for numbering
+      const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + pageSize < total)];
+	  
+	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+	  const footerText = embedArr[embedArr.length - 1].data.footer?.text;
+	  const ZERO_WIDTH = "⠀"; // U+2800
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+
+	  // Apply “invisible” footer to all, then real footer on the last
+	  for (const e of embedArr) {
+	    e.setFooter({ text: blankText });
+	  }
+	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
+	  
+	  const selectRow = mapSelectRowForPage(rows, page);
+	  const nav = [navRow(VIEWS.MAPS), selectRow];
+	  
       return { embeds, nav, pager };
     }
     default:

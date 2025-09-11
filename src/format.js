@@ -246,6 +246,65 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
   return embeds;
 }
 
+export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset = 0) {
+ 
+  const embeds = [
+    new EmbedBuilder().setColor(0x32d296).setTitle(title)
+  ];
+
+  rows.map((r, i) => {
+	   
+    let embed;
+	
+	if(i === 0) {
+		
+		embed = embeds[0];
+		
+	} else {
+		
+		embed = new EmbedBuilder()
+			.setColor(0x32d296);
+		embeds.push(embed);
+		
+	}
+	
+    const absoluteIndex = offset + i;               // <— absolute rank
+    let rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
+    
+
+    embed.setDescription(`**${rankDisplay} ${r.label}**`);
+  embed.addFields(
+		{
+			name : `Kills`,
+			value : String(r.kills),
+			inline : true
+		},
+		{
+			name : `Suicides`,
+			value : String(r.suicides),
+			inline : true
+		},
+		{
+			name : `Rounds Played`,
+			value : String(r.rounds),
+			inline : true
+		}
+	);
+	
+	if (r.thumbnail) {
+		embed.setThumbnail(r.thumbnail);
+	}
+  });
+
+  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
+
+  if(!rows.length) {
+	embeds[0].setDescription("_No maps found_");
+  }
+  return embeds;
+}
+
+
 export function formatLastSeenEmbed(rows, opts = {}) {
   const { thumbnail } = opts;
   const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
@@ -393,12 +452,16 @@ export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
   return embeds;
 }
 
-export function renderMapsEmbed({ items, page, perPage = 50 }) {
-  return chunkedListEmbed({
-    title: "🗺️ Top Maps by Rounds Played",
-    items, page, perPage,
-    unitKey: "rounds",
-    unitLabel: "rounds",
-  });
+export function renderMapsEmbed({ rows, page }) {
+  const offset = page * 10;
+  
+  const embeds = formatTopMapEmbed(rows, `🗺️ Top Maps by Rounds Played`,  offset );
+  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
+  if (embeds.length) {
+    const last = embeds[embeds.length - 1];
+    const footer = last.data.footer?.text || "XLRStats • B3";
+    last.setFooter({ text: `${footer} • Maps page ${page + 1}` });
+  }
+  return embeds;
 }
 
