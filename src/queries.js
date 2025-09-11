@@ -340,7 +340,7 @@ const ui_mapsAll = `
   ORDER BY rounds DESC
 `;
 
-const ui_mapCount = `
+const ui_mapsCount = `
   FROM xlr_playermaps pm
   JOIN xlr_mapstats m ON m.id = pm.map_id
   GROUP BY m.id, m.name`;
