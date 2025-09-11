@@ -292,7 +292,6 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset =
 	);
 	
 	if (r.thumbnail) {
-		console.log(r.thumbnail);
 		embed.setThumbnail(r.thumbnail);
 	}
   });
