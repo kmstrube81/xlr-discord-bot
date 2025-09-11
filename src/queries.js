@@ -341,7 +341,8 @@ const ui_mapsAll = `
 `;
 
 const ui_mapsCount = `
-  FROM xlr_playermaps pm
+  SELECT COUNT(*) AS cnt
+  FROM xlr_mapstats s
   `;
   
 const ui_playerMapsCount = `
