@@ -262,7 +262,10 @@ async function getWeaponsSlice(offset=0, limit=10) {
 async function getMapsSlice(offset=0, limit=10) {
   const { sql, params } = queries.ui_mapsSlice(limit, offset);
   const rows = await runQuery(sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: (await getMapImageUrl(r.label)) || DEFAULT_THUMB; })); // absolute rank for page 2 => 11..20
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: (async () => { 
+			(await getMapImageUrl(r.label)) || DEFAULT_THUMB;
+		})()
+	})); // absolute rank for page 2 => 11..20
 }
 
 async function getLadderCount() {
@@ -437,7 +440,10 @@ async function buildView(view, page=0) {
     }
     case VIEWS.MAPS: {
       const pageSize = 10, offset = page * pageSize;
-      const [rows, total] = await Promise.all([getMapsSlice(offset, pageSize), getMapsCount()]);
+      const [rows, total] = await Promise.all([
+		getMapsSlice(offset, pageSize),
+		getMapsCount(),
+		]);
       const embeds = renderMapsEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + pageSize < total)];
 	  
