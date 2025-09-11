@@ -452,7 +452,7 @@ export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
   return embeds;
 }
 
-export function renderMapsEmbed({ rows, page }) {
+export function renderMapsEmbeds({ rows, page }) {
   const offset = page * 10;
   
   const embeds = formatTopMapEmbed(rows, `🗺️ Top Maps by Rounds Played`,  offset );
