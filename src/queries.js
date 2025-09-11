@@ -567,6 +567,7 @@ export const queries = {
   ui_ladderSlice,   // function -> { sql, params }
   ui_ladderCount,
   ui_playerWeaponSlice,
+  ui_playerWeaponCount,
   ui_weaponsSlice,
   ui_weaponsCount,
   // UI — Weapons/Maps
