@@ -236,6 +236,18 @@ async function buildView(view, page=0) {
       const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
       const embeds = renderLadderEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + pageSize < total)];
+	  
+	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+	  const footerText = embedArr[embedArr.length - 1].footer.text;
+	  const ZERO_WIDTH = "⠀"; // U+2800
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+
+	  // Apply “invisible” footer to all, then real footer on the last
+	  for (const e of embedArr) {
+	    e.setFooter({ text: blankText });
+	  }
+	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
       return { embeds, nav, pager };
     }
     case VIEWS.WEAPONS: {
@@ -243,6 +255,18 @@ async function buildView(view, page=0) {
       const [rows, total] = await Promise.all([getWeaponsSlice(offset, pageSize), getWeaponsCount()]);
       const embeds = renderWeaponsEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + pageSize < total)];
+	  
+	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+	  const footerText = embedArr[embedArr.length - 1].footer.text;
+	  const ZERO_WIDTH = "⠀"; // U+2800
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+
+	  // Apply “invisible” footer to all, then real footer on the last
+	  for (const e of embedArr) {
+	    e.setFooter({ text: blankText });
+	  }
+	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
       return { embeds, nav, pager };
     }
     case VIEWS.MAPS: {
@@ -426,7 +450,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 
 		// Thumbnail: use map image if querying a map, else default image
-		let thumbUrl = DEFAULT_THUMB;
+		let thumbUrl = "";
 		if (map) {
 		  const label = matchedLabel || map;
 		  thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
