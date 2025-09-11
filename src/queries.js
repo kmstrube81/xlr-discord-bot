@@ -342,8 +342,7 @@ const ui_mapsAll = `
 
 const ui_mapsCount = `
   FROM xlr_playermaps pm
-  JOIN xlr_mapstats m ON m.id = pm.map_id
-  GROUP BY m.id, m.name`;
+  `;
   
 const ui_playerMapsCount = `
   SELECT COUNT(*) AS cnt
