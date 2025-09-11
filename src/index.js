@@ -238,6 +238,8 @@ async function buildView(view, page=0) {
       const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + pageSize < total)];
 	  
 	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+	  
+	  console.log(embedArr);
 	  const footerText = embedArr[embedArr.length - 1].footer.text;
 	  const ZERO_WIDTH = "⠀"; // U+2800
 	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
