@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
-import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbed, renderMapsEmbed, setEmojiResolver, resolveEmoji } from "./format.js";
+import { formatPlayerEmbed, formatTopEmbed, formatLastSeenEmbed, formatPlayerWeaponEmbed, formatPlayerVsEmbed, formatPlayerMapEmbed, renderHomeEmbed, renderLadderEmbeds, renderWeaponsEmbeds, renderMapsEmbed, setEmojiResolver, resolveEmoji } from "./format.js";
 import axios from "axios";
 
 // add near your other imports
