@@ -262,7 +262,9 @@ async function getWeaponsSlice(offset=0, limit=10) {
 async function getMapsSlice(offset=0, limit=10) {
   const { sql, params } = queries.ui_mapsSlice(limit, offset);
   const rows = await runQuery(sql, params);
-  return await rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: getMapImageUrl(r.label) || DEFAULT_THUMB })); // absolute rank for page 2 => 11..20
+  let slice = await rows.map((r, i) => ({ ...r, rank: offset + i + 1, thumbnail: getMapImageUrl(r.label) || DEFAULT_THUMB })); // absolute rank for page 2 => 11..20
+
+  return slice;
 }
 
 async function getLadderCount() {
