@@ -140,7 +140,7 @@ const ui_totalRounds = `
 `;
 
 const ui_totalPlayers = `
-  COUNT(*) AS totalPlayers
+  SELECT COUNT(*) AS totalPlayers
   FROM clients s
 `;
 
