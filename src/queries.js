@@ -139,6 +139,11 @@ const ui_totalRounds = `
   FROM xlr_playerstats
 `;
 
+const ui_totalPlayers = `
+  COUNT(*) AS totalPlayers
+  FROM clients s
+`;
+
 const ui_favoriteWeapon = `
   SELECT w.name AS label, SUM(wu.kills) AS kills
   FROM xlr_weaponusage wu
@@ -686,6 +691,7 @@ export const queries = {
   `,
   topDynamic,
   // UI — Home
+  ui_totalPlayers,
   ui_totalKills,
   ui_totalRounds,
   ui_favoriteWeapon,
