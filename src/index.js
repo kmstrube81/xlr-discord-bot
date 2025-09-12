@@ -377,7 +377,7 @@ async function buildMapPlayersView(mapLabel, playerPage = 0, mapsPage = 0) {
       return +cnt || 0;
     })(),
     // the same 10 weapons the user saw on that weapons page
-    getWeaponsSlice(mapsPage * pageSize, pageSize),
+    getMapsSlice(mapsPage * pageSize, pageSize),
   ]);
 
   // Title + embeds (reuse your formatter; pass offset for absolute ranking)
@@ -396,7 +396,7 @@ async function buildMapPlayersView(mapLabel, playerPage = 0, mapsPage = 0) {
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
 
   // Keep tabs on “Weapons” and keep the SAME 10-option select (with current weapon preselected)
-  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapsLabel)];
+  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
 
   return { embeds, nav, pager };
 }
@@ -596,7 +596,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 		
 		if (parsed.view === VIEWS.MAPS_PLAYERS) {
-		  const payload = await buildMapPlayersView(parsed.param, parsed.page, parsed.mapsPage ?? 0);
+		  const payload = await buildMapPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
 		  await i.update({ embeds: payload.embeds, components: payload.pager });
 
 		  // keep toolbar synced so the select stays on the same 10 weapons
@@ -643,6 +643,29 @@ client.on(Events.InteractionCreate, async (i) => {
 	  await Promise.all([
 		i.update({ content: "", embeds: [], components: payload.nav }), // ACK on the nav message
 		contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+	  ]);
+
+	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+	  return;
+	}
+
+	if (i.isStringSelectMenu() && i.customId.startsWith("ui:maps:select:")) {
+	  const parts = i.customId.split(":"); // ["ui","maps","select","<page>"]
+	  const mapsPage = Math.max(0, parseInt(parts[3], 10) || 0);
+	  const mapLabel = i.values?.[0];
+	  if (!mapLabel) return i.reply({ content: "No map selected.", ephemeral: true });
+
+	  const payload = await buildMapPlayersView(mapLabel, 0, mapsPage);
+
+	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+	  const [navMsg, contentMsg] = await Promise.all([
+		channel.messages.fetch(UI_NAV_MESSAGE_ID),
+		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
+	  ]);
+
+	  await Promise.all([
+		i.update({ content: "", embeds: [], components: payload.nav }), // nav message
+		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }) // content message
 	  ]);
 
 	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });

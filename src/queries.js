@@ -235,7 +235,7 @@ function ui_weaponsSlice(limit = 10, offset = 0) {
 	return { sql, params: [limit, offset] };
 }
 
-function ui_playerMapsSlice(map, limit = 10, offset = 10) {
+function ui_playerMapsSlice(map, limit = 10, offset = 0) {
 	
 	const sql = `
 		SELECT c.id AS client_id,
