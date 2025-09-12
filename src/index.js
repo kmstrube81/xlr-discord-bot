@@ -206,6 +206,8 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
       const maxName = Math.max(0, 100 - (prefix.length + 1));
       const label = `${prefix} ${String(r.name).slice(0, maxName)}`;
 
+		console.log(label);
+
       return {
         label,
         value: String(r.client_id), // stays unique even if names collide
