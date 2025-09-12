@@ -189,6 +189,22 @@ function mapSelectRowForPage(rows, page, selectedLabel = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+function playerSelectRowForPage(rows, page, selectedId = null) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ui:ladder:select:${page}`) // carry the ladder page number
+    .setPlaceholder("Select a Player to View More Stats..")
+    .addOptions(
+      rows.map((r) => ({
+        label: String(r.name).slice(0, 100),  // show name
+        value: String(r.client_id),           // use stable id
+        default: selectedId ? r.client_id === selectedId : false,
+      }))
+    );
+
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
 }
@@ -233,13 +249,15 @@ async function runQuery(sql, params) {
 }
 
 async function getHomeTotals() {
-  const [[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
+  const [[{totalPlayers=0 }],[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
+    runQuery(queries.ui_totalPlayers,[]),
     runQuery(queries.ui_totalKills, []),
     runQuery(queries.ui_totalRounds, []),
     runQuery(queries.ui_favoriteWeapon, []),
     runQuery(queries.ui_favoriteMap, []),
   ]);
   return {
+	totalPlayers: +totalPlayers || 0,
     totalKills: +totalKills || 0,
     totalRounds: +totalRounds || 0,
     favoriteWeapon: { label: favW?.label ?? "—", kills: +(favW?.kills ?? 0) },
@@ -401,6 +419,30 @@ async function buildMapPlayersView(mapLabel, playerPage = 0, mapsPage = 0) {
   return { embeds, nav, pager };
 }
 
+async function buildPlayerView(clientId, ladderPage = 0) {
+  
+
+  const pageSize = 10;
+  const offset   = ladderPage * pageSize;
+
+  const [details, ladderRows] = await Promise.all([
+    runQuery(queries.playerCard, [clientId, clientId, clientId]),
+    getLadderSlice(offset, pageSize), // reuse ladder rows for the same page in the select
+  ]);
+
+  const nav = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, ladderPage, clientId)];
+  if (!details.length) {
+    const err = new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+    return { embeds: [err], nav, pager: [] };
+  }
+  
+  const embed = formatPlayerEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
+  const pager   = [pagerRowWithParams(VIEWS.PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
+
+  return { embeds: [embed], nav, pager };
+}
+
+
 async function buildView(view, page=0) {
   const nav = [navRow(view)];
   switch (view) {
@@ -428,7 +470,11 @@ async function buildView(view, page=0) {
 	    e.setFooter({ text: blankText });
 	  }
 	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-      return { embeds, nav, pager };
+	  
+	  const selectRow = playerSelectRowForPage(rows, page);
+	  const nav = [navRow(VIEWS.LADDER), selectRow];
+	  return { embeds, nav, pager };
+	  
     }
     case VIEWS.WEAPONS: {
 	  const pageSize = 10, offset = page * pageSize;
@@ -608,7 +654,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 		  return;
 		}
-		
+				
 		const payload = await buildView(view, page);
 		await i.update({ embeds: payload.embeds, components: payload.pager });
 
@@ -656,6 +702,29 @@ client.on(Events.InteractionCreate, async (i) => {
 	  if (!mapLabel) return i.reply({ content: "No map selected.", ephemeral: true });
 
 	  const payload = await buildMapPlayersView(mapLabel, 0, mapsPage);
+
+	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+	  const [navMsg, contentMsg] = await Promise.all([
+		channel.messages.fetch(UI_NAV_MESSAGE_ID),
+		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
+	  ]);
+
+	  await Promise.all([
+		i.update({ content: "", embeds: [], components: payload.nav }), // nav message
+		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }) // content message
+	  ]);
+
+	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+	  return;
+	}
+	
+	if (i.isStringSelectMenu() && i.customId.startsWith("ui:ladder:select:")) {
+	  const parts = i.customId.split(":"); // ["ui","maps","select","<page>"]
+	  const ladderPage = Math.max(0, parseInt(parts[3], 10) || 0);
+	  const playerLabel = i.values?.[0];
+	  if (!playerLabel) return i.reply({ content: "No player selected.", ephemeral: true });
+
+	  const payload = await buildPlayerView(playerLabel, 0, ladderPage);
 
 	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
 	  const [navMsg, contentMsg] = await Promise.all([
