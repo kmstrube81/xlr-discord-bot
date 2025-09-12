@@ -193,15 +193,8 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
   const medals = ["🥇", "🥈", "🥉"];
   const PAGE_SIZE = 10;
 
-  // Defensive: dedupe by client_id to avoid Discord “option value duplicated”
-  const seen = new Set();
+  
   const options = rows
-    .filter(r => {
-      const id = String(r.client_id ?? "");
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })
     .map((r, i) => {
       // prefer absolute rank from the slice; fall back to page math
       const absoluteRank = typeof r.rank === "number"
@@ -222,7 +215,7 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`ui:ladder:select:${page}`)
-    .setPlaceholder("Select a player…")
+    .setPlaceholder("Select a Player to View More Stats...")
     .setMinValues(1)
     .setMaxValues(1)
     .addOptions(options);
