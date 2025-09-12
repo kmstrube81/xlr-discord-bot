@@ -190,19 +190,46 @@ function mapSelectRowForPage(rows, page, selectedLabel = null) {
 }
 
 function playerSelectRowForPage(rows, page, selectedId = null) {
+  const medals = ["🥇", "🥈", "🥉"];
+  const PAGE_SIZE = 10;
+
+  // Defensive: dedupe by client_id to avoid Discord “option value duplicated”
+  const seen = new Set();
+  const options = rows
+    .filter(r => {
+      const id = String(r.client_id ?? "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((r, i) => {
+      // prefer absolute rank from the slice; fall back to page math
+      const absoluteRank = typeof r.rank === "number"
+        ? r.rank
+        : page * PAGE_SIZE + i + 1;
+
+      const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
+      // keep label under Discord’s 100-char limit (reserve for prefix + space)
+      const maxName = Math.max(0, 100 - (prefix.length + 1));
+      const label = `${prefix} ${String(r.name).slice(0, maxName)}`;
+
+      return {
+        label,
+        value: String(r.client_id), // stays unique even if names collide
+        default: selectedId != null && String(r.client_id) === String(selectedId),
+      };
+    });
+
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(`ui:ladder:select:${page}`) // carry the ladder page number
-    .setPlaceholder("Select a Player to View More Stats..")
-    .addOptions(
-      rows.map((r) => ({
-        label: String(r.name).slice(0, 100),  // show name
-        value: String(r.client_id),           // use stable id
-        default: selectedId ? r.client_id === selectedId : false,
-      }))
-    );
+    .setCustomId(`ui:ladder:select:${page}`)
+    .setPlaceholder("Select a player…")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(options);
 
   return new ActionRowBuilder().addComponents(menu);
 }
+
 
 
 function toolbarPayload(activeView) {
