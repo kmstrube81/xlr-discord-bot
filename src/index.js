@@ -632,7 +632,7 @@ client.on(Events.InteractionCreate, async (i) => {
 	  const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
 		
 		
-		console.log(payload.nav[1]);
+		console.log(payload.nav[1].components[0].options);
 		
 	  // Ack immediately by updating the nav message, and in parallel edit the content message
 	  await Promise.all([
