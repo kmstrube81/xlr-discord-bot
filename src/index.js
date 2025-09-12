@@ -630,7 +630,10 @@ client.on(Events.InteractionCreate, async (i) => {
 	  const payload = await buildView(view, page);
 	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
 	  const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
-
+		
+		
+		console.log(payload);
+		
 	  // Ack immediately by updating the nav message, and in parallel edit the content message
 	  await Promise.all([
 		i.update({ content: "", embeds: [], components: payload.nav }), // ACK happens here
@@ -763,7 +766,6 @@ client.on(Events.InteractionCreate, async (i) => {
 
   } catch (e) {
 	  console.error("[ui] button error", e);
-	  console.log(payload);
 	  try {
 		if (i.deferred || i.replied) {
 		  await i.followUp({ content: "Something went wrong.", flags: 64 });
