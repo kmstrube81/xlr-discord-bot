@@ -18,6 +18,8 @@ let UI_CONTENT_MESSAGE_ID = process.env.UI_CONTENT_MESSAGE_ID?.trim() || "";
 const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes
 let uiCollector = null;              // channel-level collector for our UI buttons
 
+// helper to detect Discord "Unknown interaction"
+const isUnknownInteraction = (e) => e?.code === 10062 || e?.rawError?.code === 10062;
 
 function upsertEnv(key, value) {
   const ENV_PATH = path.resolve(process.cwd(), ".env");
@@ -31,11 +33,10 @@ function upsertEnv(key, value) {
   if (key === "UI_CONTENT_MESSAGE_ID") UI_CONTENT_MESSAGE_ID = value;
 }
 
-
 const HEARTBEAT_FILE = "/opt/xlrbot/health/ready";
 // Default image if no map or fetch fails — set your own brand image here
 const DEFAULT_THUMB = process.env.XLR_DEFAULT_IMAGE
-	|| "https://cod.pm/mp_maps/unknown.png";
+  || "https://cod.pm/mp_maps/unknown.png";
 const {
   DISCORD_TOKEN, APPLICATION_ID, GUILD_ID,
   MYSQL_B3_DB, MYSQL_B3_USER, MYSQL_B3_PASSWORD,
@@ -87,7 +88,7 @@ const commands = [
     .setDescription("Lookup a player by name (optionally filter by weapon, or compare vs opponent)")
     .addStringOption(o => o.setName("name").setDescription("Player (partial)").setRequired(true))
     .addStringOption(o => o.setName("weapon").setDescription("Weapon (partial name or exact id)"))
-	.addStringOption(o => o.setName("map").setDescription("Map (partial name or exact id)"))
+  .addStringOption(o => o.setName("map").setDescription("Map (partial name or exact id)"))
     .addStringOption(o => o.setName("vs").setDescription("Opponent player (partial name)")),
   new SlashCommandBuilder()
     .setName("xlr-lastseen")
@@ -116,21 +117,20 @@ async function checkUrlFor404(url) {
 
 // Helper: attempt to fetch an image URL for a map name from cod.pm API (adjust endpoint if needed)
 async function getMapImageUrl(label) {
-	try {
-	  if( await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png")) {
-		  if (await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png")){
-			  return null;
-		  } else {
-			  return "https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png";
-		  }
-	  } else {
-		  return "https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png";
-	  }  
-	} catch {
-	  return null;
-	}
+  try {
+    if( await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png")) {
+      if (await checkUrlFor404("https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png")){
+        return null;
+      } else {
+        return "https://cod.pm/mp_maps/cod1+coduo/custom/" + label + ".png";
+      }
+    } else {
+      return "https://cod.pm/mp_maps/cod1+coduo/stock/" + label + ".png";
+    }  
+  } catch {
+    return null;
+  }
 }
-
 
 const VIEWS = Object.freeze({ HOME: "home", LADDER: "ladder", WEAPONS: "weapons", MAPS: "maps", WEAPON_PLAYERS: "weaponPlayers", MAPS_PLAYERS: "mapsPlayers" });
 
@@ -355,7 +355,6 @@ async function getPlayerMapCount(map) {
   return +cnt || 0;
 }
 
-
 const getWeaponsAll = () => runQuery(queries.ui_weaponsAll, []);
 const getMapsAll    = () => runQuery(queries.ui_mapsAll,   []);
 
@@ -465,7 +464,7 @@ async function buildView(view, page=0) {
   switch (view) {
     case VIEWS.HOME: {
       const totals = await getHomeTotals();
-	  const status = await fetchServerStatus();
+      const status = await fetchServerStatus();
       const embeds = renderHomeEmbed({ totals }, status, TZ, B3_RCON_IP, B3_RCON_PORT);
       return { embeds, nav, pager: [] };
     }
@@ -474,45 +473,45 @@ async function buildView(view, page=0) {
       const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
       const embeds = renderLadderEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + pageSize < total)];
-	  
-	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-	  
-	  const footerText = embedArr[embedArr.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀"; // U+2800
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
+      
+      const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+      
+      const footerText = embedArr[embedArr.length - 1].data.footer.text;
+      const ZERO_WIDTH = "⠀"; // U+2800
+      const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+      const blankText = ZERO_WIDTH.repeat(padLen);
 
-	  // Apply “invisible” footer to all, then real footer on the last
-	  for (const e of embedArr) {
-	    e.setFooter({ text: blankText });
-	  }
-	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-	  
-	  const selectRow = playerSelectRowForPage(rows, page);
-	  const nav = [navRow(VIEWS.LADDER), selectRow];
-	  return { embeds, nav, pager };
+      // Apply “invisible” footer to all, then real footer on the last
+      for (const e of embedArr) {
+        e.setFooter({ text: blankText });
+      }
+      embedArr[embedArr.length - 1].setFooter({ text: footerText });
+      
+      const selectRow = playerSelectRowForPage(rows, page);
+      const nav = [navRow(VIEWS.LADDER), selectRow];
+      return { embeds, nav, pager };
     }
     case VIEWS.WEAPONS: {
-	  const pageSize = 10, offset = page * pageSize;
+      const pageSize = 10, offset = page * pageSize;
       const [rows, total] = await Promise.all([getWeaponsSlice(offset, pageSize), getWeaponsCount()]);
       const embeds = renderWeaponsEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + pageSize < total)];
-	  
-	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-	  const footerText = embedArr[embedArr.length - 1].data.footer?.text;
-	  const ZERO_WIDTH = "⠀"; // U+2800
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
+      
+      const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+      const footerText = embedArr[embedArr.length - 1].data.footer?.text;
+      const ZERO_WIDTH = "⠀"; // U+2800
+      const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+      const blankText = ZERO_WIDTH.repeat(padLen);
 
-	  // Apply “invisible” footer to all, then real footer on the last
-	  for (const e of embedArr) {
-	    e.setFooter({ text: blankText });
-	  }
-	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-	  
-	  const selectRow = weaponSelectRowForPage(rows, page);
-	  const nav = [navRow(VIEWS.WEAPONS), selectRow];
-	  
+      // Apply “invisible” footer to all, then real footer on the last
+      for (const e of embedArr) {
+        e.setFooter({ text: blankText });
+      }
+      embedArr[embedArr.length - 1].setFooter({ text: footerText });
+      
+      const selectRow = weaponSelectRowForPage(rows, page);
+      const nav = [navRow(VIEWS.WEAPONS), selectRow];
+      
       return { embeds, nav, pager };
     }
     case VIEWS.MAPS: {
@@ -520,22 +519,22 @@ async function buildView(view, page=0) {
       const [rows, total] = await Promise.all([getMapsSlice(offset, pageSize), getMapsCount()]);
       const embeds = renderMapsEmbeds({ rows, page }); // uses absolute r.rank for numbering
       const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + pageSize < total)];
-	  
-	  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-	  const footerText = embedArr[embedArr.length - 1].data.footer?.text;
-	  const ZERO_WIDTH = "⠀"; // U+2800
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
+      
+      const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+      const footerText = embedArr[embedArr.length - 1].data.footer?.text;
+      const ZERO_WIDTH = "⠀"; // U+2800
+      const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+      const blankText = ZERO_WIDTH.repeat(padLen);
 
-	  // Apply “invisible” footer to all, then real footer on the last
-	  for (const e of embedArr) {
-	    e.setFooter({ text: blankText });
-	  }
-	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-	  
-	  const selectRow = mapSelectRowForPage(rows, page);
-	  const nav = [navRow(VIEWS.MAPS), selectRow];
-	  
+      // Apply “invisible” footer to all, then real footer on the last
+      for (const e of embedArr) {
+        e.setFooter({ text: blankText });
+      }
+      embedArr[embedArr.length - 1].setFooter({ text: footerText });
+      
+      const selectRow = mapSelectRowForPage(rows, page);
+      const nav = [navRow(VIEWS.MAPS), selectRow];
+      
       return { embeds, nav, pager };
     }
     default:
@@ -584,7 +583,6 @@ async function startUiInactivitySession(channel) {
   });
 }
 
-
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 setEmojiResolver((label) => {
@@ -602,264 +600,264 @@ client.once(Events.ClientReady,  async (c) => {
   await ensureUiMessages(client);
 
   // kick off idle watcher
-	try {
-	  const channel = await client.channels.fetch(CHANNEL_ID);
-	  if (channel) startUiInactivitySession(channel);
-	} catch (e) {
-	  console.warn("[ui] could not start inactivity session:", e);
-	}
+  try {
+    const channel = await client.channels.fetch(CHANNEL_ID);
+    if (channel) startUiInactivitySession(channel);
+  } catch (e) {
+    console.warn("[ui] could not start inactivity session:", e);
+  }
 });
 
 client.on(Events.InteractionCreate, async (i) => {
   try {
+    // BUTTONS
     if (i.isButton()) {
       const parsed = parseCustomId(i.customId);
-	  if (!parsed) return;
-	  const { view, page } = parsed;
+      if (!parsed) return;
 
-	// NAV toolbar clicked
-	if (i.message.id === UI_NAV_MESSAGE_ID) {
-	  const parsed = parseCustomId(i.customId);
-	  if (!parsed) return;
-	  const { view, page } = parsed;
+      // Ack immediately to avoid 10062
+      const ack = i.deferUpdate().catch(() => null);
 
-	  const payload = await buildView(view, page);
-	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-	  const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
+      if (i.message.id === UI_NAV_MESSAGE_ID) {
+        // NAV toolbar clicked
+        const payloadPromise = buildView(parsed.view, parsed.page);
+        await ack;
 
-	  // Ack immediately by updating the nav message, and in parallel edit the content message
-	  await Promise.all([
-		i.update({ content: "", embeds: [], components: payload.nav }), // ACK happens here
-		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
-	  ]);
+        const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+        const [navMsg, contentMsg, payload] = await Promise.all([
+          channel.messages.fetch(UI_NAV_MESSAGE_ID),
+          channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+          payloadPromise
+        ]);
 
-	  // reset inactivity timer if present
-	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        await Promise.all([
+          navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+          contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+        ]);
 
-	  return;
-	}
+        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        return;
+      }
 
+      if (i.message.id === UI_CONTENT_MESSAGE_ID) {
+        // PAGER clicked in content message
+        let payloadPromise;
 
-	  // PAGER clicked in content message
-	  if (i.message.id === UI_CONTENT_MESSAGE_ID) {
-		  
-		if (parsed.view === VIEWS.WEAPON_PLAYERS) {
-		  const payload = await buildWeaponPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-		  await i.update({ embeds: payload.embeds, components: payload.pager });
+        if (parsed.view === VIEWS.WEAPON_PLAYERS) {
+          payloadPromise = buildWeaponPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        } else if (parsed.view === VIEWS.MAPS_PLAYERS) {
+          payloadPromise = buildMapPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        } else {
+          payloadPromise = buildView(parsed.view, parsed.page);
+        }
 
-		  // keep toolbar synced so the select stays on the same 10 weapons
-		  if (UI_NAV_MESSAGE_ID) {
-			const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-			const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
-			await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-		  }
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
-		}
-		
-		if (parsed.view === VIEWS.MAPS_PLAYERS) {
-		  const payload = await buildMapPlayersView(parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-		  await i.update({ embeds: payload.embeds, components: payload.pager });
+        await ack;
 
-		  // keep toolbar synced so the select stays on the same 10 weapons
-		  if (UI_NAV_MESSAGE_ID) {
-			const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-			const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
-			await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-		  }
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
-		}
-		
-		const payload = await buildView(view, page);
-		await i.update({ embeds: payload.embeds, components: payload.pager });
+        const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+        const [navMsg, contentMsg, payload] = await Promise.all([
+          channel.messages.fetch(UI_NAV_MESSAGE_ID),
+          channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+          payloadPromise
+        ]);
 
-		// keep toolbar highlight synced (optional, cheap)
-		if (UI_NAV_MESSAGE_ID) {
-		  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-		  const navMsg = await channel.messages.fetch(UI_NAV_MESSAGE_ID);
-		  await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-		}
-		// reset inactivity timer
-		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		return;
-	  }
+        // Always keep toolbar synced; edit both safely
+        await Promise.all([
+          navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+          contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+        ]);
+
+        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        return;
+      }
     }
-	// Handle weapon select (customId: ui:weapons:select:<page>)
-	if (i.isStringSelectMenu() && i.customId.startsWith("ui:weapons:select:")) {
-	  const parts = i.customId.split(":"); // ["ui","weapons","select","<page>"]
-	  const page  = Math.max(0, parseInt(parts[3], 10) || 0);
-	  const weaponLabel = i.values?.[0];
-	  if (!weaponLabel) return i.reply({ content: "No weapon selected.", ephemeral: true });
 
-	  // Build “Top Players by Weapon …” view for page 0 initially
-	  const payload = await buildWeaponPlayersView(weaponLabel, 0, page);
+    // SELECT MENUS
+    // Handle weapon select (customId: ui:weapons:select:<page>)
+    if (i.isStringSelectMenu() && i.customId.startsWith("ui:weapons:select:")) {
+      const parts = i.customId.split(":"); // ["ui","weapons","select","<page>"]
+      const page  = Math.max(0, parseInt(parts[3], 10) || 0);
+      const weaponLabel = i.values?.[0];
+      if (!weaponLabel) return i.reply({ content: "No weapon selected.", ephemeral: true });
 
-	  // Update the NAV (tabs + same-page select) and CONTENT (embeds + pager)
-	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-	  const [navMsg, contentMsg] = await Promise.all([
-		channel.messages.fetch(UI_NAV_MESSAGE_ID),
-		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
-	  ]);
+      const ack = i.deferUpdate().catch(() => null);
+      const payloadPromise = buildWeaponPlayersView(weaponLabel, 0, page);
+      await ack;
 
-	  await Promise.all([
-		i.update({ content: "", embeds: [], components: payload.nav }), // ACK on the nav message
-		contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-	  ]);
+      const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+      const [navMsg, contentMsg, payload] = await Promise.all([
+        channel.messages.fetch(UI_NAV_MESSAGE_ID),
+        channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+        payloadPromise
+      ]);
 
-	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-	  return;
-	}
+      await Promise.all([
+        navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
 
-	if (i.isStringSelectMenu() && i.customId.startsWith("ui:maps:select:")) {
-	  const parts = i.customId.split(":"); // ["ui","maps","select","<page>"]
-	  const mapsPage = Math.max(0, parseInt(parts[3], 10) || 0);
-	  const mapLabel = i.values?.[0];
-	  if (!mapLabel) return i.reply({ content: "No map selected.", ephemeral: true });
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
 
-	  const payload = await buildMapPlayersView(mapLabel, 0, mapsPage);
+    // Handle map select (customId: ui:maps:select:<page>)
+    if (i.isStringSelectMenu() && i.customId.startsWith("ui:maps:select:")) {
+      const parts = i.customId.split(":"); // ["ui","maps","select","<page>"]
+      const mapsPage = Math.max(0, parseInt(parts[3], 10) || 0);
+      const mapLabel = i.values?.[0];
+      if (!mapLabel) return i.reply({ content: "No map selected.", ephemeral: true });
 
-	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-	  const [navMsg, contentMsg] = await Promise.all([
-		channel.messages.fetch(UI_NAV_MESSAGE_ID),
-		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
-	  ]);
+      const ack = i.deferUpdate().catch(() => null);
+      const payloadPromise = buildMapPlayersView(mapLabel, 0, mapsPage);
+      await ack;
 
-	  await Promise.all([
-		i.update({ content: "", embeds: [], components: payload.nav }), // nav message
-		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }) // content message
-	  ]);
+      const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+      const [navMsg, contentMsg, payload] = await Promise.all([
+        channel.messages.fetch(UI_NAV_MESSAGE_ID),
+        channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+        payloadPromise
+      ]);
 
-	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-	  return;
-	}
-	
-	if (i.isStringSelectMenu() && i.customId.startsWith("ui:ladder:select:")) {
-	  const parts = i.customId.split(":"); // ["ui","ladder","select","<page>"]
-	  const ladderPage = Math.max(0, parseInt(parts[3], 10) || 0);
-	  const clientId = Number(i.values?.[0]);
-	  if (!clientId) return i.reply({ content: "No player selected.", ephemeral: true });
+      await Promise.all([
+        navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
 
-	  const payload = await buildPlayerCardView(clientId, ladderPage);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
 
-	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
-	  const [navMsg, contentMsg] = await Promise.all([
-		channel.messages.fetch(UI_NAV_MESSAGE_ID),
-		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
-	  ]);
+    // Handle ladder player select (customId: ui:ladder:select:<page>)
+    if (i.isStringSelectMenu() && i.customId.startsWith("ui:ladder:select:")) {
+      const parts = i.customId.split(":"); // ["ui","ladder","select","<page>"]
+      const ladderPage = Math.max(0, parseInt(parts[3], 10) || 0);
+      const clientId = Number(i.values?.[0]);
+      if (!clientId) return i.reply({ content: "No player selected.", ephemeral: true });
 
-	  await Promise.all([
-		i.update({ content: "", embeds: [], components: payload.nav }), // ack on NAV message
-		contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-	  ]);
+      const ack = i.deferUpdate().catch(() => null);
+      const payloadPromise = buildPlayerCardView(clientId, ladderPage);
+      await ack;
 
-	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-	  return;
-	}
+      const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+      const [navMsg, contentMsg, payload] = await Promise.all([
+        channel.messages.fetch(UI_NAV_MESSAGE_ID),
+        channel.messages.fetch(UI_CONTENT_MESSAGE_ID),
+        payloadPromise
+      ]);
 
+      await Promise.all([
+        navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
 
   } catch (e) {
-	  console.error("[ui] button error", e);
-	  try {
-		if (i.deferred || i.replied) {
-		  await i.followUp({ content: "Something went wrong.", flags: 64 });
-		} else {
-		  await i.reply({ content: "Something went wrong.", flags: 64 });
-		}
-	  } catch (e2) {
-		// Interaction might already be invalid/expired; swallow to avoid crashing
-		console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
-	  }
-	}
-
+    if (isUnknownInteraction(e)) {
+      // user double-clicked, tab slept, or token expired; ignore quietly
+      console.warn("[ui] ignored unknown interaction");
+      return;
+    }
+    console.error("[ui] button/select error", e);
+    try {
+      if (i.deferred || i.replied) {
+        await i.followUp({ content: "Something went wrong.", flags: 64 });
+      } else {
+        await i.reply({ content: "Something went wrong.", flags: 64 });
+      }
+    } catch (e2) {
+      console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
+    }
+  }
 
   if (!i.isChatInputCommand()) return;
 
   try {
 
-	if (i.commandName === "xlr-top") {
-	  await i.deferReply();
+    if (i.commandName === "xlr-top") {
+      await i.deferReply();
 
-	  const countIn = i.options.getInteger("count");
-	  const sort    = i.options.getString("sort") || "skill";
-	  let weapon    = i.options.getString("weapon") || null;
-	  let map       = i.options.getString("map") || null;
+      const countIn = i.options.getInteger("count");
+      const sort    = i.options.getString("sort") || "skill";
+      let weapon    = i.options.getString("weapon") || null;
+      let map       = i.options.getString("map") || null;
 
-	  // 0 => all (up to 10)
-	  const count = countIn ?? 0;
-	  const limit = count === 0 ? 10 : Math.min(count, 10);
+      // 0 => all (up to 10)
+      const count = countIn ?? 0;
+      const limit = count === 0 ? 10 : Math.min(count, 10);
 
-	  // weapon precedence over map
-	  if (weapon && map) map = null;
+      // weapon precedence over map
+      if (weapon && map) map = null;
 
-	  try {
-		const { sql, params } = queries.topDynamic({ limit, sort, weapon, map });
-		const rows = await runQuery(sql, params);
+      try {
+        const { sql, params } = queries.topDynamic({ limit, sort, weapon, map });
+        const rows = await runQuery(sql, params);
 
-		// figure out canonical matched labels (if any)
-		const matchedLabel = rows.length ? rows[0].matched_label : null;
+        // figure out canonical matched labels (if any)
+        const matchedLabel = rows.length ? rows[0].matched_label : null;
 
-		// Build title
-		let title = "Top Players by Skill";
-		if (weapon) {
-		  const label = matchedLabel || weapon;
-		  const emoji = resolveEmoji(label);
-		  if(emoji)
-			title = `Top Players by Weapon: ${emoji} ${label}`;
-		  else
-			title = `Top Players by Weapon: ${label}`;
-		} else if (map) {
-		  const label = matchedLabel || map;
-		  title = `Top Players by Map: ${label}`;
-		} else if (sort && sort !== "skill") {
-		  title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
-		}
+        // Build title
+        let title = "Top Players by Skill";
+        if (weapon) {
+          const label = matchedLabel || weapon;
+          const emoji = resolveEmoji(label);
+          if(emoji)
+            title = `Top Players by Weapon: ${emoji} ${label}`;
+          else
+            title = `Top Players by Weapon: ${label}`;
+        } else if (map) {
+          const label = matchedLabel || map;
+          title = `Top Players by Map: ${label}`;
+        } else if (sort && sort !== "skill") {
+          title = `Top Players by ${sort.charAt(0).toUpperCase()}${sort.slice(1)}`;
+        }
 
-		// Thumbnail: use map image if querying a map, else default image
-		let thumbUrl = "";
-		if (map) {
-		  const label = matchedLabel || map;
-		  thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
-		}
+        // Thumbnail: use map image if querying a map, else default image
+        let thumbUrl = "";
+        if (map) {
+          const label = matchedLabel || map;
+          thumbUrl = (await getMapImageUrl(label)) || DEFAULT_THUMB;
+        }
 
-		// Build tags
-		const tags = [
-		  `Sort: ${sort}`,
-		  `Count: ${rows.length}`,
-		  weapon ? `Weapon: ${matchedLabel}` : null,
-		  map ? `Map: ${matchedLabel}` : null
-		].filter(Boolean).join("  •  ");
+        // Build tags
+        const tags = [
+          `Sort: ${sort}`,
+          `Count: ${rows.length}`,
+          weapon ? `Weapon: ${matchedLabel}` : null,
+          map ? `Map: ${matchedLabel}` : null
+        ].filter(Boolean).join("  •  ");
 
-		// Footer text
-		const footerText = `XLRStats • B3 • ${tags}`;
+        // Footer text
+        const footerText = `XLRStats • B3 • ${tags}`;
 
-		const ZERO_WIDTH = "⠀"; // U+2800
-		const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-		const blankText = ZERO_WIDTH.repeat(padLen);
+        const ZERO_WIDTH = "⠀"; // U+2800
+        const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+        const blankText = ZERO_WIDTH.repeat(padLen);
 
-		// Create embeds
-		const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
-		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+        // Create embeds
+        const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl });
+        const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 
-		// Apply “invisible” footer to all, then real footer on the last
-		for (const e of embedArr) {
-		  e.setFooter({ text: blankText });
-		}
-		embedArr[embedArr.length - 1].setFooter({ text: footerText });
-		await i.editReply({ embeds: embeds });
-	  } catch (err) {
-		console.error(err);
-		await i.editReply("Error talking to the stats database.");
-	  }
-	}
+        // Apply “invisible” footer to all, then real footer on the last
+        for (const e of embedArr) {
+          e.setFooter({ text: blankText });
+        }
+        embedArr[embedArr.length - 1].setFooter({ text: footerText });
+        await i.editReply({ embeds: embeds });
+      } catch (err) {
+        console.error(err);
+        await i.editReply("Error talking to the stats database.");
+      }
+    }
 
     if (i.commandName === "xlr-player") {
       await i.deferReply();
       const name = i.options.getString("name");
-	  const weapon = i.options.getString("weapon");
-	  const mapOpt = i.options.getString("map");
+      const weapon = i.options.getString("weapon");
+      const mapOpt = i.options.getString("map");
       const vsName = i.options.getString("vs");
-	  
+      
       const matches = await runQuery(queries.findPlayer, [`%${name}%`, `%${name}%`]);
       if (!matches.length) return i.editReply(`No players found matching **${name}**.`);
 
@@ -868,17 +866,17 @@ client.on(Events.InteractionCreate, async (i) => {
       // precedence: weapon > vs > default player card
      if (weapon) {
         const idOrNeg1 = /^\d+$/.test(weapon) ? Number(weapon) : -1;
-		const details = await runQuery(queries.playerWeaponCard, [`%${weapon}%`, idOrNeg1, clientId]);       if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
+    const details = await runQuery(queries.playerWeaponCard, [`%${weapon}%`, idOrNeg1, clientId]);       if (!details.length) return i.editReply(`No **weapon** usage found for **${matches[0].name}** matching \`${weapon}\`.`);
         const embed = formatPlayerWeaponEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
-	  if (mapOpt) {
+      if (mapOpt) {
 
        const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
        const details = await runQuery(queries.playerMapCard, [`%${mapOpt}%`, idOrNeg1, clientId]);
        if (!details.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-	   let thumbUrl = DEFAULT_THUMB;
-	   thumbUrl = (await getMapImageUrl(details[0].map)) || DEFAULT_THUMB;
+     let thumbUrl = DEFAULT_THUMB;
+     thumbUrl = (await getMapImageUrl(details[0].map)) || DEFAULT_THUMB;
        const embed = formatPlayerMapEmbed(details[0],{ thumbnail: thumbUrl });
        return i.editReply({ embeds: [embed] });
      }
@@ -888,11 +886,11 @@ client.on(Events.InteractionCreate, async (i) => {
         const opponentId = opp[0].client_id;
         if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
         const rows = await runQuery(queries.playerVsCard, [
-		  opponentId,           
-		  clientId, opponentId, 
-		  opponentId, clientId, 
-		  clientId              
-		]);
+      opponentId,           
+      clientId, opponentId, 
+      opponentId, clientId, 
+      clientId              
+    ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const embed = formatPlayerVsEmbed(rows[0],{ thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
