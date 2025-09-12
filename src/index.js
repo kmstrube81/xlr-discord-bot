@@ -206,8 +206,6 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
       const maxName = Math.max(0, 100 - (prefix.length + 1));
       const label = `${prefix} ${String(r.name).slice(0, maxName)}`;
 
-		console.log(label);
-
       return {
         label,
         value: String(r.client_id), // stays unique even if names collide
@@ -765,6 +763,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
   } catch (e) {
 	  console.error("[ui] button error", e);
+	  console.log(payload);
 	  try {
 		if (i.deferred || i.replied) {
 		  await i.followUp({ content: "Something went wrong.", flags: 64 });
