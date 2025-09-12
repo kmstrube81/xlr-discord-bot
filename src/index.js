@@ -189,6 +189,21 @@ function mapSelectRowForPage(rows, page, selectedLabel = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+function playerSelectRowForPage(rows, page, selectedId = null) {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ui:ladder:select:${page}`) // carry the ladder page number
+    .setPlaceholder("Select a player…")
+    .addOptions(
+      rows.map((r) => ({
+        label: String(r.name).slice(0, 100),  // show name
+        value: String(r.client_id),           // use stable id
+        default: selectedId ? r.client_id === selectedId : false,
+      }))
+    );
+
+  return new ActionRowBuilder().addComponents(menu);
+}
+
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
 }
@@ -287,7 +302,6 @@ async function getLadderCount() {
   const [{ cnt=0 }={}] = await runQuery(queries.ui_ladderCount, []);
   return +cnt || 0;
 }
-
 
 async function getWeaponsCount() {
   const [{ cnt=0 }={}] = await runQuery(queries.ui_weaponsCount, []);
@@ -401,6 +415,25 @@ async function buildMapPlayersView(mapLabel, playerPage = 0, mapsPage = 0) {
   return { embeds, nav, pager };
 }
 
+async function buildPlayerCardView(clientId, ladderPage = 0) {
+  const pageSize = 10;
+  const offset   = ladderPage * pageSize;
+
+  const [details, ladderRows] = await Promise.all([
+    runQuery(queries.playerCard, [clientId, clientId, clientId]),
+    getLadderSlice(offset, pageSize), // reuse ladder rows for the same page in the select
+  ]);
+
+  const nav = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, ladderPage, clientId)];
+  if (!details.length) {
+    const err = new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+    return { embeds: [err], nav, pager: [] };
+  }
+
+  const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
+  return { embeds: [embed], nav, pager: [] };
+}
+
 async function buildView(view, page=0) {
   const nav = [navRow(view)];
   switch (view) {
@@ -428,7 +461,10 @@ async function buildView(view, page=0) {
 	    e.setFooter({ text: blankText });
 	  }
 	  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-      return { embeds, nav, pager };
+	  
+	  const selectRow = playerSelectRowForPage(rows, page);
+	  const nav = [navRow(VIEWS.LADDER), selectRow];
+	  return { embeds, nav, pager };
     }
     case VIEWS.WEAPONS: {
 	  const pageSize = 10, offset = page * pageSize;
@@ -671,6 +707,30 @@ client.on(Events.InteractionCreate, async (i) => {
 	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 	  return;
 	}
+	
+	if (i.isStringSelectMenu() && i.customId.startsWith("ui:ladder:select:")) {
+	  const parts = i.customId.split(":"); // ["ui","ladder","select","<page>"]
+	  const ladderPage = Math.max(0, parseInt(parts[3], 10) || 0);
+	  const clientId = Number(i.values?.[0]);
+	  if (!clientId) return i.reply({ content: "No player selected.", ephemeral: true });
+
+	  const payload = await buildPlayerCardView(clientId, ladderPage);
+
+	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
+	  const [navMsg, contentMsg] = await Promise.all([
+		channel.messages.fetch(UI_NAV_MESSAGE_ID),
+		channel.messages.fetch(UI_CONTENT_MESSAGE_ID)
+	  ]);
+
+	  await Promise.all([
+		i.update({ content: "", embeds: [], components: payload.nav }), // ack on NAV message
+		contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+	  ]);
+
+	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+	  return;
+	}
+
 
   } catch (e) {
 	  console.error("[ui] button error", e);
