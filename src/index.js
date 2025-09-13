@@ -457,7 +457,6 @@ async function buildPlayerView(clientId, ladderPage = 0) {
   }
   
   const embed = formatPlayerEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
-  const pager   = [pagerRowWithParams(VIEWS.PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
 
   return { embeds: [embed], nav, pager };
 }
@@ -631,8 +630,6 @@ client.on(Events.InteractionCreate, async (i) => {
 	  const channel = i.channel ?? await i.client.channels.fetch(CHANNEL_ID);
 	  const contentMsg = await channel.messages.fetch(UI_CONTENT_MESSAGE_ID);
 		
-		
-		console.log(payload.nav[1].components[0].options);
 		
 	  // Ack immediately by updating the nav message, and in parallel edit the content message
 	  await Promise.all([
