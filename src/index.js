@@ -458,7 +458,7 @@ async function buildPlayerView(clientId, ladderPage = 0) {
   
   const embed = formatPlayerEmbed(details[0],{ thumbnail: DEFAULT_THUMB });
 
-  return { embeds: [embed], nav, pager };
+  return { embeds: [embed], nav };
 }
 
 
@@ -754,7 +754,7 @@ client.on(Events.InteractionCreate, async (i) => {
 
 	  await Promise.all([
 		i.update({ content: "", embeds: [], components: payload.nav }), // nav message
-		contentMsg.edit({ embeds: payload.embeds, components: payload.pager }) // content message
+		contentMsg.edit({ embeds: payload.embeds, components: [] }) // content message
 	  ]);
 
 	  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
