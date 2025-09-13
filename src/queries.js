@@ -12,7 +12,7 @@ function orderExpr(sort) {
     case "ratio":     return "ratio DESC";
     case "suicides":  return "suicides DESC";
     case "assists":   return "assists DESC";
-    case "rounds":    return "rounds DESC";   // <— new
+    case "rounds":    return "rounds DESC";
     case "skill":
     default:          return "skill DESC";
   }
@@ -21,24 +21,39 @@ function orderExpr(sort) {
 const asLike = t => `%${t}%`;
 const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 
+/**
+ * Preferred-alias join:
+ * - Choose the alias with highest num_used
+ * - Tie-break with latest time_edit
+ * - Returns exactly one row per client_id
+ *
+ * @param {string} as         Subquery alias name (e.g. 'a', 'pa', 'oa', 'ka')
+ * @param {string} clientRef  Column to join on (default 'c.id')
+ */
+const preferredAliasJoin = (as = "a", clientRef = "c.id") => `
+LEFT JOIN (
+  SELECT
+    client_id,
+    SUBSTRING_INDEX(
+      GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
+      '||', 1
+    ) AS alias
+  FROM aliases
+  GROUP BY client_id
+) ${as} ON ${as}.client_id = ${clientRef}
+`;
+
+/** Shared name join for lists that show player names */
+const nameJoin = `
+  JOIN clients c ON c.id = s.client_id
+  ${preferredAliasJoin("a", "c.id")}
+`;
+
 /** Robust top list with weapon/map pre-resolution + non-zero filter + matched_label */
 export function topDynamic({ limit, sort = "skill", weapon = null, map = null }) {
   const safeSort = SORTABLE.has(sort) ? sort : "skill";
   const orderBy  = `ORDER BY ${orderExpr(safeSort)}`;
   const params   = [];
-
-  const nameJoin = `
-    JOIN clients c ON c.id = s.client_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
-    ) a ON a.client_id = c.id
-  `;
 
   let select, from, joins = "", where = "";
 
@@ -182,23 +197,13 @@ function ui_ladderSlice(limit = 10, offset = 0) {
         SUM(s.suicides) AS suicides,
         SUM(s.assists)  AS assists,
         SUM(s.rounds)   AS rounds,
-        /* Choose how you want to combine skill; MAX() keeps the best,
-           AVG() makes it a mean. */
         MAX(s.skill)    AS skill
       FROM ${PLAYERSTATS} s
       GROUP BY s.client_id
       HAVING (SUM(s.kills) > 0 OR SUM(s.deaths) > 0 OR SUM(s.assists) > 0)
     ) agg
     JOIN clients c ON c.id = agg.client_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     ORDER BY agg.skill DESC
     LIMIT ? OFFSET ?
   `;
@@ -219,21 +224,12 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
       NULL AS rounds,
       wsel.name AS matched_label
     FROM (
-      /* aggregate base playerstats so skill/rounds/etc. are stable per player */
       SELECT client_id, MAX(skill) AS skill
       FROM ${PLAYERSTATS}
       GROUP BY client_id
     ) sagg
     JOIN clients c ON c.id = sagg.client_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
       SELECT id, name
       FROM xlr_weaponstats
@@ -242,7 +238,6 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
       LIMIT 1
     ) wsel ON 1=1
     JOIN (
-      /* aggregate weapon usage per (player, weapon) */
       SELECT player_id, weapon_id,
              SUM(kills) AS kills,
              SUM(deaths) AS deaths,
@@ -258,16 +253,15 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
 }
 
 function ui_weaponsSlice(limit = 10, offset = 0) {
-	// WEAPONS — all by kills
-	const sql = `
-	  SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
-	  FROM xlr_weaponusage wu
-	  JOIN xlr_weaponstats w ON w.id = wu.weapon_id
-	  GROUP BY w.id, w.name
-	  ORDER BY kills DESC
-	  LIMIT ? OFFSET ?
-	`;
-	return { sql, params: [limit, offset] };
+  const sql = `
+    SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
+    FROM xlr_weaponusage wu
+    JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+    GROUP BY w.id, w.name
+    ORDER BY kills DESC
+    LIMIT ? OFFSET ?
+  `;
+  return { sql, params: [limit, offset] };
 }
 
 function ui_playerMapsSlice(map, limit = 10, offset = 0) {
@@ -289,15 +283,7 @@ function ui_playerMapsSlice(map, limit = 10, offset = 0) {
       GROUP BY client_id
     ) sagg
     JOIN clients c ON c.id = sagg.client_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
       SELECT id, name
       FROM xlr_mapstats
@@ -306,7 +292,6 @@ function ui_playerMapsSlice(map, limit = 10, offset = 0) {
       LIMIT 1
     ) msel ON 1=1
     JOIN (
-      /* aggregate map usage per (player, map) */
       SELECT player_id, map_id,
              SUM(kills) AS kills,
              SUM(deaths) AS deaths,
@@ -323,16 +308,15 @@ function ui_playerMapsSlice(map, limit = 10, offset = 0) {
 }
 
 function ui_mapsSlice(limit = 10, offset = 0) {
-	// MAPS by Rounds
-	const sql = `
-	  SELECT m.name AS label, SUM(pm.rounds) AS rounds, SUM(pm.kills) AS kills, SUM(pm.suicides) AS suicides
-      FROM xlr_playermaps pm
-      JOIN xlr_mapstats m ON m.id = pm.map_id
-      GROUP BY m.id, m.name
-      ORDER BY rounds DESC
-	  LIMIT ? OFFSET ?
-	`;
-	return { sql, params: [limit, offset] };
+  const sql = `
+    SELECT m.name AS label, SUM(pm.rounds) AS rounds, SUM(pm.kills) AS kills, SUM(pm.suicides) AS suicides
+    FROM xlr_playermaps pm
+    JOIN xlr_mapstats m ON m.id = pm.map_id
+    GROUP BY m.id, m.name
+    ORDER BY rounds DESC
+    LIMIT ? OFFSET ?
+  `;
+  return { sql, params: [limit, offset] };
 }
 
 const ui_ladderCount = `
@@ -350,7 +334,6 @@ const ui_weaponsCount = `
   FROM xlr_weaponstats s
 `;
 
-// WEAPONS — all by kills
 const ui_weaponsAll = `
   SELECT w.name AS label, SUM(wu.kills) AS kills, SUM(wu.suicides) AS suicides
   FROM xlr_weaponusage wu
@@ -382,7 +365,6 @@ const ui_playerWeaponCount = `
   ) t
 `;
 
-// MAPS — all by rounds
 const ui_mapsAll = `
   SELECT m.name AS label, SUM(pm.rounds) AS rounds
   FROM xlr_playermaps pm
@@ -394,8 +376,8 @@ const ui_mapsAll = `
 const ui_mapsCount = `
   SELECT COUNT(*) AS cnt
   FROM xlr_mapstats s
-  `;
-  
+`;
+
 const ui_playerMapsCount = `
   SELECT COUNT(*) AS cnt
   FROM (
@@ -419,7 +401,6 @@ const ui_playerMapsCount = `
   ) t
 `;
 
-		
 export const queries = {
   // Top players by skill (no server_id filter)
   topBySkill: `
@@ -429,34 +410,27 @@ export const queries = {
            CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio
     FROM ${PLAYERSTATS} s
     JOIN clients c ON c.id = s.client_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     ORDER BY s.skill DESC
     LIMIT ?
   `,
 
-  // Find a player by (partial) name in aliases or clients
+  // Find a player by (partial) name in aliases or clients.
+  // Filter against *all* aliases but display the preferred alias.
   findPlayer: `
-    SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name
+    SELECT
+      c.id AS client_id,
+      COALESCE(pa.alias, c.name) AS name
     FROM clients c
-    LEFT JOIN (
-      SELECT client_id, alias, num_used
-      FROM aliases
-    ) a ON a.client_id=c.id
-    WHERE (c.name LIKE ? OR a.alias LIKE ?)
+    ${preferredAliasJoin("pa", "c.id")}
+    LEFT JOIN aliases af ON af.client_id = c.id
+    WHERE (c.name LIKE ? OR af.alias LIKE ?)
     GROUP BY c.id
-    ORDER BY MAX(a.num_used) DESC
+    ORDER BY MAX(af.num_used) DESC, MAX(af.time_edit) DESC
     LIMIT 10
   `,
 
-    // Detailed line for a single player, extended with fav weapon, assists, and nemesis
+  // Detailed line for a single player, extended with fav weapon, assists, and nemesis
   playerCard: `
     SELECT
       c.id AS client_id,
@@ -466,21 +440,15 @@ export const queries = {
       s.winstreak, s.losestreak,
       s.assists,
       COALESCE(pb.headshots, 0) AS headshots,
-
-      
       fw.fav_weapon AS fav,
-
-      
       COALESCE(ka.alias, kc.name) AS nemesis,
       nem.kills AS nemesis_kills,
-
       c.connections,
       c.time_add, c.time_edit
     FROM clients c
     JOIN ${PLAYERSTATS} s
       ON s.client_id = c.id
 
-   
     LEFT JOIN (
       SELECT player_id, SUM(kills) AS headshots
       FROM ${PLAYERBODY}
@@ -488,18 +456,8 @@ export const queries = {
       GROUP BY player_id
     ) pb ON pb.player_id = c.id
 
-    
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
 
-    
     LEFT JOIN (
       SELECT wu.player_id, w.name AS fav_weapon, wu.kills
       FROM xlr_weaponusage wu
@@ -509,7 +467,6 @@ export const queries = {
       LIMIT 1
     ) fw ON fw.player_id = c.id
 
-    
     LEFT JOIN (
       SELECT o.target_id AS player_id, o.killer_id, SUM(o.kills) AS kills
       FROM xlr_opponents o
@@ -519,19 +476,12 @@ export const queries = {
       LIMIT 1
     ) nem ON nem.player_id = c.id
     LEFT JOIN clients kc ON kc.id = nem.killer_id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) ka ON ka.client_id = kc.id
+    ${preferredAliasJoin("ka", "kc.id")}
 
     WHERE c.id = ?
     LIMIT 1
   `,
+
   // Player + specific weapon usage (weapon resolved by LIKE or exact id)
   playerWeaponCard: `
     SELECT
@@ -545,15 +495,7 @@ export const queries = {
       c.time_edit
     FROM clients c
     JOIN ${PLAYERSTATS} s ON s.client_id = c.id
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-    ) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN xlr_weaponusage wu ON wu.player_id = c.id
     JOIN (
       SELECT id, name
@@ -565,110 +507,73 @@ export const queries = {
     WHERE c.id = ?
     LIMIT 1
   `,
-   playerMapCard: `
-  SELECT
-    c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
-    s.skill,
-    msel.name AS map,
-    pm.kills,
-    pm.deaths,
-    pm.suicides,
-    pm.rounds,
-    c.time_edit
-  FROM clients c
-  JOIN ${PLAYERSTATS} s ON s.client_id = c.id
 
-  -- preferred alias
-  LEFT JOIN (
-    SELECT aa.client_id, aa.alias
-    FROM aliases aa
+  playerMapCard: `
+    SELECT
+      c.id AS client_id,
+      COALESCE(a.alias, c.name) AS name,
+      s.skill,
+      msel.name AS map,
+      pm.kills,
+      pm.deaths,
+      pm.suicides,
+      pm.rounds,
+      c.time_edit
+    FROM clients c
+    JOIN ${PLAYERSTATS} s ON s.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
-      SELECT client_id, MAX(num_used) AS max_used
-      FROM aliases
-      GROUP BY client_id
-    ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-  ) a ON a.client_id = c.id
-
-  -- map selection (LIKE name or exact id)
-  JOIN (
-    SELECT id, name
-    FROM xlr_mapstats
-    WHERE (name LIKE ? OR id = ?)
-    ORDER BY name
+      SELECT id, name
+      FROM xlr_mapstats
+      WHERE (name LIKE ? OR id = ?)
+      ORDER BY name
+      LIMIT 1
+    ) msel ON 1=1
+    JOIN xlr_playermaps pm
+      ON pm.player_id = c.id
+     AND pm.map_id    = msel.id
+    WHERE c.id = ?
     LIMIT 1
-  ) msel ON 1=1
-
-  -- player’s stats on that map
-  JOIN xlr_playermaps pm
-    ON pm.player_id = c.id
-   AND pm.map_id    = msel.id
-
-  WHERE c.id = ?
-  LIMIT 1
-`,
+  `,
 
   // Player vs Opponent head-to-head summary from xlr_opponents
   playerVsCard: `
-  SELECT
-    p.id  AS player_id,
-    COALESCE(pa.alias, p.name) AS player_name,
-    sp.skill AS player_skill,
+    SELECT
+      p.id  AS player_id,
+      COALESCE(pa.alias, p.name) AS player_name,
+      sp.skill AS player_skill,
 
-    o.id  AS opponent_id,
-    COALESCE(oa.alias, o.name) AS opponent_name,
-    so.skill AS opp_skill,
+      o.id  AS opponent_id,
+      COALESCE(oa.alias, o.name) AS opponent_name,
+      so.skill AS opp_skill,
 
-    COALESCE(kp.kills_vs, 0) AS kills_vs,
-    COALESCE(ko.kills_vs, 0) AS deaths_vs
+      COALESCE(kp.kills_vs, 0) AS kills_vs,
+      COALESCE(ko.kills_vs, 0) AS deaths_vs
 
-  FROM clients p
-  JOIN ${PLAYERSTATS} sp ON sp.client_id = p.id
+    FROM clients p
+    JOIN ${PLAYERSTATS} sp ON sp.client_id = p.id
 
-  
-  JOIN clients o ON o.id = ?
-  LEFT JOIN ${PLAYERSTATS} so ON so.client_id = o.id
+    JOIN clients o ON o.id = ?
+    LEFT JOIN ${PLAYERSTATS} so ON so.client_id = o.id
 
-  
-  LEFT JOIN (
-    SELECT SUM(kills) AS kills_vs
-    FROM xlr_opponents
-    WHERE killer_id = ? AND target_id = ?
-  ) kp ON 1=1
+    LEFT JOIN (
+      SELECT SUM(kills) AS kills_vs
+      FROM xlr_opponents
+      WHERE killer_id = ? AND target_id = ?
+    ) kp ON 1=1
 
-  
-  LEFT JOIN (
-    SELECT SUM(kills) AS kills_vs
-    FROM xlr_opponents
-    WHERE killer_id = ? AND target_id = ?
-  ) ko ON 1=1
+    LEFT JOIN (
+      SELECT SUM(kills) AS kills_vs
+      FROM xlr_opponents
+      WHERE killer_id = ? AND target_id = ?
+    ) ko ON 1=1
 
-  
-  LEFT JOIN (
-    SELECT aa.client_id, aa.alias
-    FROM aliases aa
-    JOIN (
-      SELECT client_id, MAX(num_used) AS max_used
-      FROM aliases
-      GROUP BY client_id
-    ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-  ) pa ON pa.client_id = p.id
-  LEFT JOIN (
-    SELECT aa.client_id, aa.alias
-    FROM aliases aa
-    JOIN (
-      SELECT client_id, MAX(num_used) AS max_used
-      FROM aliases
-      GROUP BY client_id
-    ) uu ON uu.client_id = aa.client_id AND uu.max_used = aa.num_used
-  ) oa ON oa.client_id = o.id
+    ${preferredAliasJoin("pa", "p.id")}
+    ${preferredAliasJoin("oa", "o.id")}
 
-  WHERE p.id = ?
-  LIMIT 1
-`,
-
-
-
+    WHERE p.id = ?
+    LIMIT 1
+  `,
 
   // Recently seen players (from clients)
   lastSeen: `
@@ -676,20 +581,14 @@ export const queries = {
            COALESCE(a.alias, c.name) AS name,
            c.time_edit
     FROM clients c
-    LEFT JOIN (
-      SELECT aa.client_id, aa.alias
-      FROM aliases aa
-      JOIN (
-        SELECT client_id, MAX(num_used) AS max_used
-        FROM aliases
-        GROUP BY client_id
-      ) uu ON uu.client_id=aa.client_id AND uu.max_used=aa.num_used
-    ) a ON a.client_id=c.id
+    ${preferredAliasJoin("a", "c.id")}
     WHERE c.time_edit IS NOT NULL
     ORDER BY c.time_edit DESC
     LIMIT ?
   `,
+
   topDynamic,
+
   // UI — Home
   ui_totalPlayers,
   ui_totalKills,
@@ -697,14 +596,13 @@ export const queries = {
   ui_favoriteWeapon,
   ui_favoriteMap,
 
-  // UI — Ladder
+  // UI — Ladder / Weapons / Maps
   ui_ladderSlice,   // function -> { sql, params }
   ui_ladderCount,
   ui_playerWeaponSlice,
   ui_playerWeaponCount,
   ui_weaponsSlice,
   ui_weaponsCount,
-  // UI — Weapons/Maps
   ui_weaponsAll,
   ui_mapsAll,
   ui_mapsCount,
