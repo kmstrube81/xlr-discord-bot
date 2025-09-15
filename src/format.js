@@ -320,7 +320,7 @@ export function formatLastSeenEmbed(rows, opts = {}) {
 
 export function renderHomeEmbed({ totals }, data, tz, ip, port) {
   const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
-  const { totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
+  const { totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
   
   const map = serverinfo?.mapname || "unknown";
   const mode = serverinfo?.g_gametype || "N/A";
@@ -339,6 +339,7 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
       .setTitle(hostname)
 	  .setImage(imageUrl)
       .addFields(
+	    { name: "Total Players Seen", value: (totalPlayers ?? 0).toLocaleString(), inline: true },
         { name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
         { name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
         { name: "\u200b", value: "\u200b", inline: true },
