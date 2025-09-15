@@ -31,6 +31,42 @@ function upsertEnv(key, value) {
   if (key === "UI_CONTENT_MESSAGE_ID") UI_CONTENT_MESSAGE_ID = value;
 }
 
+// --- Multi-server discovery from env ---
+// Picks up: B3_RCON_IP, B3_RCON_PORT (base) and B3_RCON_IP_2 / B3_RCON_PORT_2, B3_RCON_IP_3 / ...
+function collectServersFromEnv(env) {
+  const pairs = [];
+
+  // include the base pair if both exist
+  if (env.B3_RCON_IP && env.B3_RCON_PORT) {
+    pairs.push({ ip: env.B3_RCON_IP.trim(), port: String(env.B3_RCON_PORT).trim() });
+  }
+
+  // scan suffixed keys like B3_RCON_IP_2, B3_RCON_PORT_2, in numeric order
+  const ipKeys = Object.keys(env).filter(k => /^B3_RCON_IP_\d+$/.test(k));
+  const indices = ipKeys
+    .map(k => Number(k.split("_").pop()))
+    .filter(n => Number.isFinite(n))
+    .sort((a,b) => a - b);
+
+  for (const n of indices) {
+    const ipKey   = `B3_RCON_IP_${n}`;
+    const portKey = `B3_RCON_PORT_${n}`;
+    if (env[ipKey] && env[portKey]) {
+      pairs.push({ ip: env[ipKey].trim(), port: String(env[portKey]).trim() });
+    }
+  }
+
+  // de-dup (in case the same server is listed twice)
+  const uniq = [];
+  const seen = new Set();
+  for (const s of pairs) {
+    const id = `${s.ip}:${s.port}`;
+    if (!seen.has(id)) { seen.add(id); uniq.push(s); }
+  }
+  return uniq;
+}
+
+const SERVERS = collectServersFromEnv(process.env); 
 
 const HEARTBEAT_FILE = "/opt/xlrbot/health/ready";
 // Default image if no map or fetch fails — set your own brand image here
@@ -95,8 +131,8 @@ const commands = [
     .addIntegerOption(o => o.setName("count").setDescription("How many (default 10)").setMinValue(1).setMaxValue(25))
 ].map(c => c.toJSON());
 
-async function fetchServerStatus() {
-  const url = `https://api.cod.pm/getstatus/${B3_RCON_IP}/${B3_RCON_PORT}`;
+async function fetchServerStatus(ip, port) {
+  const url = `https://api.cod.pm/getstatus/${ip}/${port}`;
   const res = await axios.get(url);
   return res.data;
 }
@@ -466,11 +502,31 @@ async function buildView(view, page=0) {
   const nav = [navRow(view)];
   switch (view) {
     case VIEWS.HOME: {
-      const totals = await getHomeTotals();
-	  const status = await fetchServerStatus();
-      const embeds = renderHomeEmbed({ totals }, status, TZ, B3_RCON_IP, B3_RCON_PORT);
-      return { embeds, nav, pager: [] };
-    }
+	  // If no servers are defined, show a friendly error
+	  if (!SERVERS.length) {
+		const err = new EmbedBuilder()
+		  .setColor(0xcc0000)
+		  .setDescription("No B3 servers configured in environment (B3_RCON_IP / B3_RCON_PORT).");
+		return { embeds: [err], nav, pager: [] };
+	  }
+
+	  // Treat 'page' as the selected server index
+	  const serverIndex = Math.abs(page) % SERVERS.length;
+	  const { ip, port } = SERVERS[serverIndex];
+
+	  const totals = await getHomeTotals();
+	  const status = await fetchServerStatus(ip, port);
+	  const embeds = renderHomeEmbed({ totals }, status, TZ, ip, port);
+
+	  // Only show server pager if we have >1 server; loop next/prev across the array
+	  const hasMultiple = SERVERS.length > 1;
+	  const pager = hasMultiple
+		? [pagerRow(VIEWS.HOME, serverIndex, true, true)]  // always enabled (wraps)
+		: [];
+
+	  return { embeds, nav, pager };
+	}
+
     case VIEWS.LADDER: {
       const pageSize = 10, offset = page * pageSize;
       const [rows, total] = await Promise.all([getLadderSlice(offset, pageSize), getLadderCount()]);
