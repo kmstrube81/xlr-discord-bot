@@ -342,7 +342,6 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 	    { name: "Total Players Seen", value: (totalPlayers ?? 0).toLocaleString(), inline: true },
         { name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
         { name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
-        { name: "\u200b", value: "\u200b", inline: true },
         { name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
         { name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
       )
