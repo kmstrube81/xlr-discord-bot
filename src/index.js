@@ -593,7 +593,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
     if (reason === 'idle') {
       try {
         // Auto-refresh Home on idle, even if already on Home
-        const payload = await buildView(serverIndex, VIEWS.HOME, 0);
+        const payload = await buildView(serverIndex, {VIEWS.HOME, 0});
 
         // Update toolbar + content
         const [navMsg, contentMsg] = await Promise.all([
@@ -620,22 +620,22 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   
   if (view === VIEWS.HOME) {
-    return { embeds } = await buildHome(serverIndex);
+    return await buildHome(serverIndex);
   }
   if (view === VIEWS.LADDER) {
-    return { embeds, pager } = await buildLadder(serverIndex, page);
+    return await buildLadder(serverIndex, page);
   }
   if (view === VIEWS.WEAPONS) {
-    return { embeds, pager, nav } = await buildWeapons(serverIndex, page);
+    return await buildWeapons(serverIndex, page);
   }
   if (view === VIEWS.WEAPON_PLAYERS) {
-    return { embeds, pager, nav } = await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    return await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
   }
   if (view === VIEWS.MAPS) {
-    return { embeds, pager, nav } = await buildMaps(serverIndex, page);
+    return await buildMaps(serverIndex, page);
   }
   if (view === VIEWS.MAPS_PLAYERS) {
-    return { embeds, pager, nav } = await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
   }
 }
 //String Select processing here
