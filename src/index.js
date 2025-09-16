@@ -933,8 +933,8 @@ client.once(Events.ClientReady, async () => {
     try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
 	try { 
 		const cfg = byIndex.get(i);
-		const channel = cfg.channelId;
-		if (channel) {
+		const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+		if (channel && channel.type === ChannelType.GuildText) {
 			const collector = channel.createMessageComponentCollector();
 			perChannelState.set(cfg.channelId, { i, collectors: collector });
 			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg);
