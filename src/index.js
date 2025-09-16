@@ -574,7 +574,7 @@ async function ensureUIForServer(serverIndex) {
   
 }
 
-async function startUiInactivitySession(uiCollector,serverIndex,cfg) {
+async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   // Stop an old one if it exists
   if (uiCollector) {
     try { uiCollector.stop('restart'); } catch {}
@@ -609,7 +609,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg) {
         console.error("[ui] idle refresh failed:", e);
       } finally {
         // Restart the idle watcher
-        startUiInactivitySession(uiCollector,serverIndex,cfg);
+        startUiInactivitySession(uiCollector,serverIndex,cfg,channel);
       }
     }
   });
@@ -937,7 +937,7 @@ client.once(Events.ClientReady, async () => {
 		if (channel && channel.type === ChannelType.GuildText) {
 			const collector = channel.createMessageComponentCollector();
 			perChannelState.set(cfg.channelId, { i, collectors: collector });
-			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg);
+			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
 		}
 	} catch (e) {
 	  console.warn("[ui] could not start inactivity session:", e);
