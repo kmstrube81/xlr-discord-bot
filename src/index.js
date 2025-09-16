@@ -593,7 +593,8 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
     if (reason === 'idle') {
       try {
         // Auto-refresh Home on idle, even if already on Home
-        const payload = await buildView(serverIndex, { "home", 0, null, null});
+		const parsed = { "home", 0, null, null };
+        const payload = await buildView(serverIndex, parsed);
 
         // Update toolbar + content
         const [navMsg, contentMsg] = await Promise.all([
