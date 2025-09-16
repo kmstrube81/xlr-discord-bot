@@ -591,50 +591,25 @@ async function ensureUIForServer(serverIndex) {
   */
 }
 
-//previously handled in click on interaction
-
-async function handleUiInteractionForServer(interaction, serverIndex, { view, page, param, weaponsPage }) {
-  const cfg = byIndex.get(serverIndex);
-  if (!cfg) return;
-  const channel = interaction.channel;
-  const navMsg = await channel.messages.fetch(cfg.ui.navId);
-  const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-
-  await navMsg.edit(toolbarPayload(view));
-
+async function buildView(serverIndex, { view, page, param, weaponsPage }) {
+  
   if (view === VIEWS.HOME) {
-    const { embeds } = await buildHome(serverIndex);
-    await contentMsg.edit({ embeds, components: [] });
-    return;
+    creturn { embeds } = await buildHome(serverIndex);
   }
   if (view === VIEWS.LADDER) {
-    const { embeds, pager } = await buildLadder(serverIndex, page);
-    await contentMsg.edit({ embeds, components: pager });
-    return;
+    return { embeds, pager } = await buildLadder(serverIndex, page);
   }
   if (view === VIEWS.WEAPONS) {
-    const { embeds, pager, nav } = await buildWeapons(serverIndex, page);
-    await navMsg.edit({ content: "", embeds: [], components: nav });
-    await contentMsg.edit({ embeds, components: pager });
-    return;
+    return { embeds, pager, nav } = await buildWeapons(serverIndex, page);
   }
   if (view === VIEWS.WEAPON_PLAYERS) {
-    const { embeds, pager, nav } = await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
-    await navMsg.edit({ content: "", embeds: [], components: nav });
-    await contentMsg.edit({ embeds, components: pager });
-    return;
+    return { embeds, pager, nav } = await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
   }
   if (view === VIEWS.MAPS) {
-    const { embeds, pager, nav } = await buildMaps(serverIndex, page);
-    await navMsg.edit({ content: "", embeds: [], components: nav });
-    await contentMsg.edit({ embeds, components: pager });
-    return;
+    return { embeds, pager, nav } = await buildMaps(serverIndex, page);
   }
   if (view === VIEWS.MAPS_PLAYERS) {
-    const { embeds, pager, nav } = await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
-    await navMsg.edit({ content: "", embeds: [], components: nav });
-    await contentMsg.edit({ embeds, components: pager });
-    return;
+    return { embeds, pager, nav } = await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
   }
 }
 //String Select processing here
@@ -654,7 +629,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		  const parsed = parseCustomId(i.customId);
 		  if (!parsed) return;
 		  const { view, page } = parsed;
-		  const payload = await buildView(serverIndex, view, page);//build payload from parsed data from button
+		  const payload = await buildView(serverIndex, parsed);//build payload from parsed data from button
 		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
 		  const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 		  // Ack immediately by updating the nav message, and in parallel edit the content message
@@ -692,7 +667,7 @@ client.on(Events.InteractionCreate, async (i) => {
 			  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 			  return;
 			} else { //if pager on another page (eg ladder or home)
-				const payload = await buildView(serverIndex,view, page);
+				const payload = await buildView(serverIndex, parsed);
 				await i.update({ embeds: payload.embeds, components: payload.pager });
 
 				// keep toolbar highlight synced (optional, cheap)
