@@ -131,6 +131,10 @@ const SERVER_CONFIGS = collectServerConfigs(process.env);
 const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c]));
 const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }]));
 
+// --- inactivity / auto-home ---
+const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes
+let uiCollector = null;  
+
 // -------------------------------------------------------------------------------------
 // MySQL pools per server
 // -------------------------------------------------------------------------------------
@@ -567,34 +571,56 @@ async function ensureUIForServer(serverIndex) {
   } else {
     await contentMsg.edit({ embeds: initial.embeds, components: initial.pager });
   }
+  
+}
 
-  // This handles the button clicks instead of elsewhere, is this why it is slow af?
- 
+async function startUiInactivitySession(uiCollector,serverIndex,cfg) {
+  // Stop an old one if it exists
+  if (uiCollector) {
+    try { uiCollector.stop('restart'); } catch {}
+    uiCollector = null;
+  }
 
-/* const prev = perChannelState.get(cfg.channelId);
-  if (prev?.collectors?.stop) prev.collectors.stop();
-
-  const filter = (i) => i.channelId === cfg.channelId;
-  const collector = channel.createMessageComponentCollector({ filter, time: 0 });
-  collector.on("collect", async (interaction) => {
-    try {
-      const parsed = parseCustomId(interaction.customId);
-      if (!parsed) return;
-      await interaction.deferUpdate();
-      await handleUiInteractionForServer(interaction, serverIndex, parsed);
-    } catch (e) {
-      console.error("[ui] button error", e);
-    }
+  // Only collect our UI buttons in the target channel + for our 2 UI messages
+  uiCollector = channel.createMessageComponentCollector({
+    idle: INACTIVITY_MS,
+    filter: (i) =>
+      i.customId?.startsWith('ui:') &&
+      (i.message?.id === cfg.ui.contentId || i.message?.id === cfg.ui.navId)
   });
 
-  perChannelState.set(cfg.channelId, { serverIndex, collectors: collector });
-  */
+  uiCollector.on('end', async (_collected, reason) => {
+    if (reason === 'idle') {
+      try {
+        // Auto-refresh Home on idle, even if already on Home
+        const payload = await buildView(serverIndex, VIEWS.HOME, 0);
+
+        // Update toolbar + content
+        const [navMsg, contentMsg] = await Promise.all([
+          channel.messages.fetch(cfg.ui.navId),
+          channel.messages.fetch(cfg.ui.contentId),
+        ]);
+
+        await Promise.all([
+          navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+          contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+        ]);
+      } catch (e) {
+        console.error("[ui] idle refresh failed:", e);
+      } finally {
+        // Restart the idle watcher
+        startUiInactivitySession(uiCollector,serverIndex,cfg);
+      }
+    }
+  });
 }
+
+
 
 async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   
   if (view === VIEWS.HOME) {
-    creturn { embeds } = await buildHome(serverIndex);
+    return { embeds } = await buildHome(serverIndex);
   }
   if (view === VIEWS.LADDER) {
     return { embeds, pager } = await buildLadder(serverIndex, page);
@@ -903,7 +929,19 @@ function resolveServerIndexFromInteraction(interaction) {
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   for (let i = 0; i < SERVER_CONFIGS.length; i++) {
+	
     try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
+	try { 
+		const cfg = byIndex.get(i);
+		const channel = cfg.channelId;
+		if (channel) {
+			const collector = channel.createMessageComponentCollector();
+			perChannelState.set(cfg.channelId, { i, collectors: collector });
+			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg);
+		}
+	} catch (e) {
+	  console.warn("[ui] could not start inactivity session:", e);
+	}
   }
 });
 
