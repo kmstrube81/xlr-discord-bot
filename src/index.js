@@ -679,8 +679,10 @@ client.on(Events.InteractionCreate, async (i) => {
       const cfg = byIndex.get(serverIndex);
       const navMsg = await i.channel.messages.fetch(cfg.ui.navId);
       const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
-      await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      await contentMsg.edit({ embeds: payload.embeds, components: payload.pager });
+	  await Promise.all([
+		  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+		]);
       return;
     }
 
@@ -690,8 +692,10 @@ client.on(Events.InteractionCreate, async (i) => {
       const cfg = byIndex.get(serverIndex);
       const navMsg = await i.channel.messages.fetch(cfg.ui.navId);
       const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
-      await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      await contentMsg.edit({ embeds: payload.embeds, components: payload.pager });
+      await Promise.all([
+		  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+		]);
       return;
     }
 
@@ -714,7 +718,7 @@ client.on(Events.InteractionCreate, async (i) => {
     if (i.commandName === "xlr-servers") {
       const lines = SERVER_CONFIGS.map((c, idx) => {
         const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
-        return `**${idx + 1}. ${c.name}** — DB: \`${c.db.host}/${c.db.name}\`, RCON: \`${c.rcon.ip}:${c.rcon.port}\`, Channel: ${chan}`;
+        return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
       });
       await i.reply({ ephemeral: true, content: lines.join("\n") || "No servers configured." });
       return;
