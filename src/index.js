@@ -43,6 +43,17 @@ const {
 } = process.env;
 
 const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png";
+// -------------------------------------------------------------------------------------
+// Perf helper
+// -------------------------------------------------------------------------------------
+function startPerf(label) {
+  const t0 = process.hrtime.bigint();
+  return function step(stepLabel) {
+    const ms = Number((process.hrtime.bigint() - t0) / 1000000n);
+    console.log(`[perf] ${label} — ${stepLabel}: ${ms}ms`);
+  };
+}
+
 
 // Write a key=value into .env (create if missing)
 function upsertEnv(key, value) {
@@ -317,7 +328,11 @@ async function getHomeTotals(serverIndex) {
 
 async function getLadderSlice(serverIndex, offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
-  const rows = await runQueryOn(serverIndex, sql, params);
+  perfCmd("map query start");
+        perfCmd("global top query start");
+      const rows = await runQueryOn(serverIndex, sql, params);
+      perfCmd("global top query done");
+        perfCmd("map query done");
   return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
 }
 async function getLadderCount(serverIndex) {
@@ -393,9 +408,6 @@ async function buildLadder(serverIndex, page=0) {
   ]);
   const embeds = renderLadderEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.LADDER), playerSelectRowForPage(rows, page, null)];
-
-  // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
   const footerText = embedArr[embedArr.length - 1].data.footer.text;
   const ZERO_WIDTH = "⠀";
@@ -403,8 +415,7 @@ async function buildLadder(serverIndex, page=0) {
   const blankText = ZERO_WIDTH.repeat(padLen);
   for (const e of embedArr) e.setFooter({ text: blankText });
   embedArr[embedArr.length - 1].setFooter({ text: footerText });
-
-  return { embeds: embedArr, nav, pager };
+  return { embeds, nav: [navRow(VIEWS.LADDER)], pager };
 }
 
 async function buildWeapons(serverIndex, page=0) {
@@ -579,11 +590,16 @@ async function ensureUIForServer(serverIndex) {
   const filter = (i) => i.channelId === cfg.channelId;
   const collector = channel.createMessageComponentCollector({ filter, time: 0 });
   collector.on("collect", async (interaction) => {
+    const perf = startPerf(`collect:${interaction.customId}`);
     try {
       const parsed = parseCustomId(interaction.customId);
       if (!parsed) return;
+      perf("before deferUpdate");
       await interaction.deferUpdate();
+      perf("after deferUpdate");
+      perf("before handleUiInteractionForServer");
       await handleUiInteractionForServer(interaction, serverIndex, parsed);
+      perf("after handleUiInteractionForServer");
     } catch (e) {
       console.error("[ui] button error", e);
     }
@@ -593,59 +609,75 @@ async function ensureUIForServer(serverIndex) {
 }
 
 async function handleUiInteractionForServer(interaction, serverIndex, { view, page, param, weaponsPage }) {
+  const perf = startPerf(`handle:${view}:${page ?? 0}`);
   const cfg = byIndex.get(serverIndex);
   if (!cfg) return;
   const channel = interaction.channel;
+  perf("before fetch nav/content");
   const navMsg = await channel.messages.fetch(cfg.ui.navId);
   const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+  perf("after fetch nav/content");
 
-  // Build both payloads first, then update nav + content together to avoid visible desync.
+  perf("before toolbar edit");
+  await navMsg.edit(toolbarPayload(view));
+  perf("after toolbar edit");
+
   if (view === VIEWS.HOME) {
-    const payload = await buildHome(serverIndex);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("HOME:build start");
+    const { embeds } = await buildHome(serverIndex);
+    perf("HOME:build done");
+    perf("HOME:edit start");
+    await contentMsg.edit({ embeds, components: [] });
+    perf("HOME:edit done");
     return;
   }
   if (view === VIEWS.LADDER) {
-    const payload = await buildLadder(serverIndex, page);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("LADDER:build start");
+    const { embeds, pager } = await buildLadder(serverIndex, page);
+    perf("LADDER:build done");
+    perf("LADDER:edit start");
+    await contentMsg.edit({ embeds, components: pager });
+    perf("LADDER:edit done");
     return;
   }
   if (view === VIEWS.WEAPONS) {
-    const payload = await buildWeapons(serverIndex, page);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("WEAPONS:build start");
+    const { embeds, pager, nav } = await buildWeapons(serverIndex, page);
+    perf("WEAPONS:build done");
+    await navMsg.edit({ content: "", embeds: [], components: nav });
+    perf("LADDER:edit start");
+    await contentMsg.edit({ embeds, components: pager });
+    perf("LADDER:edit done");
     return;
   }
   if (view === VIEWS.WEAPON_PLAYERS) {
-    const payload = await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("WEAPON_PLAYERS:build start");
+    const { embeds, pager, nav } = await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    perf("WEAPON_PLAYERS:build done");
+    await navMsg.edit({ content: "", embeds: [], components: nav });
+    perf("LADDER:edit start");
+    await contentMsg.edit({ embeds, components: pager });
+    perf("LADDER:edit done");
     return;
   }
   if (view === VIEWS.MAPS) {
-    const payload = await buildMaps(serverIndex, page);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("MAPS:build start");
+    const { embeds, pager, nav } = await buildMaps(serverIndex, page);
+    perf("MAPS:build done");
+    await navMsg.edit({ content: "", embeds: [], components: nav });
+    perf("LADDER:edit start");
+    await contentMsg.edit({ embeds, components: pager });
+    perf("LADDER:edit done");
     return;
   }
   if (view === VIEWS.MAPS_PLAYERS) {
-    const payload = await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
-    await Promise.all([
-      navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-      contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-    ]);
+    perf("MAPS_PLAYERS:build start");
+    const { embeds, pager, nav } = await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    perf("MAPS_PLAYERS:build done");
+    await navMsg.edit({ content: "", embeds: [], components: nav });
+    perf("LADDER:edit start");
+    await contentMsg.edit({ embeds, components: pager });
+    perf("LADDER:edit done");
     return;
   }
 }
@@ -668,41 +700,57 @@ client.on(Events.InteractionCreate, async (i) => {
     // Handle selects for weapons/maps/ladder player selection
     const [prefix, view, kind, pageStr] = i.customId.split(":");
     if (prefix !== "ui") return;
+    const perfSel = startPerf(`select:${i.customId}`);
+    perfSel("before deferUpdate");
     await i.deferUpdate();
+    perfSel("after deferUpdate");
     const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
     if (serverIndex < 0) return;
     const page = Math.max(0, parseInt(pageStr, 10) || 0);
 
     if (view === "weapons" && kind === "select") {
       const label = i.values[0];
+      perfSel("build start");
       const payload = await buildWeaponPlayers(serverIndex, label, 0, page);
+      perfSel("build done");
       const cfg = byIndex.get(serverIndex);
       const navMsg = await i.channel.messages.fetch(cfg.ui.navId);
       const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
-	  await Promise.all([
-		  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-		]);
+      perfSel("edit start");
+      await Promise.all([
+        navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      perfSel("edit done");
       return;
     }
 
     if (view === "maps" && kind === "select") {
       const label = i.values[0];
+      perfSel("build start");
       const payload = await buildMapPlayers(serverIndex, label, 0, page);
+      perfSel("build done");
       const cfg = byIndex.get(serverIndex);
       const navMsg = await i.channel.messages.fetch(cfg.ui.navId);
       const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
+      perfSel("edit start");
       await Promise.all([
-		  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-		  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-		]);
+        navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      perfSel("edit done");
       return;
     }
 
     if (view === "ladder" && kind === "select") {
+      const perfSel2 = startPerf(`select:${i.customId}`);
+      perfSel2("before parse value");
       const clientId = i.values[0];
+      perfSel2("after parse value");
       // Show player card for that clientId
+      perfSel2("query start");
       const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+      perfSel2("query done");
       const embed = rows.length ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB }) : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
       const cfg = byIndex.get(serverIndex);
       const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
@@ -718,7 +766,7 @@ client.on(Events.InteractionCreate, async (i) => {
     if (i.commandName === "xlr-servers") {
       const lines = SERVER_CONFIGS.map((c, idx) => {
         const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
-        return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
+        return `**${idx + 1}. ${c.name}** — DB: \`${c.db.host}/${c.db.name}\`, RCON: \`${c.rcon.ip}:${c.rcon.port}\`, Channel: ${chan}`;
       });
       await i.reply({ ephemeral: true, content: lines.join("\n") || "No servers configured." });
       return;
@@ -727,7 +775,14 @@ client.on(Events.InteractionCreate, async (i) => {
     const serverIndex = resolveServerIndexFromInteraction(i);
 
     if (i.commandName === "xlr-top") {
+      const perfCmd = startPerf("cmd:xlr-top");
+      perfCmd("before deferReply");
+      perfCmd("before deferReply");
+      perfCmd("before deferReply");
       await i.deferReply();
+      perfCmd("after deferReply");
+      perfCmd("after deferReply");
+      perfCmd("after deferReply");
 
       const count  = i.options.getInteger("count") ?? 0;
       const weapon = i.options.getString("weapon");
@@ -737,12 +792,16 @@ client.on(Events.InteractionCreate, async (i) => {
       // If weapon OR map is provided, we show that specific list (limited by count or page size)
       if (weapon) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
+        perfCmd("weapon query start");
         const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
+        perfCmd("weapon query done");
         const weap = (rows && rows[0]?.matched_label) || weapon;
         const emoji = resolveEmoji(weap);
         const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
         const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
+        perfCmd("editReply start");
         await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+        perfCmd("editReply done");
         return;
       }
 
@@ -752,7 +811,9 @@ client.on(Events.InteractionCreate, async (i) => {
         const rows = await runQueryOn(serverIndex, sql, params);
         const thumbUrl = (await getMapImageUrl((rows && rows[0]?.matched_label) || map)) || DEFAULT_THUMB;
         const embeds = formatTopEmbed(rows, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
+        perfCmd("editReply start");
         await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+        perfCmd("editReply done");
         return;
       }
 
@@ -761,68 +822,96 @@ client.on(Events.InteractionCreate, async (i) => {
       const { sql, params } = queries.topDynamic({ limit, sort });
       const rows = await runQueryOn(serverIndex, sql, params);
       const embeds = formatTopEmbed(rows, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
-      await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+      perfCmd("editReply start");
+        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+        perfCmd("editReply done");
       return;
     }
 
     if (i.commandName === "xlr-player") {
+      const perfCmd = startPerf("cmd:xlr-player");
+      perfCmd("before deferReply");
       await i.deferReply();
+      perfCmd("after deferReply");
       const name = i.options.getString("name", true);
       const weaponOpt = i.options.getString("weapon");
       const mapOpt = i.options.getString("map");
       const vsName = i.options.getString("vs");
 
+      perfCmd("findPlayer start");
       const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
+      perfCmd("findPlayer done");
       if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
       const clientId = matches[0].client_id;
 
       if (weaponOpt) {
         const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
         const { sql, params } = queries.playerWeaponCard;
+        perfCmd("playerWeaponCard start");
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
+        perfCmd("playerWeaponCard done");
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
         const embed = formatPlayerWeaponEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
-        return i.editReply({ embeds: [embed] });
+        perfCmd("editReply start");
+      return i.editReply({ embeds: [embed] }).then(() => perfCmd("editReply done"));
       }
 
       if (mapOpt) {
         const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
+        perfCmd("playerMapCard start");
         const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
+        perfCmd("playerMapCard done");
         if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
         let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows[0].map)) || DEFAULT_THUMB;
         const embed = formatPlayerMapEmbed(rows[0], { thumbnail: thumbUrl });
-        return i.editReply({ embeds: [embed] });
+        perfCmd("editReply start");
+      return i.editReply({ embeds: [embed] }).then(() => perfCmd("editReply done"));
       }
 
       if (vsName) {
+        perfCmd("findOpponent start");
         const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
+        perfCmd("findOpponent done");
         if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
         const opponentId = opp[0].client_id;
         if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
+        perfCmd("playerVsCard start");
         const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
           opponentId,
           clientId, opponentId,
           opponentId, clientId,
           clientId
         ]);
+        perfCmd("playerVsCard done");
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
-        return i.editReply({ embeds: [embed] });
+        perfCmd("editReply start");
+      return i.editReply({ embeds: [embed] }).then(() => perfCmd("editReply done"));
       }
 
+      perfCmd("playerCard start");
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+      perfCmd("playerCard done");
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
       const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
-      return i.editReply({ embeds: [embed] });
+      perfCmd("editReply start");
+      return i.editReply({ embeds: [embed] }).then(() => perfCmd("editReply done"));
     }
 
     if (i.commandName === "xlr-lastseen") {
+      const perfCmd = startPerf("cmd:xlr-lastseen");
+      perfCmd("before deferReply");
       await i.deferReply();
+      perfCmd("after deferReply");
       const count = i.options.getInteger("count") ?? 10;
+      perfCmd("lastSeen query start");
       const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+      perfCmd("lastSeen query done");
       const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+      perfCmd("editReply start");
       await i.editReply({ embeds: [embed] });
+      perfCmd("editReply done");
       return;
     }
   } catch (err) {
