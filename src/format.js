@@ -68,8 +68,8 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Weapon", value: String(weap ?? "—"), inline: true },
-      { name: "\u200B", value: "\u200B", inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
+	  { name: "KDR", value: String(kd), inline: true },
       { name: "Killed By", value: String(row.deaths ?? 0), inline: true },
       { name: "Suicides By", value: String(row.suicides ?? 0), inline: true }
     )
@@ -98,6 +98,7 @@ export function formatPlayerMapEmbed(row, opts = {}) {
   const lastSeen = row.time_edit
     ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
     : "—";
+  const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
 
   return new EmbedBuilder()
     .setColor(0x2b7cff)
@@ -106,6 +107,7 @@ export function formatPlayerMapEmbed(row, opts = {}) {
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
+	  { name: "KDR", value: String(kd), inline: true },
       { name: "Deaths", value: String(row.deaths ?? 0), inline: true },
       { name: "Suicides", value: String(row.suicides ?? 0), inline: true },
       { name: "Rounds Played", value: String(row.rounds ?? 0), inline: true }
