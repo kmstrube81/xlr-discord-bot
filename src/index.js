@@ -618,6 +618,8 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   });
 }
 
+
+
 async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   
   if (view === VIEWS.HOME) {
@@ -640,151 +642,13 @@ async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   }
 }
 
-client.on(Events.InteractionCreate, async (i) => {
+// -------------------------------------------------------------------------------------
+// Handlers
+// -------------------------------------------------------------------------------------
+async function handleSlashCommand(i) {
+  console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
 
-  const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
-  if (serverIndex < 0) return;
-  const cfg = byIndex.get(serverIndex);
-  const state = perChannelState.get(cfg.channelId);
-  const uiCollector = state?.collectors || null;
-
-  
-  try { //try catch error handling on button/string select
-    if (i.isButton()) { //process nav button or bottom pager clicks
-		const parsed = parseCustomId(i.customId);
-		if (!parsed) return; //if button click is invalid, return without doing anything
-	    const { view, page } = parsed;
-		// if NAV toolbar button clicked
-		if (i.message.id === cfg.ui.navId) {
-		  const parsed = parseCustomId(i.customId);
-		  if (!parsed) return;
-		  const { view, page } = parsed;
-		  const payload = await buildView(serverIndex, parsed);//build payload from parsed data from button
-		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-		  const navMsg = await channel.messages.fetch(cfg.ui.navId);
-		  const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		  await Promise.all([
-			i.update({ content: "", embeds: [], components: payload.nav }),
-			contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-			]);
-		  // reset inactivity timer if present
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
-		} else //if pager buttons are clicked
-		if (i.message.id === cfg.ui.contentId) {
-			//if the weapon pager is clicked
-			if (parsed.view === VIEWS.WEAPON_PLAYERS) {
-			  const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-			  await i.update({ embeds: payload.embeds, components: payload.pager });
-			  // keep toolbar synced so the select stays on the same 10 weapons
-			  if (cfg.ui.navId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const navMsg = await channel.messages.fetch(cfg.ui.navId);
-				await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-			  }
-			  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-			  return;
-			} else //if map pager is clicked
-			if (parsed.view === VIEWS.MAPS_PLAYERS) {
-			  const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-			  await i.update({ embeds: payload.embeds, components: payload.pager });
-			  // keep toolbar synced so the select stays on the same 10 maps
-			  if (cfg.ui.navId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const navMsg = await channel.messages.fetch(cfg.ui.navId);
-				await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-			  }
-			  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-			  return;
-			} else { //if pager on another page (eg ladder or home)
-				const payload = await buildView(serverIndex, parsed);
-				await i.update({ embeds: payload.embeds, components: payload.pager });
-
-				// keep toolbar highlight synced (optional, cheap)
-				if (cfg.ui.navId) {
-				  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				  const navMsg = await channel.messages.fetch(cfg.ui.navId);
-				  await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-				}
-				// reset inactivity timer
-				if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-				return;
-			} 
-		}
-	} else
-	  if (i.isStringSelectMenu()) {
-		// Handle selects for weapons/maps/ladder player selection
-		const [prefix, view, kind, pageStr] = i.customId.split(":");
-		if (prefix !== "ui") return;
-		const page = Math.max(0, parseInt(pageStr, 10) || 0);
-
-		if (view === "weapons" && kind === "select") {
-		  const label = i.values[0];
-		  const payload = await buildWeaponPlayers(serverIndex, label, 0, page);
-		  // Update the NAV (tabs + same-page select) and CONTENT (embeds + pager)
-		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-		  const [navMsg, contentMsg] = await Promise.all([
-			channel.messages.fetch(cfg.ui.navId),
-			channel.messages.fetch(cfg.ui.contentId)
-		  ]);
-		  await Promise.all([
-			i.update({ content: "", embeds: [], components: payload.nav }),
-			contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-		  ]);
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
-		}
-
-		if (view === "maps" && kind === "select") {
-		  const label = i.values[0];
-		  const payload = await buildMapPlayers(serverIndex, label, 0, page);
-		  // Update the NAV (tabs + same-page select) and CONTENT (embeds + pager)
-		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-		  const [navMsg, contentMsg] = await Promise.all([
-			channel.messages.fetch(cfg.ui.navId),
-			channel.messages.fetch(cfg.ui.contentId)
-		  ]);
-		  await Promise.all([
-			i.update({ content: "", embeds: [], components: payload.nav }),
-			contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-		  ]);
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
-		}
-
-		if (view === "ladder" && kind === "select") {
-			const clientId = i.values[0];
-
-			// Build the player card 
-			const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-			const embed = rows.length
-			  ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
-			  : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
-
-			// Build Ladder NAV with the current page, marking the selected player
-			const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
-			const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, page, clientId)];
-
-			const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-			const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
-
-			await Promise.all([
-			  i.update({ content: "", embeds: [], components: navComponents }),
-			  // update the content message with the player card (no pager change here)
-			  contentMsg.edit({ embeds: [embed], components: [] }),
-			]);
-			perChannelState.get(cfg.channelId)?.collectors?.resetTimer({ idle: INACTIVITY_MS });
-			return;
-		  
-		}
-
-		return;
-	  }
-  
-
-	if (!i.isChatInputCommand()) return;
-
-  
+  try {
     if (i.commandName === "xlr-servers") {
       const lines = SERVER_CONFIGS.map((c, idx) => {
         const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
@@ -895,23 +759,130 @@ client.on(Events.InteractionCreate, async (i) => {
       await i.editReply({ embeds: [embed] });
       return;
     }
-  } catch (e) {
-	  console.error("[ui] error", e);
-	  try {
-		if (i.deferred || i.replied) {
-		  await i.followUp({ content: "Something went wrong.", flags: 64 });
-		} else {
-		  await i.reply({ content: "Something went wrong.", flags: 64 });
-		}
-	  } catch (e2) {
-		// Interaction might already be invalid/expired; swallow to avoid crashing
-		console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
-	  }
+  } catch (err) {
+    console.error("[slash] error:", err);
+    if (i.deferred || i.replied) {
+      await i.editReply("Error talking to the stats database.");
+    } else {
+      await i.reply({ content: "Error talking to the stats database.", ephemeral: true });
+    }
   }
-});
+}
+
+async function handleUiComponent(i, serverIndex) {
+  const cfg = byIndex.get(serverIndex);
+  const state = perChannelState.get(cfg.channelId);
+  const uiCollector = state?.collectors || null;
+
+  // Buttons
+  if (i.isButton()) {
+    const parsed = parseCustomId(i.customId);
+    if (!parsed) return; // ignore non-UI buttons
+
+    // NAV toolbar button
+    if (i.message.id === cfg.ui.navId) {
+      const payload = await buildView(serverIndex, parsed);
+      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+      await Promise.all([
+        i.update({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+
+    // CONTENT pager buttons
+    if (i.message.id === cfg.ui.contentId) {
+      if (parsed.view === VIEWS.WEAPON_PLAYERS) {
+        const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+        if (cfg.ui.navId) {
+          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+          const navMsg = await channel.messages.fetch(cfg.ui.navId);
+          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+        }
+        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        return;
+      }
+      if (parsed.view === VIEWS.MAPS_PLAYERS) {
+        const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+        if (cfg.ui.navId) {
+          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+          const navMsg = await channel.messages.fetch(cfg.ui.navId);
+          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+        }
+        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        return;
+      }
+
+      const payload = await buildView(serverIndex, parsed);
+      await i.update({ embeds: payload.embeds, components: payload.pager });
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+  }
+
+  // Select Menus
+  if (i.isStringSelectMenu()) {
+    const [prefix, view, kind, pageStr] = i.customId.split(":");
+    if (prefix !== "ui") return;
+    const page = Math.max(0, parseInt(pageStr, 10) || 0);
+
+    if (view === "weapons" && kind === "select") {
+      const label = i.values[0];
+      const payload = await buildWeaponPlayers(serverIndex, label, 0, page);
+      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+      await Promise.all([
+        i.update({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+
+    if (view === "maps" && kind === "select") {
+      const label = i.values[0];
+      const payload = await buildMapPlayers(serverIndex, label, 0, page);
+      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+      await Promise.all([
+        i.update({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+
+    if (view === "ladder" && kind === "select") {
+      const clientId = i.values[0];
+      const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+      const embed = rows.length
+        ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
+        : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+      const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
+      const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, page, clientId)];
+      const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+      const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
+      await Promise.all([
+        i.update({ content: "", embeds: [], components: navComponents }),
+        contentMsg.edit({ embeds: [embed], components: [] }),
+      ]);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+  }
+}
 
 // -------------------------------------------------------------------------------------
-// Slash command routing
+// Slash command routing / InteractionCreate
 // -------------------------------------------------------------------------------------
 function resolveServerIndexFromInteraction(interaction) {
   const arg = interaction.options?.getString("server")?.trim();
@@ -923,22 +894,46 @@ function resolveServerIndexFromInteraction(interaction) {
   return 0;
 }
 
+client.on(Events.InteractionCreate, async (i) => {
+  try {
+    // 1) Handle slash commands ANYWHERE (do not gate by UI channel)
+    if (i.isChatInputCommand()) {
+      await handleSlashCommand(i);
+      return;
+    }
+
+    // 2) For component interactions, only react inside the configured UI channel(s)
+    const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
+    if (serverIndex < 0) return; // not one of our UI channels
+    await handleUiComponent(i, serverIndex);
+
+  } catch (e) {
+    console.error("Interaction error:", e);
+    try {
+      if (i.deferred || i.replied) {
+        await i.followUp({ content: "Something went wrong.", flags: 64 });
+      } else {
+        await i.reply({ content: "Something went wrong.", flags: 64 });
+      }
+    } catch {/* ignore */}
+  }
+});
+
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   for (let i = 0; i < SERVER_CONFIGS.length; i++) {
-	
     try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
-	try { 
-		const cfg = byIndex.get(i);
-		const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
-		if (channel && channel.type === ChannelType.GuildText) {
-			const collector = channel.createMessageComponentCollector();
-			perChannelState.set(cfg.channelId, { i, collectors: collector });
-			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
-		}
-	} catch (e) {
-	  console.warn("[ui] could not start inactivity session:", e);
-	}
+    try { 
+      const cfg = byIndex.get(i);
+      const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+      if (channel && channel.type === ChannelType.GuildText) {
+        const collector = channel.createMessageComponentCollector();
+        perChannelState.set(cfg.channelId, { i, collectors: collector });
+        startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
+      }
+    } catch (e) {
+      console.warn("[ui] could not start inactivity session:", e);
+    }
   }
 });
 
