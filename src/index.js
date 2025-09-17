@@ -657,12 +657,12 @@ client.on(Events.InteractionCreate, async (i) => {
 		  const { view, page } = parsed;
 		  const payload = await buildView(serverIndex, parsed);//build payload from parsed data from button
 		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+		  const navMsg = await channel.messages.fetch(cfg.ui.navId);
 		  const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		  // Ack immediately by updating the nav message, and in parallel edit the content message
 		  await Promise.all([
-			i.update({ content: "", embeds: [], components: payload.nav }), // ACK happens here
-			contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
-		  ]);
+			  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+			]);
 		  // reset inactivity timer if present
 		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 		  return;
