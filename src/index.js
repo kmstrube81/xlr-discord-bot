@@ -396,6 +396,9 @@ async function buildLadder(serverIndex, page=0) {
   ]);
   const embeds = renderLadderEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
+  const nav = [navRow(VIEWS.LADDER), playerSelectRowForPage(rows, page, null)];
+
+  // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
   const footerText = embedArr[embedArr.length - 1].data.footer.text;
   const ZERO_WIDTH = "⠀";
@@ -403,7 +406,8 @@ async function buildLadder(serverIndex, page=0) {
   const blankText = ZERO_WIDTH.repeat(padLen);
   for (const e of embedArr) e.setFooter({ text: blankText });
   embedArr[embedArr.length - 1].setFooter({ text: footerText });
-  return { embeds, nav: [navRow(VIEWS.LADDER)], pager };
+
+  return { embeds: embedArr, nav, pager };
 }
 
 async function buildWeapons(serverIndex, page=0) {
