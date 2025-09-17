@@ -661,14 +661,13 @@ client.on(Events.InteractionCreate, async (i) => {
 		  const parsed = parseCustomId(i.customId);
 		  if (!parsed) return;
 		  const { view, page } = parsed;
-		  await i.deferUpdate();
 		  const payload = await buildView(serverIndex, parsed);//build payload from parsed data from button
 		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
 		  const navMsg = await channel.messages.fetch(cfg.ui.navId);
 		  const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 		  await Promise.all([
-			  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+			i.update({ content: "", embeds: [], components: payload.nav }),
+			contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
 			]);
 		  // reset inactivity timer if present
 		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
@@ -677,7 +676,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		if (i.message.id === cfg.ui.contentId) {
 			//if the weapon pager is clicked
 			if (parsed.view === VIEWS.WEAPON_PLAYERS) {
-			  const payload = await buildWeaponPlayersView(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+			  const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
 			  await i.update({ embeds: payload.embeds, components: payload.pager });
 			  // keep toolbar synced so the select stays on the same 10 weapons
 			  if (cfg.ui.navId) {
@@ -689,7 +688,7 @@ client.on(Events.InteractionCreate, async (i) => {
 			  return;
 			} else //if map pager is clicked
 			if (parsed.view === VIEWS.MAPS_PLAYERS) {
-			  const payload = await buildMapPlayersView(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+			  const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
 			  await i.update({ embeds: payload.embeds, components: payload.pager });
 			  // keep toolbar synced so the select stays on the same 10 maps
 			  if (cfg.ui.navId) {
@@ -719,9 +718,6 @@ client.on(Events.InteractionCreate, async (i) => {
 		// Handle selects for weapons/maps/ladder player selection
 		const [prefix, view, kind, pageStr] = i.customId.split(":");
 		if (prefix !== "ui") return;
-	   // await i.deferUpdate();
-	   // const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
-	   // if (serverIndex < 0) return;
 		const page = Math.max(0, parseInt(pageStr, 10) || 0);
 
 		if (view === "weapons" && kind === "select") {
@@ -739,11 +735,6 @@ client.on(Events.InteractionCreate, async (i) => {
 		  ]);
 		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 		  return;
-		 // const navMsg = await i.channel.messages.fetch(cfg.ui.navId);
-		 // const contentMsg = await i.channel.messages.fetch(cfg.ui.contentId);
-		 // await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-		 // await contentMsg.edit({ embeds: payload.embeds, components: payload.pager });
-		 // return;
 		}
 
 		if (view === "maps" && kind === "select") {
@@ -764,23 +755,31 @@ client.on(Events.InteractionCreate, async (i) => {
 		}
 
 		if (view === "ladder" && kind === "select") {
-		  const clientId = i.values[0];
-		  // Show player card for that clientId
-		  const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-		  const embed = rows.length ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB }) : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
-		  // Update the NAV (tabs + same-page select) and CONTENT (embeds + pager)
-		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-		  const [navMsg, contentMsg] = await Promise.all([
-			channel.messages.fetch(cfg.ui.navId),
-			channel.messages.fetch(cfg.ui.contentId)
-		  ]);
-		  await Promise.all([
-			i.update({ content: "", embeds: [], components: payload.nav }),
-			contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
-		  ]);
-		  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-		  return;
+			const clientId = i.values[0];
+
+			// Build the player card 
+			const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+			const embed = rows.length
+			  ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
+			  : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+
+			// Build Ladder NAV with the current page, marking the selected player
+			const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
+			const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, page, clientId)];
+
+			const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+			const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
+
+			await Promise.all([
+			  i.update({ content: "", embeds: [], components: navComponents }),
+			  // update the content message with the player card (no pager change here)
+			  contentMsg.edit({ embeds: [embed], components: [] }),
+			]);
+			perChannelState.get(cfg.channelId)?.collectors?.resetTimer({ idle: INACTIVITY_MS });
+			return;
+		  
 		}
+
 		return;
 	  }
   } catch (e) {
