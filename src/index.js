@@ -696,7 +696,7 @@ client.on(Events.InteractionCreate, async (i) => {
 			  }
 			  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 			  return;
-			} else { //if pager on another page (eg ladder or home)
+			} /*else { //if pager on another page (eg ladder or home)
 				const payload = await buildView(serverIndex, parsed);
 				await i.update({ embeds: payload.embeds, components: payload.pager });
 
@@ -709,7 +709,7 @@ client.on(Events.InteractionCreate, async (i) => {
 				// reset inactivity timer
 				if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 				return;
-			}
+			} */
 		}
 	} else
 	  if (i.isStringSelectMenu()) {
