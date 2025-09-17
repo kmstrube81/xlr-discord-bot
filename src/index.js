@@ -132,8 +132,7 @@ const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c]));
 const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }]));
 
 // --- inactivity / auto-home ---
-const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes
-let uiCollector = null;  
+const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes 
 
 // -------------------------------------------------------------------------------------
 // MySQL pools per server
@@ -644,6 +643,7 @@ client.on(Events.InteractionCreate, async (i) => {
   const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
   if (serverIndex < 0) return;
   const cfg = byIndex.get(serverIndex);
+  const uiCollector = perChannelState.get(cfg.channelId).collectors;
   
   try { //try catch error handling on button/string select
     if (i.isButton()) { //process nav button or bottom pager clicks
