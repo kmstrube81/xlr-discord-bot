@@ -647,7 +647,9 @@ client.on(Events.InteractionCreate, async (i) => {
   const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
   if (serverIndex < 0) return;
   const cfg = byIndex.get(serverIndex);
-  const uiCollector = perChannelState.get(cfg.channelId).collectors;
+  const state = perChannelState.get(cfg.channelId);
+  const uiCollector = state?.collectors || null;
+
   
   try { //try catch error handling on button/string select
     if (i.isButton()) { //process nav button or bottom pager clicks
@@ -659,6 +661,7 @@ client.on(Events.InteractionCreate, async (i) => {
 		  const parsed = parseCustomId(i.customId);
 		  if (!parsed) return;
 		  const { view, page } = parsed;
+		  await i.deferUpdate();
 		  const payload = await buildView(serverIndex, parsed);//build payload from parsed data from button
 		  const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
 		  const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -696,7 +699,7 @@ client.on(Events.InteractionCreate, async (i) => {
 			  }
 			  if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 			  return;
-			} /*else { //if pager on another page (eg ladder or home)
+			} else { //if pager on another page (eg ladder or home)
 				const payload = await buildView(serverIndex, parsed);
 				await i.update({ embeds: payload.embeds, components: payload.pager });
 
@@ -709,7 +712,7 @@ client.on(Events.InteractionCreate, async (i) => {
 				// reset inactivity timer
 				if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 				return;
-			} */
+			} 
 		}
 	} else
 	  if (i.isStringSelectMenu()) {
