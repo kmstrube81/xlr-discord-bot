@@ -918,6 +918,7 @@ client.on(Events.InteractionCreate, async (i) => {
         await i.reply({ content: "Something went wrong.", flags: 64 });
       }
     } catch {}
+  }
 });
 
 // -------------------------------------------------------------------------------------
