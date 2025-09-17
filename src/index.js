@@ -673,8 +673,7 @@ async function handleSlashCommand(i) {
         const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
         return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
       });
-      await i.reply({ ephemeral: true, content: lines.join("
-") || "No servers configured." });
+      await i.reply({ ephemeral: true, content: lines.join("\n") || "No servers configured." });
       return;
     }
 
