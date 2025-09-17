@@ -618,8 +618,6 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   });
 }
 
-
-
 async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   
   if (view === VIEWS.HOME) {
@@ -641,7 +639,7 @@ async function buildView(serverIndex, { view, page, param, weaponsPage }) {
     return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
   }
 }
-//String Select processing here
+
 client.on(Events.InteractionCreate, async (i) => {
 
   const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
@@ -782,23 +780,11 @@ client.on(Events.InteractionCreate, async (i) => {
 
 		return;
 	  }
-  } catch (e) {
-	  console.error("[ui] button error", e);
-	  try {
-		if (i.deferred || i.replied) {
-		  await i.followUp({ content: "Something went wrong.", flags: 64 });
-		} else {
-		  await i.reply({ content: "Something went wrong.", flags: 64 });
-		}
-	  } catch (e2) {
-		// Interaction might already be invalid/expired; swallow to avoid crashing
-		console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
-	  }
-  }
+  
 
-  if (!i.isChatInputCommand()) return;
+	if (!i.isChatInputCommand()) return;
 
-  try {
+  
     if (i.commandName === "xlr-servers") {
       const lines = SERVER_CONFIGS.map((c, idx) => {
         const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
@@ -909,13 +895,18 @@ client.on(Events.InteractionCreate, async (i) => {
       await i.editReply({ embeds: [embed] });
       return;
     }
-  } catch (err) {
-    console.error(err);
-    if (i.deferred || i.replied) {
-      await i.editReply("Error talking to the stats database.");
-    } else {
-      await i.reply({ content: "Error talking to the stats database.", ephemeral: true });
-    }
+  } catch (e) {
+	  console.error("[ui] error", e);
+	  try {
+		if (i.deferred || i.replied) {
+		  await i.followUp({ content: "Something went wrong.", flags: 64 });
+		} else {
+		  await i.reply({ content: "Something went wrong.", flags: 64 });
+		}
+	  } catch (e2) {
+		// Interaction might already be invalid/expired; swallow to avoid crashing
+		console.warn("[ui] failed sending error follow-up:", e2?.code || e2);
+	  }
   }
 });
 
