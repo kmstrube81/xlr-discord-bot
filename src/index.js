@@ -965,22 +965,34 @@ client.once(Events.ClientReady, async () => {
   
   //init emoji resolver
 	try {
-	  const emojiIndex = new Map();
+	  if (!GUILD_ID) {
+		console.warn("[emoji] No GUILD_ID set in .env, skipping emoji resolver");
+	  } else {
+		const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
+		if (!guild) {
+		  console.warn(`[emoji] Could not fetch guild ${GUILD_ID}`);
+		} else {
+		  const emojis = await guild.emojis.fetch();
+		  const emojiIndex = new Map();
 
-	  const g = client.guilds.cache.get(process.env.GUILD_ID);
-	  if (g) { const col = await g.emojis.fetch();
+		  emojis.forEach(e => {
+			const key = (e.name || "").toLowerCase();
+			const mention = `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`;
+			emojiIndex.set(key, mention);
+		  });
 
-	  setEmojiResolver((label) => {
-		if (!label) return null;
-		const k = String(label).replace(/:/g, "").toLowerCase().trim();
-		return emojiIndex.get(k) ?? null;
-	  });
+		  setEmojiResolver((label) => {
+			if (!label) return null;
+			const k = String(label).replace(/:/g, "").toLowerCase().trim();
+			return emojiIndex.get(k) ?? null;
+		  });
 
-	  console.log(`[emoji] loaded ${emojiIndex.size} custom emojis`);
+		  console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
+		}
+	  }
 	} catch (e) {
 	  console.warn("[emoji] init failed:", e);
 	}
-
   
   for (let i = 0; i < SERVER_CONFIGS.length; i++) {
 	
