@@ -226,9 +226,9 @@ function displayName(row, isTitle = false, isOpponent = false) {
 	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle) {
-		const name = client.users.fetch(id).username;
+		const name = client.users.fetch(id);
 		console.log(name);
-		return name;
+		return name.username;
 	  }
 	  else {
 		// mention links to profile in Discord
