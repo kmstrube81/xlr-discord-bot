@@ -801,7 +801,7 @@ async function handleSlashCommand(i) {
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
@@ -833,7 +833,7 @@ async function handleSlashCommand(i) {
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
 		);
 		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
