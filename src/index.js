@@ -223,18 +223,14 @@ const VIEWS = Object.freeze({
 async function displayName(row, isTitle = false, isOpponent = false) {
   try {
     const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
-	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle) {
 		const name = await client.users.fetch(id);
-		console.log(name);
-		console.log(name.username);
 		return name.username;
 	  }
 	  else {
 		// mention links to profile in Discord
 		const name = `<@${id}>`;
-		console.log(name);
 		return name;
 	  }
     }
@@ -242,7 +238,6 @@ async function displayName(row, isTitle = false, isOpponent = false) {
   const name = row?.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
     .replace(/`/g, "'");  // replace backticks with apostrophes
-  conosle.log(name);
   return name ?? "";
 }
 
@@ -824,6 +819,7 @@ async function handleSlashCommand(i) {
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
 	  details.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+	  console.log(details);
       const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
     }
