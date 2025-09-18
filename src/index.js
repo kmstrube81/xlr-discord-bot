@@ -738,11 +738,13 @@ async function handleSlashCommand(i) {
       if (weapon) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
-		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+		const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
         const weap = (rows && rows[0]?.matched_label) || weapon;
         const emoji = resolveEmoji(weap);
         const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
-        const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
+        const embeds = formatTopEmbed(rows2, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
         await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
         return;
       }
@@ -751,9 +753,11 @@ async function handleSlashCommand(i) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
         const rows = await runQueryOn(serverIndex, sql, params);
-		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
-        const thumbUrl = (await getMapImageUrl((rows && rows[0]?.matched_label) || map)) || DEFAULT_THUMB;
-        const embeds = formatTopEmbed(rows, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
+		const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+        const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
+        const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
         await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
         return;
       }
@@ -761,8 +765,11 @@ async function handleSlashCommand(i) {
       const limit = count && count > 0 ? Math.min(count, 10) : 10;
       const { sql, params } = queries.topDynamic({ limit, sort });
       const rows = await runQueryOn(serverIndex, sql, params);
-	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
-      const embeds = formatTopEmbed(rows, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
+	  const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+
+      const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
       await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
       return;
     }
@@ -783,8 +790,10 @@ async function handleSlashCommand(i) {
         const { sql, params } = queries.playerWeaponCard;
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
-        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
-		const embed = formatPlayerWeaponEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
 
@@ -792,10 +801,12 @@ async function handleSlashCommand(i) {
         const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
         const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+        const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
 		let thumbUrl = DEFAULT_THUMB;
-        thumbUrl = (await getMapImageUrl(rows[0].map)) || DEFAULT_THUMB;
-        const embed = formatPlayerMapEmbed(rows[0], { thumbnail: thumbUrl });
+        thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
+        const embed = formatPlayerMapEmbed(rows2[0], { thumbnail: thumbUrl });
         return i.editReply({ embeds: [embed] });
       }
 
@@ -811,16 +822,19 @@ async function handleSlashCommand(i) {
           clientId
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        rows.map((r, i) => ({ ...r, player_name: displayName(r, true) ?? r.player_name, opponent_name: displayName(r,false,true)}));
-		const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
 
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
-	  details.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
-	  console.log(details);
-      const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
+	  const rows2 = await Promise.all(
+		  details.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+      const embed = formatPlayerEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
     }
 
@@ -828,8 +842,10 @@ async function handleSlashCommand(i) {
       await i.deferReply();
       const count = i.options.getInteger("count") ?? 10;
       const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
-	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
-      const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+	  const rows2 = await Promise.all(
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		);
+      const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
       return;
     }
