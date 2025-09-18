@@ -603,7 +603,7 @@ const commands = [
     .setName("xlr-register")
     .setDescription("Link your Discord user to a B3 GUID")
     .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
-    .addStringOption(o => o.setName("server").setDescription("Which server
+    .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
 ].map(c => c.toJSON());
 
 async function register() {
