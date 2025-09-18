@@ -231,7 +231,10 @@ function displayName(row, isTitle = false, isOpponent = false) {
       return `<@${id}>`;
     }
   } catch {}
-  return sanitize(row?.name ?? "");
+  return row?.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
+    .replace(/\|/g, "")   // remove pipes
+    .replace(/`/g, "'")  // replace backticks with apostrophes
+	?? "";
 }
 
 const navRow = (active) =>
