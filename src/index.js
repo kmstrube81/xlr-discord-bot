@@ -220,13 +220,13 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-function displayName(row, isTitle = false, isOpponent = false) {
+function async displayName(row, isTitle = false, isOpponent = false) {
   try {
     const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
 	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle) {
-		const name = client.users.fetch(id);
+		const name = await client.users.fetch(id);
 		console.log(name);
 		return name.username;
 	  }
