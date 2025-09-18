@@ -583,7 +583,7 @@ export const queries = {
       o.id  AS opponent_id,
       COALESCE(oa.alias, o.name) AS opponent_name,
       so.skill AS opp_skill,
-	  so.discord_id AS opponent_discord_id,
+	  o.discord_id AS opponent_discord_id,
 
       COALESCE(kp.kills_vs, 0) AS kills_vs,
       COALESCE(ko.kills_vs, 0) AS deaths_vs
