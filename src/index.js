@@ -222,7 +222,7 @@ const VIEWS = Object.freeze({
 
 function displayName(row, isTitle = false, isOpponent = false) {
   try {
-    const id = isOpponent ? row?.discord_id : row?.opponent_discord_id;
+    const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
 	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle)
