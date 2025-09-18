@@ -220,9 +220,9 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-function displayName(row, isTitle = false) {
+function displayName(row, isTitle = false, isOpponent = false) {
   try {
-    const id = row?.discord_id;
+    const id = isOpponent ? row?.discord_id : row?.opponent_discord_id;
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle)
 		return client.users.fetch(id).username;
@@ -523,7 +523,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , displayName(r, true) ?? r.name}));
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
@@ -804,7 +804,7 @@ async function handleSlashCommand(i) {
           clientId
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        rows.map((r, i) => ({ ...r, player_name: displayName(r, true, "player_id") ?? r.player_name, opponent_name: displayName(r,false,"opponent_id")}));
+        rows.map((r, i) => ({ ...r, player_name: displayName(r, true) ?? r.player_name, opponent_name: displayName(r,false,true)}));
 		const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
