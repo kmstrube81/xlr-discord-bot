@@ -220,7 +220,7 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-function async displayName(row, isTitle = false, isOpponent = false) {
+async function displayName(row, isTitle = false, isOpponent = false) {
   try {
     const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
 	console.log(id);
