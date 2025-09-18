@@ -599,6 +599,11 @@ const commands = [
   new SlashCommandBuilder()
     .setName("xlr-servers")
     .setDescription("List configured servers and their numbers"),
+  new SlashCommandBuilder()
+    .setName("xlr-register")
+    .setDescription("Link your Discord user to a B3 GUID")
+    .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
+    .addStringOption(o => o.setName("server").setDescription("Which server
 ].map(c => c.toJSON());
 
 async function register() {
@@ -857,6 +862,26 @@ async function handleSlashCommand(i) {
 		);
       const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
+      return;
+    }
+	
+	if (i.commandName === "xlr-register") {
+      const guid = i.options.getString("guid", true).trim();
+      const serverIndex = resolveServerIndexFromInteraction(i);
+      try {
+        // Look up client by GUID first for a friendly error if not found
+        const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
+        if (!rows.length) {
+          await i.reply({ ephemeral: true, content: `No client found with GUID **${guid}** on server ${serverIndex + 1}.` });
+          return;
+        }
+        const clientId = rows[0].id;
+        await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
+        await i.reply({ ephemeral: true, content: `Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` });
+      } catch (e) {
+        console.error("xlr-register failed:", e);
+        await i.reply({ ephemeral: true, content: "Sorry, linking failed. Try again later or contact an admin." });
+      }
       return;
     }
   } catch (err) {
