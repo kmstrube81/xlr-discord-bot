@@ -460,7 +460,7 @@ async function buildLadder(serverIndex, page=0) {
   ]);
   const embeds = renderLadderEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.LADDER), playerSelectRowForPage(rows, page, null)];
+  const nav = [navRow(VIEWS.LADDER), await playerSelectRowForPage(rows, page, null)];
 
   // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
