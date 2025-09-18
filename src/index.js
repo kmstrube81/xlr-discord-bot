@@ -220,7 +220,7 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-async function displayName(row, isTitle = false, isOpponent = false) {
+async function displayName(row, rowname, isTitle = false, isOpponent = false) {
   try {
     const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
     if (id && String(id).match(/^\d{15,20}$/)) {
@@ -235,7 +235,7 @@ async function displayName(row, isTitle = false, isOpponent = false) {
 	  }
     }
   } catch {}
-  const name = row?.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
+  const name = rowname.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
     .replace(/`/g, "'");  // replace backticks with apostrophes
   return name ?? "";
@@ -299,7 +299,7 @@ async function playerSelectRowForPage(rows, page, selectedId = null) {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-	const name = displayName(r, true) ?? r.name;
+	const name = displayName(r, r.name, true) ?? r.name;
     const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
@@ -361,7 +361,7 @@ async function getHomeTotals(serverIndex) {
 async function getLadderSlice(serverIndex, offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
 }
 async function getLadderCount(serverIndex) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
@@ -404,7 +404,7 @@ async function getMapsAll(serverIndex) {
 async function getPlayerWeaponSlice(serverIndex, weapon, offset=0, limit=10) {
   const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
 }
 async function getPlayerWeaponCount(serverIndex, weapon) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
@@ -464,7 +464,7 @@ async function buildLadder(serverIndex, page=0) {
     rows.map(async (r) => ({
       ...r,
       // use the fetched discord username when available; fall back to r.name
-      name: (await displayName(r, true)) || r.name,
+      name: (await displayName(r, r.name, true)) || r.name,
     }))
   );
 
@@ -540,7 +540,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, true) ?? r.name}));
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, r.name, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
@@ -749,7 +749,7 @@ async function handleSlashCommand(i) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
 		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
         const weap = (rows && rows[0]?.matched_label) || weapon;
         const emoji = resolveEmoji(weap);
@@ -764,7 +764,7 @@ async function handleSlashCommand(i) {
         const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
         const rows = await runQueryOn(serverIndex, sql, params);
 		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
         const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
         const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
@@ -776,7 +776,7 @@ async function handleSlashCommand(i) {
       const { sql, params } = queries.topDynamic({ limit, sort });
       const rows = await runQueryOn(serverIndex, sql, params);
 	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 
       const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
@@ -801,7 +801,7 @@ async function handleSlashCommand(i) {
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
@@ -812,7 +812,7 @@ async function handleSlashCommand(i) {
         const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
@@ -833,7 +833,7 @@ async function handleSlashCommand(i) {
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
@@ -842,7 +842,7 @@ async function handleSlashCommand(i) {
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
 	  const rows2 = await Promise.all(
-		  details.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  details.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
       const embed = formatPlayerEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
@@ -853,7 +853,7 @@ async function handleSlashCommand(i) {
       const count = i.options.getInteger("count") ?? 10;
       const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
       const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
@@ -976,7 +976,7 @@ async function handleUiComponent(i, serverIndex) {
 		const ladderRowsWithNames = await Promise.all(
 		  ladderRows.map(async (r) => ({
 			...r,
-			name: (await displayName(r, true)) || r.name,
+			name: (await displayName(r, r.name, true)) || r.name,
 		  }))
 		);
 
