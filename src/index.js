@@ -962,6 +962,26 @@ function resolveServerIndexFromInteraction(interaction) {
 
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  
+  //init emoji resolver
+	try {
+	  const emojiIndex = new Map();
+
+	  const g = client.guilds.cache.get(process.env.GUILD_ID);
+	  if (g) { const col = await g.emojis.fetch();
+
+	  setEmojiResolver((label) => {
+		if (!label) return null;
+		const k = String(label).replace(/:/g, "").toLowerCase().trim();
+		return emojiIndex.get(k) ?? null;
+	  });
+
+	  console.log(`[emoji] loaded ${emojiIndex.size} custom emojis`);
+	} catch (e) {
+	  console.warn("[emoji] init failed:", e);
+	}
+
+  
   for (let i = 0; i < SERVER_CONFIGS.length; i++) {
 	
     try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
