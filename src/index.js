@@ -225,17 +225,24 @@ function displayName(row, isTitle = false, isOpponent = false) {
     const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
 	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
-	  if(isTitle)
-		return client.users.fetch(id).username;
-	  else
-      // mention links to profile in Discord
-      return `<@${id}>`;
+	  if(isTitle) {
+		const name = client.users.fetch(id).username;
+		console.log(name);
+		return name;
+	  }
+	  else {
+		// mention links to profile in Discord
+		const name = `<@${id}>`;
+		console.log(name);
+		return name;
+	  }
     }
   } catch {}
-  return row?.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
+  const name = row?.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
-    .replace(/`/g, "'")  // replace backticks with apostrophes
-	?? "";
+    .replace(/`/g, "'");  // replace backticks with apostrophes
+  conosle.log(name);
+  return name ?? "";
 }
 
 const navRow = (active) =>
