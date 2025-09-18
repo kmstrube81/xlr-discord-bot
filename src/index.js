@@ -299,7 +299,7 @@ async function playerSelectRowForPage(rows, page, selectedId = null) {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-	const name = await displayName(r, true) ?? r.name;
+	const name = displayName(r, true) ?? r.name;
     const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
