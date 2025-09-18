@@ -21,19 +21,32 @@ function orderExpr(sort) {
 const asLike = t => `%${t}%`;
 const asIdOrNeg1 = t => (Number.isInteger(Number(t)) ? Number(t) : -1);
 
+/**
+ * Preferred-alias join:
+ * - Choose the alias with highest num_used
+ * - Tie-break with latest time_edit
+ * - Returns exactly one row per client_id
+ *
+ * @param {string} as         Subquery alias name (e.g. 'a', 'pa', 'oa', 'ka')
+ * @param {string} clientRef  Column to join on (default 'c.id')
+ */
+const preferredAliasJoin = (as = "a", clientRef = "c.id") => `
+LEFT JOIN (
+  SELECT
+    client_id,
+    SUBSTRING_INDEX(
+      GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
+      '||', 1
+    ) AS alias
+  FROM aliases
+  GROUP BY client_id
+) ${as} ON ${as}.client_id = ${clientRef}
+`;
+
 /** Shared name join for lists that show player names */
 const nameJoin = `
   JOIN clients c ON c.id = s.client_id
-  LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+  ${preferredAliasJoin("a", "c.id")}
 `;
 
 /** Robust top list with weapon/map pre-resolution + non-zero filter + matched_label */
@@ -205,16 +218,7 @@ function ui_ladderSlice(limit = 10, offset = 0) {
       HAVING (SUM(s.kills) > 0 OR SUM(s.deaths) > 0 OR SUM(s.assists) > 0)
     ) agg
     JOIN clients c ON c.id = agg.client_id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     ORDER BY agg.skill DESC
     LIMIT ? OFFSET ?
   `;
@@ -243,16 +247,7 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
       GROUP BY client_id
     ) sagg
     JOIN clients c ON c.id = sagg.client_id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
       SELECT id, name
       FROM xlr_weaponstats
@@ -309,16 +304,7 @@ function ui_playerMapsSlice(map, limit = 10, offset = 0) {
       GROUP BY client_id
     ) sagg
     JOIN clients c ON c.id = sagg.client_id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
       SELECT id, name
       FROM xlr_mapstats
@@ -451,16 +437,7 @@ export const queries = {
            CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio
     FROM ${PLAYERSTATS} s
     JOIN clients c ON c.id = s.client_id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     ORDER BY s.skill DESC
     LIMIT ?
   `,
@@ -473,16 +450,7 @@ export const queries = {
       COALESCE(pa.alias, c.name) AS name,
       c.discord_id AS discord_id
     FROM clients c
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("pa", "c.id")}
     LEFT JOIN aliases af ON af.client_id = c.id
     WHERE (c.name LIKE ? OR af.alias LIKE ?)
     GROUP BY c.id
@@ -519,16 +487,7 @@ export const queries = {
       GROUP BY player_id
     ) pb ON pb.player_id = c.id
 
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
 
     LEFT JOIN (
       SELECT wu.player_id, w.name AS fav_weapon, wu.kills
@@ -548,16 +507,7 @@ export const queries = {
       LIMIT 1
     ) nem ON nem.player_id = c.id
     LEFT JOIN clients kc ON kc.id = nem.killer_id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) ka ON ka.client_id = kc.id
+    ${preferredAliasJoin("ka", "kc.id")}
 
     WHERE c.id = ?
     LIMIT 1
@@ -579,16 +529,7 @@ export const queries = {
       c.time_edit
     FROM clients c
     JOIN ${PLAYERSTATS} s ON s.client_id = c.id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN xlr_weaponusage wu ON wu.player_id = c.id
     JOIN (
       SELECT id, name
@@ -617,16 +558,7 @@ export const queries = {
       c.time_edit
     FROM clients c
     JOIN ${PLAYERSTATS} s ON s.client_id = c.id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     JOIN (
       SELECT id, name
       FROM xlr_mapstats
@@ -673,26 +605,8 @@ export const queries = {
       WHERE killer_id = ? AND target_id = ?
     ) ko ON 1=1
 
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) pa ON pa.client_id = p.id
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) oa ON oa.client_id = o.id
+    ${preferredAliasJoin("pa", "p.id")}
+    ${preferredAliasJoin("oa", "o.id")}
 
     WHERE p.id = ?
     LIMIT 1
@@ -708,16 +622,7 @@ export const queries = {
            c.discord_id AS discord_id,
            c.time_edit
     FROM clients c
-    LEFT JOIN (
-	  SELECT
-		client_id,
-		SUBSTRING_INDEX(
-		  GROUP_CONCAT(alias ORDER BY num_used DESC, time_edit DESC SEPARATOR '||'),
-		  '||', 1
-		) AS alias
-	  FROM aliases
-	  GROUP BY client_id
-	) a ON a.client_id = c.id
+    ${preferredAliasJoin("a", "c.id")}
     WHERE c.time_edit IS NOT NULL
     ORDER BY c.time_edit DESC
     LIMIT ?
