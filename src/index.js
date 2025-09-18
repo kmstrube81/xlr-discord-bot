@@ -292,14 +292,14 @@ function mapSelectRowForPage(rows, page, selectedLabel = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
-function playerSelectRowForPage(rows, page, selectedId = null) {
+async function playerSelectRowForPage(rows, page, selectedId = null) {
   const medals = ["🥇", "🥈", "🥉"];
   const PAGE_SIZE = 10;
   const options = rows.map((r, i) => {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-	const name = displayName(r, true) ?? r.name;
+	const name = await displayName(r, true) ?? r.name;
     const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
