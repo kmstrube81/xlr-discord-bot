@@ -220,6 +220,20 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
+function displayName(row, isTitle = false) {
+  try {
+    const id = row?.discord_id;
+    if (id && String(id).match(/^\d{15,20}$/)) {
+	  if(isTitle)
+		return client.users.fetch(id).username;
+	  else
+      // mention links to profile in Discord
+      return `<@${id}>`;
+    }
+  } catch {}
+  return sanitize(row?.name ?? "");
+}
+
 const navRow = (active) =>
   new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`ui:${VIEWS.HOME}`).setLabel("Home").setStyle(active==="home"?ButtonStyle.Primary:ButtonStyle.Secondary),
@@ -278,7 +292,8 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-    const label = `${prefix} ${String(r.name).slice(0, maxName)}`;
+	const name = displayName(r, true) ?? r.name;
+    const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
       value: String(r.client_id),
@@ -339,7 +354,7 @@ async function getHomeTotals(serverIndex) {
 async function getLadderSlice(serverIndex, offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
 }
 async function getLadderCount(serverIndex) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
@@ -382,7 +397,7 @@ async function getMapsAll(serverIndex) {
 async function getPlayerWeaponSlice(serverIndex, weapon, offset=0, limit=10) {
   const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
 }
 async function getPlayerWeaponCount(serverIndex, weapon) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
@@ -508,7 +523,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , displayName(r, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
@@ -567,11 +582,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("xlr-servers")
     .setDescription("List configured servers and their numbers"),
-  new SlashCommandBuilder()
-    .setName("xlr-register")
-    .setDescription("Link your Discord user to a B3 GUID")
-    .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
-    .addStringOption(o => o.setName("server").setDescription("Which server DB to use (name or number)")),
 ].map(c => c.toJSON());
 
 async function register() {
@@ -710,27 +720,6 @@ async function handleSlashCommand(i) {
 
     const serverIndex = resolveServerIndexFromInteraction(i);
 
-    if (i.commandName === "xlr-register") {
-      const guid = i.options.getString("guid", true).trim();
-      const serverIndex = resolveServerIndexFromInteraction(i);
-      try {
-        // Look up client by GUID first for a friendly error if not found
-        const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
-        if (!rows.length) {
-          await i.reply({ ephemeral: true, content: `No client found with GUID **${guid}** on server ${serverIndex + 1}.` });
-          return;
-        }
-        const clientId = rows[0].id;
-        await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
-        await i.reply({ ephemeral: true, content: `Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` });
-      } catch (e) {
-        console.error("xlr-register failed:", e);
-        await i.reply({ ephemeral: true, content: "Sorry, linking failed. Try again later or contact an admin." });
-      }
-      return;
-    }
-
-
     if (i.commandName === "xlr-top") {
       await i.deferReply();
 
@@ -742,6 +731,7 @@ async function handleSlashCommand(i) {
       if (weapon) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
+		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
         const weap = (rows && rows[0]?.matched_label) || weapon;
         const emoji = resolveEmoji(weap);
         const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
@@ -754,6 +744,7 @@ async function handleSlashCommand(i) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
         const rows = await runQueryOn(serverIndex, sql, params);
+		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
         const thumbUrl = (await getMapImageUrl((rows && rows[0]?.matched_label) || map)) || DEFAULT_THUMB;
         const embeds = formatTopEmbed(rows, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
         await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
@@ -763,6 +754,7 @@ async function handleSlashCommand(i) {
       const limit = count && count > 0 ? Math.min(count, 10) : 10;
       const { sql, params } = queries.topDynamic({ limit, sort });
       const rows = await runQueryOn(serverIndex, sql, params);
+	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
       const embeds = formatTopEmbed(rows, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
       await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
       return;
@@ -784,7 +776,8 @@ async function handleSlashCommand(i) {
         const { sql, params } = queries.playerWeaponCard;
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
-        const embed = formatPlayerWeaponEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+		const embed = formatPlayerWeaponEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
 
@@ -792,7 +785,8 @@ async function handleSlashCommand(i) {
         const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
         const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-        let thumbUrl = DEFAULT_THUMB;
+        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+		let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows[0].map)) || DEFAULT_THUMB;
         const embed = formatPlayerMapEmbed(rows[0], { thumbnail: thumbUrl });
         return i.editReply({ embeds: [embed] });
@@ -810,12 +804,14 @@ async function handleSlashCommand(i) {
           clientId
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        rows.map((r, i) => ({ ...r, player_name: displayName(r, true, "player_id") ?? r.player_name, opponent_name: displayName(r,false,"opponent_id")}));
+		const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
       }
 
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
+	  details.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
       const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
     }
@@ -824,6 +820,7 @@ async function handleSlashCommand(i) {
       await i.deferReply();
       const count = i.options.getInteger("count") ?? 10;
       const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
       const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
       return;
