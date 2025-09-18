@@ -228,6 +228,7 @@ async function displayName(row, isTitle = false, isOpponent = false) {
 	  if(isTitle) {
 		const name = await client.users.fetch(id);
 		console.log(name);
+		console.log(name.username);
 		return name.username;
 	  }
 	  else {
