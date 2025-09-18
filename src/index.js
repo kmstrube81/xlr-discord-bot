@@ -458,9 +458,19 @@ async function buildLadder(serverIndex, page=0) {
     getLadderSlice(serverIndex, offset, V_PAGE),
     getLadderCount(serverIndex)
   ]);
-  const embeds = renderLadderEmbeds({ rows, page });
+
+  // PRE-ENRICH: fetch Discord username for titles/labels
+  const rowsWithNames = await Promise.all(
+    rows.map(async (r) => ({
+      ...r,
+      // use the fetched discord username when available; fall back to r.name
+      name: (await displayName(r, true)) || r.name,
+    }))
+  );
+
+  const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
   const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.LADDER), await playerSelectRowForPage(rows, page, null)];
+  const nav   = [navRow(VIEWS.LADDER), playerSelectRowForPage(rowsWithNames, page, null)];
 
   // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
@@ -954,13 +964,24 @@ async function handleUiComponent(i, serverIndex) {
     }
 
     if (view === "ladder" && kind === "select") {
-      const clientId = i.values[0];
-      const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-      const embed = rows.length
-        ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
-        : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
-      const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
-      const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, page, clientId)];
+        const clientId = i.values[0];
+		const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+		const embed = rows.length
+		  ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
+		  : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+
+		const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
+
+		// PRE-ENRICH: compute display names for select menu labels
+		const ladderRowsWithNames = await Promise.all(
+		  ladderRows.map(async (r) => ({
+			...r,
+			name: (await displayName(r, true)) || r.name,
+		  }))
+		);
+
+		const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRowsWithNames, page, clientId)];
+
       const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
       const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
