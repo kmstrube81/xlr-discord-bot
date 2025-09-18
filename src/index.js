@@ -400,11 +400,35 @@ const V_PAGE = 10;
 
 async function buildHome(serverIndex) {
   const cfg = byIndex.get(serverIndex);
-  const totals = await getHomeTotals(serverIndex);
-  const status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port);
+  let totals, status;
+  let hadError = false;
+
+  try {
+    totals = await getHomeTotals(serverIndex);
+  } catch (e) {
+    hadError = true;
+    console.warn("[home] totals error → falling back to zeros");
+    totals = {
+      totalPlayers: 0,
+      totalKills: 0,
+      totalRounds: 0,
+      favoriteWeapon: { label: "—", kills: 0 },
+      favoriteMap: { label: "—", rounds: 0 },
+    };
+  }
+
+  try {
+    status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port);
+    if (status && status.error) hadError = true;
+  } catch (e) {
+    hadError = true;
+    status = { error: summarizeAxiosError(e) };
+  }
+
   const embeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
-  return { embeds, nav: [navRow(VIEWS.HOME)], pager: [] };
+  return { embeds, nav: [navRow(VIEWS.HOME)], pager: [], hadError };
 }
+
 
 async function buildLadder(serverIndex, page=0) {
   const offset = page * V_PAGE;
@@ -611,32 +635,34 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   });
 
   uiCollector.on('end', async (_collected, reason) => {
-    if (reason === 'idle') {
-      try {
-        // Auto-refresh Home on idle, even if already on Home
-        const payload = await buildView(serverIndex, {view: VIEWS.HOME, page: 0});
+	  if (reason === 'idle') {
+		try {
+		  // Auto-refresh Home on idle, even if already on Home
+		  const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0 });
 
-        // Update toolbar + content
-        const [navMsg, contentMsg] = await Promise.all([
-          channel.messages.fetch(cfg.ui.navId),
-          channel.messages.fetch(cfg.ui.contentId),
-        ]);
+		  if (payload?.hadError) {
+			console.warn("[ui] idle refresh: aborting edit due to upstream error");
+		  } else {
+			// Update toolbar + content
+			const [navMsg, contentMsg] = await Promise.all([
+			  channel.messages.fetch(cfg.ui.navId),
+			  channel.messages.fetch(cfg.ui.contentId),
+			]);
 
-        await Promise.all([
-          navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-          contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
-        ]);
-      } catch (e) {
-        console.error("[ui] idle refresh failed:", e);
-      } finally {
-        // Restart the idle watcher
-        startUiInactivitySession(uiCollector,serverIndex,cfg,channel);
-      }
-    }
-  });
+			await Promise.all([
+			  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
+			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+			]);
+		  }
+		} catch (e) {
+		  console.error("[ui] idle refresh failed:", e);
+		} finally {
+		  // Restart the idle watcher
+		  startUiInactivitySession(uiCollector, serverIndex, cfg, channel);
+		}
+	  }
+	});
 }
-
-
 
 async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   
