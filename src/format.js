@@ -28,6 +28,17 @@ function sanitize(name) {
 }
 
 
+function displayName(row) {
+  try {
+    const id = row?.discord_id;
+    if (id && String(id).match(/^\d{15,20}$/)) {
+      // mention links to profile in Discord
+      return `<@${id}>`;
+    }
+  } catch {}
+  return sanitize(row?.name ?? "");
+}
+
 export function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
@@ -64,7 +75,7 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
-    .setDescription(`**${row.name}**`)
+    .setDescription(`**${displayName(row)}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Weapon", value: String(weap ?? "—"), inline: true },
@@ -103,7 +114,7 @@ export function formatPlayerMapEmbed(row, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
-    .setDescription(`**${row.name}** on **${row.map}**`)
+    .setDescription(`**${displayName(row)}** on **${row.map}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
