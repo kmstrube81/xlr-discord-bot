@@ -41,13 +41,14 @@ function displayName(row) {
 
 export function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
+  const name = displayName(p);
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   const favWeapEmoji = resolveEmoji(p.fav);
   const favWeap = favWeapEmoji ? `${favWeapEmoji} ${p.fav}` : p.fav;
   return new EmbedBuilder().
 	setColor(0x2b7cff).
-    setTitle(`**${p.name}**`).
+    setTitle(`**${name}**`).
 	setThumbnail(thumbnail).
     addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
