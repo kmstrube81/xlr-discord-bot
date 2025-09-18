@@ -223,6 +223,7 @@ const VIEWS = Object.freeze({
 function displayName(row, isTitle = false, isOpponent = false) {
   try {
     const id = isOpponent ? row?.discord_id : row?.opponent_discord_id;
+	console.log(id);
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle)
 		return client.users.fetch(id).username;
