@@ -68,7 +68,7 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Weapon", value: String(weap ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
-	  { name: "KDR", value: String(kd), inline: true },
+	 // { name: "KDR", value: String(kd), inline: true },
       { name: "Killed By", value: String(row.deaths ?? 0), inline: true },
       { name: "Suicides By", value: String(row.suicides ?? 0), inline: true }
     )
@@ -172,8 +172,8 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
 		}
 	);
         // append extra stats when present
-    if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
-    if (typeof r.assists === "number")  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
+    if (r.suicides) embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
+    if (r.assists)  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
     if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
 
   });

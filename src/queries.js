@@ -1,7 +1,6 @@
 // src/queries.js
 const PLAYERSTATS = "xlr_playerstats";
 const PLAYERBODY  = "xlr_playerbody";
-const HEADSHOT_ID = Number(5);
 
 export const SORTABLE = new Set(["skill", "kills", "deaths", "ratio", "suicides", "assists", "rounds"]);
 
@@ -483,7 +482,9 @@ export const queries = {
     LEFT JOIN (
       SELECT player_id, SUM(kills) AS headshots
       FROM ${PLAYERBODY}
-      WHERE bodypart_id = ${HEADSHOT_ID}
+      WHERE bodypart_id = (SELECT id
+     FROM xlr_bodyparts
+    WHERE name = 'head')
       GROUP BY player_id
     ) pb ON pb.player_id = c.id
 
