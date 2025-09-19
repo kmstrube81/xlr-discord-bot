@@ -131,7 +131,6 @@ const SERVER_CONFIGS = collectServerConfigs(process.env);
 const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c]));
 const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }]));
 const __memberNameCache = new Map();
-const GUILD_ID = process.env.GUILD_ID ? String(process.env.GUILD_ID).trim() : null;
 
 // --- inactivity / auto-home ---
 const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes 
