@@ -130,6 +130,8 @@ function collectServerConfigs(env) {
 const SERVER_CONFIGS = collectServerConfigs(process.env);
 const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c]));
 const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }]));
+const __memberNameCache = new Map();
+const GUILD_ID = process.env.GUILD_ID ? String(process.env.GUILD_ID).trim() : null;
 
 // --- inactivity / auto-home ---
 const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes 
@@ -220,20 +222,17 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-
 async function displayName(row, rowname, isTitle = false, isOpponent = false) {
-  // sanitize base text first
   const raw = rowname ?? row?.name ?? "";
   const base = typeof raw === "string" ? raw : String(raw ?? "");
   const sanitized = base
-    .replace(/\^\d/g, "")  // strip CoD color codes ^1 etc
+    .replace(/\^\d/g, "")
     .replace(/\|/g, "")
     .replace(/`/g, "'");
 
   const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
   if (!id) return sanitized;
 
-  // Prefer guild nickname (member.displayName) using fixed GUILD_ID
   if (GUILD_ID) {
     const cacheKey = `${GUILD_ID}:${id}`;
     if (__memberNameCache.has(cacheKey)) {
@@ -246,19 +245,14 @@ async function displayName(row, rowname, isTitle = false, isOpponent = false) {
       const dn = member?.displayName || null;
       __memberNameCache.set(cacheKey, dn);
       if (dn) return isTitle ? dn : `<@${id}>`;
-    } catch {
-      // fall through
-    }
+    } catch {}
   }
 
-  // Fallback: fetch user, then username/globalName
   try {
     const user = await client.users.fetch(id);
     const uName = user?.globalName ?? user?.username ?? null;
     if (uName) return isTitle ? uName : `<@${id}>`;
-  } catch {
-    // fall through
-  }
+  } catch {}
 
   return sanitized;
 }
@@ -315,14 +309,14 @@ function mapSelectRowForPage(rows, page, selectedLabel = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
-async function playerSelectRowForPage(rows, page, selectedId = null) {
+function playerSelectRowForPage(rows, page, selectedId = null) {
   const medals = ["🥇", "🥈", "🥉"];
   const PAGE_SIZE = 10;
   const options = rows.map((r, i) => {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-	const name = await displayName(r, true) ?? r.name;
+    const name = (r?.name ?? r?.player_name ?? "");
     const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
@@ -338,6 +332,7 @@ async function playerSelectRowForPage(rows, page, selectedId = null) {
     .addOptions(options);
   return new ActionRowBuilder().addComponents(menu);
 }
+
 
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
@@ -384,7 +379,7 @@ async function getHomeTotals(serverIndex) {
 async function getLadderSlice(serverIndex, offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
 }
 async function getLadderCount(serverIndex) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
@@ -427,7 +422,7 @@ async function getMapsAll(serverIndex) {
 async function getPlayerWeaponSlice(serverIndex, weapon, offset=0, limit=10) {
   const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
 }
 async function getPlayerWeaponCount(serverIndex, weapon) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
@@ -487,7 +482,7 @@ async function buildLadder(serverIndex, page=0) {
     rows.map(async (r) => ({
       ...r,
       // use the fetched discord username when available; fall back to r.name
-      name: (await displayName(r, true)) || r.name,
+      name: (await displayName(r, r.name, true)) || r.name,
     }))
   );
 
@@ -563,7 +558,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, true) ?? r.name}));
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, r.name, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
@@ -586,7 +581,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
 // -------------------------------------------------------------------------------------
 // Discord wiring — multi UI
 // -------------------------------------------------------------------------------------
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers] });
 
 const commands = [
   new SlashCommandBuilder()
@@ -622,6 +617,11 @@ const commands = [
   new SlashCommandBuilder()
     .setName("xlr-servers")
     .setDescription("List configured servers and their numbers"),
+  new SlashCommandBuilder()
+    .setName("xlr-register")
+    .setDescription("Link your Discord user to a B3 GUID")
+    .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
+    .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
 ].map(c => c.toJSON());
 
 async function register() {
@@ -772,7 +772,7 @@ async function handleSlashCommand(i) {
         const limit = count && count > 0 ? Math.min(count, 10) : 10;
         const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
 		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
         const weap = (rows && rows[0]?.matched_label) || weapon;
         const emoji = resolveEmoji(weap);
@@ -787,7 +787,7 @@ async function handleSlashCommand(i) {
         const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
         const rows = await runQueryOn(serverIndex, sql, params);
 		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
         const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
         const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
@@ -799,7 +799,7 @@ async function handleSlashCommand(i) {
       const { sql, params } = queries.topDynamic({ limit, sort });
       const rows = await runQueryOn(serverIndex, sql, params);
 	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 
       const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
@@ -824,7 +824,7 @@ async function handleSlashCommand(i) {
         const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
@@ -835,7 +835,7 @@ async function handleSlashCommand(i) {
         const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
         if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
 		let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
@@ -856,7 +856,7 @@ async function handleSlashCommand(i) {
         ]);
         if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
         const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
 		);
 		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
         return i.editReply({ embeds: [embed] });
@@ -865,7 +865,7 @@ async function handleSlashCommand(i) {
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
       if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
 	  const rows2 = await Promise.all(
-		  details.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  details.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
       const embed = formatPlayerEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
       return i.editReply({ embeds: [embed] });
@@ -876,10 +876,30 @@ async function handleSlashCommand(i) {
       const count = i.options.getInteger("count") ?? 10;
       const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, true)) || r.name }))
+		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
       const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
       await i.editReply({ embeds: [embed] });
+      return;
+    }
+	
+	if (i.commandName === "xlr-register") {
+      const guid = i.options.getString("guid", true).trim();
+      const serverIndex = resolveServerIndexFromInteraction(i);
+      try {
+        // Look up client by GUID first for a friendly error if not found
+        const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
+        if (!rows.length) {
+          await i.reply({ ephemeral: true, content: `No client found with GUID **${guid}** on server ${serverIndex + 1}.` });
+          return;
+        }
+        const clientId = rows[0].id;
+        await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
+        await i.reply({ ephemeral: true, content: `Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` });
+      } catch (e) {
+        console.error("xlr-register failed:", e);
+        await i.reply({ ephemeral: true, content: "Sorry, linking failed. Try again later or contact an admin." });
+      }
       return;
     }
   } catch (err) {
@@ -999,7 +1019,7 @@ async function handleUiComponent(i, serverIndex) {
 		const ladderRowsWithNames = await Promise.all(
 		  ladderRows.map(async (r) => ({
 			...r,
-			name: (await displayName(r, true)) || r.name,
+			name: (await displayName(r, r.name, true)) || r.name,
 		  }))
 		);
 
