@@ -538,6 +538,7 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
     getPlayerWeaponCount(serverIndex, weaponLabel),
     getWeaponsSlice(serverIndex, weaponsPage * pageSize, pageSize),
   ]);
+  
   const weap = (rows && rows[0]?.matched_label) || weaponLabel;
   const emoji = resolveEmoji(weap);
   const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
@@ -574,7 +575,8 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: await displayName(r, r.name, true) ?? r.name}));
+      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
+      return mapped;
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
