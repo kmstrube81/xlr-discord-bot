@@ -375,11 +375,19 @@ async function getHomeTotals(serverIndex) {
   };
 }
 
-async function getLadderSlice(serverIndex, offset=0, limit=10) {
+async function getLadderSlice(serverIndex, offset = 0, limit = 10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
+  const enriched = await Promise.all(
+    rows.map(async (r, i) => ({
+      ...r,
+      rank: offset + i + 1,
+      name: (await displayName(r, true)) ?? r.name,
+    }))
+  );
+  return enriched;
 }
+
 async function getLadderCount(serverIndex) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
   return +cnt || 0;
@@ -418,15 +426,24 @@ async function getMapsAll(serverIndex) {
   return rows;
 }
 
-async function getPlayerWeaponSlice(serverIndex, weapon, offset=0, limit=10) {
+async function getPlayerWeaponSlice(serverIndex, weapon, offset = 0, limit = 10) {
   const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
+  const enriched = await Promise.all(
+    rows.map(async (r, i) => ({
+      ...r,
+      rank: offset + i + 1,
+      name: (await displayName(r, true)) ?? r.name,
+    }))
+  );
+  return enriched;
 }
+
 async function getPlayerWeaponCount(serverIndex, weapon) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
   return +cnt || 0;
 }
+
 async function getPlayerMapCount(serverIndex, map) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerMapsCount, [ `%${map}%`, /^\d+$/.test(map) ? Number(map) : -1 ]);
   return +cnt || 0;
@@ -557,7 +574,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, r.name, true) ?? r.name}));
+      return data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: await displayName(r, r.name, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
