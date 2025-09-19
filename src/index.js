@@ -235,7 +235,7 @@ async function displayName(row, rowname, isTitle = false, isOpponent = false) {
     if (id && /^\d{15,20}$/.test(String(id))) {
       if (isTitle) {
         const u = await client.users.fetch(id);
-        return u?.globalName ?? u?.username ?? sanitized;
+        return u?.displayName ?? u?.username ?? u?.globalName ?? sanitized;
       }
       return `<@${id}>`; // mention renders in descriptions/values (not in titles)
     }
