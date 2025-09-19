@@ -220,9 +220,9 @@ const VIEWS = Object.freeze({
   MAPS_PLAYERS: "mapsPlayers",
 });
 
-function displayName(row, rowname, isTitle = false, isOpponent = false) {
+function displayName(row, isTitle = false, isOpponent = false) {
   try {
-    const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
+    const id = isOpponent ? row?.discord_id : row?.opponent_discord_id;
     if (id && String(id).match(/^\d{15,20}$/)) {
 	  if(isTitle) {
 		const name = client.users.fetch(id);
@@ -235,10 +235,10 @@ function displayName(row, rowname, isTitle = false, isOpponent = false) {
 	  }
     }
   } catch {}
-  const name = rowname ? rowname.toString().replace(/\^\d/g, "") : "" // remove color codes like ^1, ^7, etc.
+  const name = row.name ? row.name.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
-    .replace(/`/g, "'");  // replace backticks with apostrophes
-  return name ?? "";
+    .replace(/`/g, "'") : row.name;  // replace backticks with apostrophes
+  return name;
 }
 
 const navRow = (active) =>
@@ -299,7 +299,7 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
     const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
     const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
     const maxName = Math.max(0, 100 - (prefix.length + 1));
-	const name = displayName(r, r.name, true) ?? r.name;
+	const name = displayName(r, true) ?? r.name;
     const label = `${prefix} ${String(name).slice(0, maxName)}`;
     return {
       label,
@@ -361,7 +361,7 @@ async function getHomeTotals(serverIndex) {
 async function getLadderSlice(serverIndex, offset=0, limit=10) {
   const { sql, params } = queries.ui_ladderSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
 }
 async function getLadderCount(serverIndex) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
@@ -404,7 +404,7 @@ async function getMapsAll(serverIndex) {
 async function getPlayerWeaponSlice(serverIndex, weapon, offset=0, limit=10) {
   const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, r.name, true) ?? r.name }));
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1, name: displayName(r, true) ?? r.name }));
 }
 async function getPlayerWeaponCount(serverIndex, weapon) {
   const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
@@ -530,7 +530,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
     (async () => {
       const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
       const data = await runQueryOn(serverIndex, sql, params);
-      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, r.name, true) ?? r.name}));
+      return data.map((r, i) => ({ ...r, rank: offset + i + 1 , name: displayName(r, true) ?? r.name}));
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
     getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
@@ -589,11 +589,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("xlr-servers")
     .setDescription("List configured servers and their numbers"),
-  new SlashCommandBuilder()
-    .setName("xlr-register")
-    .setDescription("Link your Discord user to a B3 GUID")
-    .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
-    .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
 ].map(c => c.toJSON());
 
 async function register() {
@@ -731,114 +726,6 @@ async function handleSlashCommand(i) {
     }
 
     const serverIndex = resolveServerIndexFromInteraction(i);
-
-    if (i.commandName === "xlr-top") {
-      await i.deferReply();
-
-      const count  = i.options.getInteger("count") ?? 0;
-      const weapon = i.options.getString("weapon");
-      const map    = i.options.getString("map");
-      const sort   = i.options.getString("sort") || "skill";
-
-      if (weapon) {
-        const limit = count && count > 0 ? Math.min(count, 10) : 10;
-        const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
-		rows.map((r) => ({ ...r, name: ( displayName(r, r.name, true)) || r.name }));
-        const weap = (rows && rows[0]?.matched_label) || weapon;
-        const emoji = resolveEmoji(weap);
-        const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
-        const embeds = formatTopEmbed(rows2, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
-        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
-        return;
-      }
-
-      if (map) {
-        const limit = count && count > 0 ? Math.min(count, 10) : 10;
-        const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
-        const rows = await runQueryOn(serverIndex, sql, params);
-		rows.map((r) => ({ ...r, name: ( displayName(r, r.name, true)) || r.name });
-        const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
-        const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
-        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
-        return;
-      }
-
-      const limit = count && count > 0 ? Math.min(count, 10) : 10;
-      const { sql, params } = queries.topDynamic({ limit, sort });
-      const rows = await runQueryOn(serverIndex, sql, params);
-	  rows.map(async (r) => ({ ...r, name: ( displayName(r, r.name, true)) || r.name }));
-
-      const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
-      await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
-      return;
-    }
-
-    if (i.commandName === "xlr-player") {
-      await i.deferReply();
-      const name = i.options.getString("name", true);
-      const weaponOpt = i.options.getString("weapon");
-      const mapOpt = i.options.getString("map");
-      const vsName = i.options.getString("vs");
-
-      const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
-      if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
-      const clientId = matches[0].client_id;
-
-      if (weaponOpt) {
-        const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
-        const { sql, params } = queries.playerWeaponCard;
-        const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
-        if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
-        rows.map((r) => ({ ...r, name: (displayName(r, r.name, true)) || r.name });
-		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
-        return i.editReply({ embeds: [embed] });
-      }
-
-      if (mapOpt) {
-        const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
-        const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
-        if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-        const rows2 = await Promise.all(
-		  rows.map((r) => ({ ...r, name: (displayName(r, r.name, true)) || r.name });
-		let thumbUrl = DEFAULT_THUMB;
-        thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
-        const embed = formatPlayerMapEmbed(rows2[0], { thumbnail: thumbUrl });
-        return i.editReply({ embeds: [embed] });
-      }
-
-      if (vsName) {
-        const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
-        if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
-        const opponentId = opp[0].client_id;
-        if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
-        const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
-          opponentId,
-          clientId, opponentId,
-          opponentId, clientId,
-          clientId
-        ]);
-        if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        rows.map((r) => ({ ...r, player_name: (displayName(r, r.player_name, true)) || r.name, opponent_name: (displayName(r, r.opponent_name, true)) || r.name }));
-		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
-        return i.editReply({ embeds: [embed] });
-      }
-
-      const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-      if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
-	  details.map((r) => ({ ...r, name: (displayName(r, r.name, true)) || r.name }));
-      const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
-      return i.editReply({ embeds: [embed] });
-    }
-
-    if (i.commandName === "xlr-lastseen") {
-      await i.deferReply();
-      const count = i.options.getInteger("count") ?? 10;
-      const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
-	  rows.map((r) => ({ ...r, name: (displayName(r, r.name, true)) || r.name }));
-      const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
-      await i.editReply({ embeds: [embed] });
-      return;
-    }
 	
 	if (i.commandName === "xlr-register") {
       const guid = i.options.getString("guid", true).trim();
@@ -859,6 +746,115 @@ async function handleSlashCommand(i) {
       }
       return;
     }
+
+    if (i.commandName === "xlr-top") {
+      await i.deferReply();
+
+      const count  = i.options.getInteger("count") ?? 0;
+      const weapon = i.options.getString("weapon");
+      const map    = i.options.getString("map");
+      const sort   = i.options.getString("sort") || "skill";
+
+      if (weapon) {
+        const limit = count && count > 0 ? Math.min(count, 10) : 10;
+        const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
+		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+        const weap = (rows && rows[0]?.matched_label) || weapon;
+        const emoji = resolveEmoji(weap);
+        const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
+        const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
+        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+        return;
+      }
+
+      if (map) {
+        const limit = count && count > 0 ? Math.min(count, 10) : 10;
+        const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
+        const rows = await runQueryOn(serverIndex, sql, params);
+		rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+        const thumbUrl = (await getMapImageUrl((rows && rows[0]?.matched_label) || map)) || DEFAULT_THUMB;
+        const embeds = formatTopEmbed(rows, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
+        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+        return;
+      }
+
+      const limit = count && count > 0 ? Math.min(count, 10) : 10;
+      const { sql, params } = queries.topDynamic({ limit, sort });
+      const rows = await runQueryOn(serverIndex, sql, params);
+	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+      const embeds = formatTopEmbed(rows, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
+      await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+      return;
+    }
+
+    if (i.commandName === "xlr-player") {
+      await i.deferReply();
+      const name = i.options.getString("name", true);
+      const weaponOpt = i.options.getString("weapon");
+      const mapOpt = i.options.getString("map");
+      const vsName = i.options.getString("vs");
+
+      const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
+      if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
+      const clientId = matches[0].client_id;
+
+      if (weaponOpt) {
+        const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
+        const { sql, params } = queries.playerWeaponCard;
+        const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
+        if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
+        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+		const embed = formatPlayerWeaponEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        return i.editReply({ embeds: [embed] });
+      }
+
+      if (mapOpt) {
+        const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
+        const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
+        if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
+        rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+		let thumbUrl = DEFAULT_THUMB;
+        thumbUrl = (await getMapImageUrl(rows[0].map)) || DEFAULT_THUMB;
+        const embed = formatPlayerMapEmbed(rows[0], { thumbnail: thumbUrl });
+        return i.editReply({ embeds: [embed] });
+      }
+
+      if (vsName) {
+        const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
+        if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
+        const opponentId = opp[0].client_id;
+        if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
+        const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
+          opponentId,
+          clientId, opponentId,
+          opponentId, clientId,
+          clientId
+        ]);
+        if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
+        rows.map((r, i) => ({ ...r, player_name: displayName(r, true) ?? r.player_name, opponent_name: displayName(r,false,true)}));
+		const embed = formatPlayerVsEmbed(rows[0], { thumbnail: DEFAULT_THUMB });
+        return i.editReply({ embeds: [embed] });
+      }
+
+      const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+      if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
+	  details.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+	  console.log(details);
+      const embed = formatPlayerEmbed(details[0], { thumbnail: DEFAULT_THUMB });
+      return i.editReply({ embeds: [embed] });
+    }
+
+    if (i.commandName === "xlr-lastseen") {
+      await i.deferReply();
+      const count = i.options.getInteger("count") ?? 10;
+      const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+	  rows.map((r, i) => ({ ...r, name: displayName(r, true) ?? r.name}));
+      const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+      await i.editReply({ embeds: [embed] });
+      return;
+    }
+	
+	
   } catch (err) {
     console.error("[slash] error:", err);
     if (i.deferred || i.replied) {
@@ -964,24 +960,13 @@ async function handleUiComponent(i, serverIndex) {
     }
 
     if (view === "ladder" && kind === "select") {
-        const clientId = i.values[0];
-		const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-		const embed = rows.length
-		  ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
-		  : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
-
-		const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
-
-		// PRE-ENRICH: compute display names for select menu labels
-		const ladderRowsWithNames = await Promise.all(
-		  ladderRows.map(async (r) => ({
-			...r,
-			name: (await displayName(r, r.name, true)) || r.name,
-		  }))
-		);
-
-		const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRowsWithNames, page, clientId)];
-
+      const clientId = i.values[0];
+      const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+      const embed = rows.length
+        ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
+        : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
+      const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
+      const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRows, page, clientId)];
       const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
       const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
