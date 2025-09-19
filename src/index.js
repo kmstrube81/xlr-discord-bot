@@ -235,7 +235,7 @@ async function displayName(row, rowname, isTitle = false, isOpponent = false) {
 	  }
     }
   } catch {}
-  const name = rowname?.replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
+  const name = rowname ? rowname.replace(/\^\d/g, "") : "" // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
     .replace(/`/g, "'");  // replace backticks with apostrophes
   return name ?? "";
