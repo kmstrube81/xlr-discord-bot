@@ -494,7 +494,9 @@ async function buildLadder(serverIndex, page=0) {
 
   const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
   const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
-  const nav   = [navRow(VIEWS.LADDER), playerSelectRowForPage(rowsWithNames, page, null)];
+  const navSelect = await playerSelectRowForPage(rowsWithNames, page, null);
+  const nav = [navRow(VIEWS.LADDER), navSelect];
+
 
   // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
@@ -562,13 +564,20 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
   const offset   = playerPage * pageSize;
   const [rows, total, mapsRows] = await Promise.all([
     (async () => {
-      const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
-      const data = await runQueryOn(serverIndex, sql, params);
-      return data.map( async (r, i) => ({ ...r, rank: offset + i + 1 , name: await displayName(r, r.name, true) ?? r.name}));
-    })(),
-    getPlayerMapCount(serverIndex, mapLabel),
-    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
-  ]);
+		const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
+		const data = await runQueryOn(serverIndex, sql, params);
+		return await Promise.all(
+		  data.map(async (r, i) => ({
+			...r,
+			rank: offset + i + 1,
+			name: (await displayName(r, r.name, true)) ?? r.name,
+		  }))
+		);
+	  })(),
+	  getPlayerMapCount(serverIndex, mapLabel),
+	  getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
+	]);
+
   const thumbUrl = (await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
   const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
@@ -1029,16 +1038,17 @@ async function handleUiComponent(i, serverIndex) {
 		  }))
 		);
 
-		const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRowsWithNames, page, clientId)];
+		const navSelect = await playerSelectRowForPage(ladderRowsWithNames, page, clientId);
+		const navComponents = [navRow(VIEWS.LADDER), navSelect];
 
-      const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: navComponents }),
-        contentMsg.edit({ embeds: [embed], components: [] }),
-      ]);
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
+		const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+		const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
+		await Promise.all([
+			i.update({ content: "", embeds: [], components: navComponents }),
+			contentMsg.edit({ embeds: [embed], components: [] }),
+		]);
+		if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+		return;
     }
   }
 }
