@@ -92,7 +92,7 @@ export function formatPlayerVsEmbed(row, opts = {}) {
     .setFooter({ text: "XLRStats • B3" });
 }
 
-export function formatPlayerMapEmbed(row, opts = {}) {
+export function formatPlayerMapEmbed(row, title = null, opts = {}) {
   const { thumbnail } = opts;
   const lastSeen = row.time_edit
     ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
@@ -102,7 +102,7 @@ export function formatPlayerMapEmbed(row, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
-    .setDescription(`**${displayName(row)}** on **${row.map}**`)
+    .setDescription(title ?? `**${displayName(row)}** on **${row.map}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
@@ -174,7 +174,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
         // append extra stats when present
     if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
     if (typeof r.assists === "number")  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
-    if (typeof r.rounds === "number")   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
+    if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
 
   });
 

@@ -382,7 +382,7 @@ async function getLadderSlice(serverIndex, offset = 0, limit = 10) {
     rows.map(async (r, i) => ({
       ...r,
       rank: offset + i + 1,
-      name: (await displayName(r, true)) ?? r.name,
+      name: (await displayName(r, r.name, true)) ?? r.name,
     }))
   );
   return enriched;
@@ -433,7 +433,7 @@ async function getPlayerWeaponSlice(serverIndex, weapon, offset = 0, limit = 10)
     rows.map(async (r, i) => ({
       ...r,
       rank: offset + i + 1,
-      name: (await displayName(r, true)) ?? r.name,
+      name: (await displayName(r, r.name, true)) ?? r.name,
     }))
   );
   return enriched;
