@@ -174,7 +174,7 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
         // append extra stats when present
     if (typeof r.suicides === "number") embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
     if (typeof r.assists === "number")  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
-    if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
+    if (typeof r.rounds === "number")   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
 
   });
 
