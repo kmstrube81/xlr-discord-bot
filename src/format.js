@@ -308,7 +308,7 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset =
 export function formatAwardEmbed(rows, title = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
   const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
 
-  const awardEmote = resolveEmoji(emoji) ? "";
+  const awardEmote = resolveEmoji(emoji) ?? "";
 
   const embeds = [
     new EmbedBuilder().setColor(0x32d296).setTitle(`${awardEmote} ${title}`)
@@ -387,7 +387,7 @@ export function formatAwardsEmbed(rows, title = "Awards") {
 			
 		}
 		
-		let emote = resolveEmoji(r.emoji) ? "";
+		let emote = resolveEmoji(r.emoji) ?? "";
 		
 		embed.setDescription(`${emote} **${r.name}**`);
 		embed.addFields( { name : "\u200B", value: r.description } );
