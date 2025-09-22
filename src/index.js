@@ -198,7 +198,7 @@ const awards = [
 	  query: queries.award_chat,
 	  properties: [{name: "Chats sent", prop: "num_chat"}]
 	}
-]);
+];
 
 // -------------------------------------------------------------------------------------
 // MySQL pools per server
