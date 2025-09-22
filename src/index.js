@@ -694,22 +694,22 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
 
 async function buildAwards(serverIndex, page=0) {
   const offset = page * V_PAGE;
-  const rows = awards.slice(offset, V_PAGE);
-  const total = awards.length;
+  const rows   = awards.slice(offset, offset + V_PAGE); // fix here
+  const total  = awards.length;
 
   const embeds = renderAwardsEmbeds({ rows, page });
+  const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + V_PAGE < total)];
+  const nav    = [navRow(VIEWS.AWARDS), awardSelectRowForPage(rows, page, null)];
+   // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
-  const ZERO = "⠀";
-  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
-  const blank  = ZERO.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blank });
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Awards page ${playerPage + 1}` });
-  const hasNext = rows.length === pageSize;
-  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
-  const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
-  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
-  return { embeds, nav, pager };
+  const footerText = embedArr[embedArr.length - 1].data.footer.text;
+  const ZERO_WIDTH = "⠀";
+  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+  const blankText = ZERO_WIDTH.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blankText });
+  embedArr[embedArr.length - 1].setFooter({ text: footerText });
+
+  return { embeds: embedArr, nav, pager };
 }
 
 async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
