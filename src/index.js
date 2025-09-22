@@ -576,7 +576,7 @@ async function buildHome(serverIndex) {
 async function buildLadder(serverIndex, page=0) {
   const offset = page * V_PAGE;
   const pageSize = 10;
-const offset   = playerPage * pageSize;
+  
 const rows = await (async () => {
   const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
   return Promise.all(data.map(async (r, i) => ({
