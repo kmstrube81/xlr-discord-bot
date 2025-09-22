@@ -106,7 +106,7 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
-	  { name: "KDR", value: String(kd), inline: true },
+	  { name: "Kill-Death Ratio", value: String(kd), inline: true },
       { name: "Deaths", value: String(row.deaths ?? 0), inline: true },
       { name: "Suicides", value: String(row.suicides ?? 0), inline: true },
       { name: "Rounds Played", value: String(row.rounds ?? 0), inline: true }
@@ -305,6 +305,102 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset =
   return embeds;
 }
 
+export function formatAwardEmbed(rows, title = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
+  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
+
+  const awardEmote = resolveEmoji(emoji);
+
+  const embeds = [
+    new EmbedBuilder().setColor(0x32d296).setTitle(`${awardEmote} ${title}`)
+  ];
+
+  rows.map((r, i) => {
+	  
+    let embed;
+	
+	if(i === 0) {
+		
+		embed = embeds[0];
+		
+	} else {
+		
+		embed = new EmbedBuilder()
+			.setColor(0x32d296);
+		embeds.push(embed);
+		
+	}
+	
+    const medals = ["🥇", "🥈", "🥉"];
+
+    const absoluteIndex = offset + i;               // <— absolute rank
+    let rankDisplay;
+    if (absoluteIndex < 3) {                        // medals only for 1–3 overall
+      rankDisplay = medals[absoluteIndex];
+    } else {
+      rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
+    }
+
+    embed.setDescription(`**${rankDisplay} ${r.name}**`);
+	for(let z = 0; z < props.length; z++) {
+		
+	  embed.addFields(
+			{
+				name : props[z].name,
+				value : String(r[props[z].prop]),
+				inline : true
+			}
+		);
+	}
+    
+  });
+
+  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
+
+  if (thumbnail) {
+    embeds[0].setThumbnail(thumbnail);
+  }
+  
+  if(!rows.length) {
+	embeds[0].setDescription("_No players found_");
+  }
+  return embeds;
+}
+
+export function formatAwardsEmbed(rows, title = "Awards") {
+
+	const embeds = [
+		new EmbedBuilder().setColor(0x32d296).setTitle(title)
+	  ];
+
+	rows.map((r,i) => {
+		let embed;
+	
+		if(i === 0) {
+			
+			embed = embeds[0];
+			
+		} else {
+			
+			embed = new EmbedBuilder()
+				.setColor(0x32d296);
+			embeds.push(embed);
+			
+		}
+		
+		let emote = resolveEmoji(r.emoji);
+		
+		embed.setDescription(`${emote} **${r.name}**`);
+		embed.addFields( { name : "\u200B", value: r.description } );
+	});
+
+	embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
+
+	if(!rows.length) {
+		embeds[0].setDescription("_No maps found_");
+	}
+	
+	return embeds;
+}	
 
 export function formatLastSeenEmbed(rows, opts = {}) {
   const { thumbnail } = opts;
@@ -337,7 +433,7 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
   
   const embed1 = new EmbedBuilder()
       .setColor(0x2b7cff)
-      .setTitle(hostname)
+      .setTitle(sanitize(hostname))
 	  .setImage(imageUrl)
       .addFields(
 	    { name: "Total Players Seen", value: (totalPlayers ?? 0).toLocaleString(), inline: true },
@@ -419,6 +515,16 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
     const last = embeds[embeds.length - 1];
     const footer = last.data.footer?.text || "XLRStats • B3";
     last.setFooter({ text: `${footer} • Ladder page ${page + 1}` });
+  }
+  return embeds;
+}
+
+export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
+  const embeds = formatAwardsEmbed(rows, `🏆 ${title}`);
+  if (embeds.length) {
+    const last = embeds[embeds.length - 1];
+    const footer = last.data.footer?.text || "XLRStats • B3";
+    last.setFooter({ text: `${footer} • Awards page ${page + 1}` });
   }
   return embeds;
 }

@@ -135,6 +135,71 @@ const __memberNameCache = new Map();
 // --- inactivity / auto-home ---
 const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes 
 
+// --- Awards Array ---
+const awards = [
+
+	{ name: "Cracked Aiming Legend",
+	  description: "Most Headshot Kills",
+	  emoji: "death_headshot",
+	  query: queries.award_headshot,
+	  properties: [{name: "Headshots", prop: "kills"}]
+	},
+	{ name: "Probably a Camper",
+	  description: "Best Kill-Death Ratio",
+	  emoji: "camper",
+	  query: queries.award_ratio,
+	  properties: [{name: "Kills", prop: "kills"}, {name: "Deaths", prop: "deaths"}, {name: "Kill-Death Ratio", prop: "ratio"}]
+	},
+	{ name: "Touch Grass",
+	  description: "Highest Skill Rating",
+	  emoji: "touchgrass",
+	  query: queries.award_skill,
+	  properties: [{name: "Skill", prop: "skill"}]
+	},
+	{ name: "John Stockton",
+	  description: "Most Kill Assists",
+	  emoji: "jumpman",
+	  query: queries.award_assists,
+	  properties: [{name: "Assists", prop: "assists"}]
+	},
+	{ name: "Crete2438g",
+	  description: "Very Nice Bash. (Most Melee Kills)",
+	  emoji: "mod_melee",
+	  query: queries.award_melee,
+	  properties: [{name: "Melee Kills", prop: "kills"}]
+	},
+	{ name: "Team Captain",
+	  description: "Most deaths with a KDR under 1.00",
+	  emoji: "brutalamish",
+	  query: queries.award_deaths,
+	  properties: [{name: "Deaths", prop: "deaths"},{name: "Kill-Death Ratio", prop: "ratio"}]
+	},
+	{ name: "Multiple Personality Disorder",
+	  description: "Most Aliases",
+	  emoji: "corgi_fan",
+	  query: queries.award_alias,
+	  properties: [{name: "Aliases", prop: "num_alias"}]
+	},
+	{ name: "Green Thumb",
+	  description: "Most Bomb Plants",
+	  emoji: "plant",
+	  query: queries.award_plant,
+	  properties: [{name: "Bomb Plants", prop: "num_plant"}]
+	},
+	{ name: "Ninja Defuser",
+	  description: "Most Bomb Defusals",
+	  emoji: "defuse",
+	  query: queries.award_defuse,
+	  properties: [{name: "Bomb Defusals", prop: "num_defuse"}]
+	},
+	{ name: "Target(+)Master",
+	  description: "I'm in position with Katy Perry. (Most chat messages sent)",
+	  emoji: "targetmaster",
+	  query: queries.award_chat,
+	  properties: [{name: "Chats sent", prop: "num_chat"}]
+	}
+]);
+
 // -------------------------------------------------------------------------------------
 // MySQL pools per server
 // -------------------------------------------------------------------------------------
@@ -219,6 +284,7 @@ const VIEWS = Object.freeze({
   MAPS: "maps",
   WEAPON_PLAYERS: "weaponPlayers",
   MAPS_PLAYERS: "mapsPlayers",
+  AWARDS: "awards",
 });
 
 async function displayName(row, rowname, isTitle = false, isOpponent = false) {
@@ -263,6 +329,8 @@ const navRow = (active) =>
     new ButtonBuilder().setCustomId(`ui:${VIEWS.LADDER}`).setLabel("Ladder").setStyle(active==="ladder"?ButtonStyle.Primary:ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`ui:${VIEWS.WEAPONS}`).setLabel("Weapons").setStyle(active==="weapons"?ButtonStyle.Primary:ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`ui:${VIEWS.MAPS}`).setLabel("Maps").setStyle(active==="maps"?ButtonStyle.Primary:ButtonStyle.Secondary),
+	new ButtonBuilder().setCustomId(`ui:${VIEWS.AWARDS}`).setLabel("Awards").setStyle(active==="awards"?ButtonStyle.Primary:ButtonStyle.Secondary),
+
   );
 
 const pagerRow = (view, page, hasPrev, hasNext) =>
@@ -332,6 +400,25 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+function awardSelectRowForPage(rows, page, selectedIndex = null) {
+  const options = rows.map((r, i) => {
+    const prefixEmoji = resolveEmoji(r.emoji) ?? "";
+    const maxName = Math.max(0, 100 - (String(prefixEmoji).length + 1));
+    const label = `${prefixEmoji} ${String(r.name).slice(0, maxName)}`.trim();
+    return {
+      label,
+      value: String(i),
+      default: selectedIndex != null && String(i) === String(selectedIndex),
+    };
+  });
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`ui:awards:select:${page}`)
+    .setPlaceholder("Select an Award to View the Winner...")
+    .setMinValues(1)
+    .setMaxValues(1)
+    .addOptions(options);
+  return new ActionRowBuilder().addComponents(menu);
+}
 
 function toolbarPayload(activeView) {
   return { content: "", embeds: [], components: [navRow(activeView)] };
@@ -488,10 +575,17 @@ async function buildHome(serverIndex) {
 
 async function buildLadder(serverIndex, page=0) {
   const offset = page * V_PAGE;
-  const [rows, total] = await Promise.all([
-    getLadderSlice(serverIndex, offset, V_PAGE),
-    getLadderCount(serverIndex)
-  ]);
+  const pageSize = 10;
+const offset   = playerPage * pageSize;
+const rows = await (async () => {
+  const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
+  return Promise.all(data.map(async (r, i) => ({
+    ...r,
+    rank: offset + i + 1,
+    name: (await displayName(r, r.name, true)) || r.name,
+  })));
+})();
+
 
   // PRE-ENRICH: fetch Discord username for titles/labels
   const rowsWithNames = await Promise.all(
@@ -550,49 +644,47 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const blank  = ZERO.repeat(padLen);
   for (const e of embedArr) e.setFooter({ text: blank });
   embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
-  const hasNext = offset + pageSize < total;
-  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
-  const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weap)];
-  return { embeds, nav, pager };
+  const hasNext = rows.length === pageSize;
+const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
+const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
+const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
+
+
+  // Keep footer balancing so pages line up visually
+  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+  const footerText = embedArr[embedArr.length - 1].data.footer.text;
+  const ZERO_WIDTH = "⠀";
+  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+  const blankText = ZERO_WIDTH.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blankText });
+  embedArr[embedArr.length - 1].setFooter({ text: footerText });
+
+  return { embeds: embedArr, nav, pager };
 }
 
-async function buildMaps(serverIndex, page=0) {
-  const offset = page * V_PAGE;
-  const [rows, total] = await Promise.all([
-    getMapsSlice(serverIndex, offset, V_PAGE),
-    getMapsCount(serverIndex)
-  ]);
-  const embeds = renderMapsEmbeds({ rows, page });
-  const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(rows, page, null)];
-  return { embeds, nav, pager };
-}
-
-async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) {
+async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const pageSize = 10;
   const offset   = playerPage * pageSize;
-  const [rows, total, mapsRows] = await Promise.all([
+  const [rows, total] = await Promise.all([
     (async () => {
-      const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
-      const data = await runQueryOn(serverIndex, sql, params);
+      const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
       const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
       return mapped;
     })(),
-    getPlayerMapCount(serverIndex, mapLabel),
-    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
+    pageSize,
   ]);
-  const thumbUrl = (await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
-  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
+  const embeds = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
   const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
   const ZERO = "⠀";
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
   for (const e of embedArr) e.setFooter({ text: blank });
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Map page ${playerPage + 1}` });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Award page ${playerPage + 1}` });
   const hasNext = offset + pageSize < total;
-  const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
-  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
+  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
+  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(awards, mapsPage, award.name)];
   return { embeds, nav, pager };
 }
 
@@ -756,6 +848,9 @@ async function buildView(serverIndex, { view, page, param, weaponsPage }) {
   }
   if (view === VIEWS.MAPS_PLAYERS) {
     return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
+  }
+  if(view === VIEWS.AWARDS) {
+	return param ? await buildAward(serverIndex, awards.find(a => a.name === param) || awards[0], page, weaponsPage ?? 0) : await buildAwards(serverIndex, page);
   }
 }
 //String Select processing here
@@ -989,6 +1084,18 @@ async function handleUiComponent(i, serverIndex) {
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }
+	
+	if (parsed.view === VIEWS.AWARDS) {
+        const payload = await buildView(serverIndex, parsed);
+        await i.update({ embeds: payload.embeds, components: payload.pager });
+        if (cfg.ui.navId) {
+          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+          const navMsg = await channel.messages.fetch(cfg.ui.navId);
+          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+        }
+        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+        return;
+      }
   }
 
   // Select Menus
@@ -1014,6 +1121,21 @@ async function handleUiComponent(i, serverIndex) {
     if (view === "maps" && kind === "select") {
       const label = i.values[0];
       const payload = await buildMapPlayers(serverIndex, label, 0, page);
+      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+      await Promise.all([
+        i.update({ content: "", embeds: [], components: payload.nav }),
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+      ]);
+      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+      return;
+    }
+	
+	if (view === "awards" && kind === "select") {
+      const selIndex = Number(i.values[0]);
+      const globalIndex = page * V_PAGE + selIndex;
+      const award = awards[globalIndex];
+      const payload = await buildAward(serverIndex, award, 0, page);
       const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
       const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([

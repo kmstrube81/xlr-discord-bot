@@ -423,7 +423,202 @@ const ui_playerMapsCount = `
 
 export const registerDiscordByGuid = `UPDATE clients SET discord_id = ? WHERE guid = ?`;
 
+// === AWARDS ===
+
+// 1) Most Headshot Kills
+export const award_headshot = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    hs.kills AS kills
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN (
+    SELECT player_id, SUM(kills) AS kills
+    FROM ${PLAYERBODY}
+    WHERE bodypart_id = (SELECT id FROM xlr_bodyparts WHERE name = 'head')
+    GROUP BY player_id
+  ) hs ON hs.player_id = c.id
+  ORDER BY hs.kills DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 2) Best Kill-Death Ratio (gate by engagements)
+export const award_ratio = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    agg.kills,
+    agg.deaths,
+    CASE WHEN agg.deaths=0 THEN agg.kills ELSE ROUND(agg.kills/agg.deaths, 2) END AS ratio
+  FROM (
+    SELECT client_id,
+           SUM(kills)  AS kills,
+           SUM(deaths) AS deaths
+    FROM ${PLAYERSTATS}
+    GROUP BY client_id
+    HAVING (SUM(kills) + SUM(deaths)) >= 20
+  ) agg
+  JOIN clients c ON c.id = agg.client_id
+  ${preferredAliasJoin("a","c.id")}
+  ORDER BY ratio DESC, kills DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 3) Highest Skill Rating
+export const award_skill = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    smax.skill AS skill
+  FROM (
+    SELECT client_id, MAX(skill) AS skill
+    FROM ${PLAYERSTATS}
+    GROUP BY client_id
+  ) smax
+  JOIN clients c ON c.id = smax.client_id
+  ${preferredAliasJoin("a","c.id")}
+  ORDER BY smax.skill DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 4) Most Kill Assists
+export const award_assists = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(s.assists) AS assists
+  FROM ${PLAYERSTATS} s
+  JOIN clients c ON c.id = s.client_id
+  ${preferredAliasJoin("a","c.id")}
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(s.assists) > 0
+  ORDER BY assists DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 5) Most Melee Kills
+export const award_melee = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(wu.kills) AS kills
+  FROM xlr_weaponusage wu
+  JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+  JOIN clients c ON c.id = wu.player_id
+  ${preferredAliasJoin("a","c.id")}
+  WHERE w.name = 'mod_melee'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(wu.kills) > 0
+  ORDER BY kills DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 6) Most deaths with KDR < 1.00
+export const award_deaths = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    agg.kills,
+    agg.deaths,
+    CASE WHEN agg.deaths=0 THEN agg.kills ELSE ROUND(agg.kills/agg.deaths, 2) END AS ratio
+  FROM (
+    SELECT client_id,
+           SUM(kills)  AS kills,
+           SUM(deaths) AS deaths
+    FROM ${PLAYERSTATS}
+    GROUP BY client_id
+  ) agg
+  JOIN clients c ON c.id = agg.client_id
+  ${preferredAliasJoin("a","c.id")}
+  WHERE (agg.deaths > 0) AND (CASE WHEN agg.deaths=0 THEN agg.kills ELSE agg.kills/agg.deaths END) < 1.0
+  ORDER BY agg.deaths DESC, agg.kills ASC
+  LIMIT ? OFFSET ?
+`;
+
+// 7) Most Aliases
+export const award_alias = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    COUNT(al.alias) AS num_alias
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN aliases al ON al.client_id = c.id
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  ORDER BY num_alias DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 8) Most Bomb Plants — xlr_actionstats + xlr_playeractions
+export const award_plant = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(pa.count) AS num_plant
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN xlr_playeractions pa ON pa.player_id = c.id
+  JOIN xlr_actionstats act ON act.id = pa.action_id
+  WHERE act.name = 'bomb_plant'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(pa.count) > 0
+  ORDER BY num_plant DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 9) Most Bomb Defusals — xlr_actionstats + xlr_playeractions
+export const award_defuse = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(pa.count) AS num_defuse
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN xlr_playeractions pa ON pa.player_id = c.id
+  JOIN xlr_actionstats act ON act.id = pa.action_id
+  WHERE act.name = 'bomb_defuse'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(pa.count) > 0
+  ORDER BY num_defuse DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 10) Most chat messages — chatlog table
+export const award_chat = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    COUNT(*) AS num_chat
+  FROM chatlog ch
+  JOIN clients c ON c.id = ch.client_id
+  ${preferredAliasJoin("a","c.id")}
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  ORDER BY num_chat DESC
+  LIMIT ? OFFSET ?
+`;
+
 export const queries = {
+  award_headshot,
+  award_ratio,
+  award_skill,
+  award_assists,
+  award_melee,
+  award_deaths,
+  award_alias,
+  award_plant,
+  award_defuse,
+  award_chat,
   // Top players by skill (no server_id filter)
   topBySkill: `
     SELECT c.id AS client_id,
