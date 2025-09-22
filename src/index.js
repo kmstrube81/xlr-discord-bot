@@ -22,10 +22,12 @@ import {
   formatPlayerWeaponEmbed,
   formatPlayerVsEmbed,
   formatPlayerMapEmbed,
+  formatAwardEmbed,
   renderHomeEmbed,
   renderLadderEmbeds,
   renderWeaponsEmbeds,
   renderMapsEmbeds,
+  renderAwardsEmbeds,
   setEmojiResolver,
   resolveEmoji
 } from "./format.js";
