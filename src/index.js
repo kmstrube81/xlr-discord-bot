@@ -577,17 +577,10 @@ async function buildHome(serverIndex) {
 
 async function buildLadder(serverIndex, page=0) {
   const offset = page * V_PAGE;
-  const pageSize = 10;
-  
-const rows = await (async () => {
-  const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
-  return Promise.all(data.map(async (r, i) => ({
-    ...r,
-    rank: offset + i + 1,
-    name: (await displayName(r, r.name, true)) || r.name,
-  })));
-})();
-
+  const [rows, total] = await Promise.all([
+    getLadderSlice(serverIndex, offset, V_PAGE),
+    getLadderCount(serverIndex)
+  ]);
 
   // PRE-ENRICH: fetch Discord username for titles/labels
   const rowsWithNames = await Promise.all(
@@ -613,7 +606,6 @@ const rows = await (async () => {
 
   return { embeds: embedArr, nav, pager };
 }
-
 async function buildWeapons(serverIndex, page=0) {
   const offset = page * V_PAGE;
   const [rows, total] = await Promise.all([
