@@ -637,18 +637,6 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const emoji = resolveEmoji(weap);
   const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
   const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset });
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
-  const ZERO = "⠀";
-  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
-  const blank  = ZERO.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blank });
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
-  const hasNext = rows.length === pageSize;
-const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
-const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
-const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
-
 
   // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
