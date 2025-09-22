@@ -639,17 +639,17 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const emoji = resolveEmoji(weap);
   const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
   const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset });
-
-  // Keep footer balancing so pages line up visually
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const footerText = embedArr[embedArr.length - 1].data.footer.text;
-  const ZERO_WIDTH = "⠀";
-  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-  const blankText = ZERO_WIDTH.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blankText });
-  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-
-  return { embeds: embedArr, nav, pager };
+  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
+  const ZERO = "⠀";
+  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
+  const blank  = ZERO.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blank });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
+  const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weap)];
+  return { embeds, nav, pager };
 }
 
 async function buildMaps(serverIndex, page=0) {
