@@ -650,6 +650,66 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   return { embeds: embedArr, nav, pager };
 }
 
+async function buildMaps(serverIndex, page=0) {
+  const offset = page * V_PAGE;
+  const [rows, total] = await Promise.all([
+    getMapsSlice(serverIndex, offset, V_PAGE),
+    getMapsCount(serverIndex)
+  ]);
+  const embeds = renderMapsEmbeds({ rows, page });
+  const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + V_PAGE < total)];
+  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(rows, page, null)];
+  return { embeds, nav, pager };
+}
+
+async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) {
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+  const [rows, total, mapsRows] = await Promise.all([
+    (async () => {
+      const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
+      const data = await runQueryOn(serverIndex, sql, params);
+      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
+      return mapped;
+    })(),
+    getPlayerMapCount(serverIndex, mapLabel),
+    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
+  ]);
+  const thumbUrl = (await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
+  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
+  const ZERO = "⠀";
+  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
+  const blank  = ZERO.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blank });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Map page ${playerPage + 1}` });
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
+  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
+  return { embeds, nav, pager };
+}
+
+async function buildAwards(serverIndex, page=0) {
+  const offset = page * V_PAGE;
+  const rows = awards.slice(offset, V_PAGE);
+  const total = awards.length;
+
+  const embeds = renderAwardsEmbeds({ rows, page });
+  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
+  const ZERO = "⠀";
+  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
+  const blank  = ZERO.repeat(padLen);
+  for (const e of embedArr) e.setFooter({ text: blank });
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Awards page ${playerPage + 1}` });
+  const hasNext = rows.length === pageSize;
+  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
+  const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
+  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
+  return { embeds, nav, pager };
+}
+
 async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const pageSize = 10;
   const offset   = playerPage * pageSize;
