@@ -405,8 +405,7 @@ function playerSelectRowForPage(rows, page, selectedId = null) {
 function awardSelectRowForPage(rows, page, selectedIndex = null) {
   const options = rows.map((r, i) => {
     
-    const maxName = Math.max(0, 100 - (String(prefixEmoji).length + 1));
-    const label = `${String(r.name).slice(0, maxName)}`.trim();
+    const label = `${String(r.name).slice(0, 100)}`.trim();
     return {
       label,
       value: String(i),
