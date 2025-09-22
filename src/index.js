@@ -669,10 +669,11 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
   for (const e of embedArr) e.setFooter({ text: blank });
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Award page ${playerPage + 1}` });
-  const hasNext = offset + pageSize < total;
+  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Awards page ${playerPage + 1}` });
+  const hasNext = rows.length === pageSize;
   const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
-  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(awards, mapsPage, award.name)];
+  const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
+  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
   return { embeds, nav, pager };
 }
 
