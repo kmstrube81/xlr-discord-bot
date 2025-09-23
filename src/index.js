@@ -1036,7 +1036,7 @@ async function handleSlashCommand(i) {
 			const [row] = await runQueryOn(serverIndex, sql, params);
 			return row ? { key: aw.key, name: aw.name, emoji: aw.emoji, properties: aw.properties, rank: row.rank } : null;
 		  }));
-		  const top10 = ranks.sort((a,b) => a.rank - b.rank).slice(0, 10);
+		  const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
 		  const titleName = (await displayName({ discord_id: matches[0]?.discord_id }, matches[0]?.name, true)) || matches[0]?.name;
 
 		  const emb = new EmbedBuilder()
