@@ -1002,7 +1002,7 @@ async function handleSlashCommand(i) {
       const clientId = matches[0].client_id;
 
 	  if (awardOpt) {
-		const aw = aw === -1 ? false : awards[Integer(awardOpt)];
+		const aw = awardOpt === "-1" ? false : awards[Integer(awardOpt)];
 	  
 		if(aw) {
 		// Top 10 for that award
