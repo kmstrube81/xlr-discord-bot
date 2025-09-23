@@ -1032,7 +1032,7 @@ async function handleSlashCommand(i) {
 		} else { 			
 		  // Compute ranks across all awards, pick best 10
 		  const ranks = await Promise.all(awards.map(async (aw) => {
-			const { sql, params } = queries.awardRank(aw.key || aw.name, clientId);
+			const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
 			const [row] = await runQueryOn(serverIndex, sql, params);
 			return row ? { key: aw.key, name: aw.name, emoji: aw.emoji, properties: aw.properties, rank: row.rank } : null;
 		  }));
