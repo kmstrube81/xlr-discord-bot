@@ -685,7 +685,13 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
 
 async function buildAwards(serverIndex, page=0) {
   const offset = page * V_PAGE;
-  const rows   = awards.slice(offset, offset + V_PAGE); // fix here
+  const baseRows = awards.slice(offset, offset + V_PAGE);
+  const rows = await Promise.all(baseRows.map(async (aw) => {
+	  const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
+	  if (top) top.name = await displayName(top, top.name, true);
+	  return { ...aw, top };
+  }));
+
   const total  = awards.length;
 
   const embeds = renderAwardsEmbeds({ rows, page });

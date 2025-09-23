@@ -391,6 +391,15 @@ export function formatAwardsEmbed(rows, title = "Awards") {
 		
 		embed.setDescription(`${emote} **${r.name}**`);
 		embed.addFields( { name : "\u200B", value: r.description } );
+		
+		if (r.top) {
+		  const props = (r.properties || [])
+			.map(p => `**${p.name}:** ${String(r.top[p.prop] ?? "0")}`)
+			.join(" • ");
+		  const leaderName = r.top?.name || "—";
+		  embed.addFields({ name: "\u200B", value: `${leaderName}${props ? " — " + props : ""}` });
+		}
+
 	});
 
 	embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
