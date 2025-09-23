@@ -1005,7 +1005,6 @@ async function handleSlashCommand(i) {
 		const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
 	  
 		if(aw) {
-
 		  // Player rank + metric(s)
 		  const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
 		  const [rankRow] = await runQueryOn(serverIndex, sql, params);
@@ -1026,8 +1025,9 @@ async function handleSlashCommand(i) {
 			  }
 			}
 		  }
+		  const embeds = [head];
 
-		  await i.editReply({ head });
+		  await i.editReply({ embeds });
 		  return;
 		} else { 			
 		  // Compute ranks across all awards, pick best 10
