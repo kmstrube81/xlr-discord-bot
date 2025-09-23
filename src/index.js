@@ -1027,7 +1027,7 @@ async function handleSlashCommand(i) {
 			}
 		  }
 
-		  await i.editReply({ [head] });
+		  await i.editReply({ head });
 		  return;
 		} else { 			
 		  // Compute ranks across all awards, pick best 10
