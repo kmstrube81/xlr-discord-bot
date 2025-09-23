@@ -1004,7 +1004,7 @@ async function handleSlashCommand(i) {
 	  if (awardOpt) {
 		const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
 	  
-		if(aw)
+		if(aw) {
 
 		  // Player rank + metric(s)
 		  const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
