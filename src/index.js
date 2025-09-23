@@ -1004,14 +1004,7 @@ async function handleSlashCommand(i) {
 	  if (awardOpt) {
 		const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
 	  
-		if(aw) {
-		// Top 9 for that award
-		  const topRowsRaw = await runQueryOn(serverIndex, aw.query, [9, 0]);
-		  const topRows = await Promise.all(topRowsRaw.map(async (r, idx) => ({
-			...r,
-			rank: idx + 1,
-			name: (await displayName(r, r.name, true)) || r.name
-		  })));
+		if(aw)
 
 		  // Player rank + metric(s)
 		  const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
@@ -1034,10 +1027,7 @@ async function handleSlashCommand(i) {
 			}
 		  }
 
-		  const list = formatAwardEmbed(topRows, `${aw.name} — Top 10`, aw.emoji, aw.properties, { thumbnail: DEFAULT_THUMB, offset: 0 });
-		  const embeds = [head, ...(Array.isArray(list) ? list : [list])];
-
-		  await i.editReply({ embeds });
+		  await i.editReply({ [head] });
 		  return;
 		} else { 			
 		  // Compute ranks across all awards, pick best 10
