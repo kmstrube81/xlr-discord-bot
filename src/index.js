@@ -1005,8 +1005,8 @@ async function handleSlashCommand(i) {
 		const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
 	  
 		if(aw) {
-		// Top 10 for that award
-		  const topRowsRaw = await runQueryOn(serverIndex, aw.query, [10, 0]);
+		// Top 9 for that award
+		  const topRowsRaw = await runQueryOn(serverIndex, aw.query, [9, 0]);
 		  const topRows = await Promise.all(topRowsRaw.map(async (r, idx) => ({
 			...r,
 			rank: idx + 1,
