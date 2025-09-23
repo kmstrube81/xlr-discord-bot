@@ -779,9 +779,9 @@ const commands = [
     .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)"))
 	.addStringOption(o => {
 	  const opt = o.setName("award").setDescription("Award category to show placement in");
-	  opt.addChoices({name: "Best Placements", value: -1});
+	  opt.addChoices({name: "Best Placements", value: "-1"});
 	  awards.slice(0,24).map((p,i) => {
-		  const ch = {name: p.name, value: i};
+		  const ch = {name: p.name, value: String(i)};
 		  opt.addChoices(ch);
 	  });
 	  return opt;
@@ -1001,8 +1001,8 @@ async function handleSlashCommand(i) {
       if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
       const clientId = matches[0].client_id;
 
-	  if (awardOpt || awardOpt === 0) {
-		const aw = aw === -1 ? false : awards[awardOpt];
+	  if (awardOpt) {
+		const aw = aw === -1 ? false : awards[Integer(awardOpt)];
 	  
 		if(aw) {
 		// Top 10 for that award
