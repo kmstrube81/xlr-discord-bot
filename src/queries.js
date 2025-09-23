@@ -793,6 +793,7 @@ export function awardRank(index, clientId) {
 
 
 export const queries = {
+  awardRank,
   award_headshot,
   award_ratio,
   award_skill,
