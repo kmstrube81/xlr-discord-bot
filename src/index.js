@@ -1014,7 +1014,7 @@ async function handleSlashCommand(i) {
 		  })));
 
 		  // Player rank + metric(s)
-		  const { sql, params } = queries.awardRank(aw.key || aw.name, clientId);
+		  const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
 		  const [rankRow] = await runQueryOn(serverIndex, sql, params);
 		  const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, true)) || (rankRow?.name ?? name);
 
