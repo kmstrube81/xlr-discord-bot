@@ -140,61 +140,71 @@ const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes
 // --- Awards Array ---
 const awards = [
 
-	{ name: "Cracked Aiming Legend",
+	{ key: "award_headshot",
+	  name: "Cracked Aiming Legend",
 	  description: "Most Headshot Kills",
 	  emoji: "death_headshot",
 	  query: queries.award_headshot,
 	  properties: [{name: "Headshots", prop: "kills"}]
 	},
-	{ name: "Probably a Camper",
+	{ key: "award_ratio",
+	  name: "Probably a Camper",
 	  description: "Best Kill-Death Ratio",
 	  emoji: "camper",
 	  query: queries.award_ratio,
 	  properties: [{name: "Kills", prop: "kills"}, {name: "Deaths", prop: "deaths"}, {name: "Kill-Death Ratio", prop: "ratio"}]
 	},
-	{ name: "Touch Grass",
+	{ key: "award_skill",
+	  name: "Touch Grass",
 	  description: "Highest Skill Rating",
 	  emoji: "touchgrass",
 	  query: queries.award_skill,
 	  properties: [{name: "Skill", prop: "skill"}]
 	},
-	{ name: "John Stockton",
+	{ key: "award_assits",
+	  name: "John Stockton",
 	  description: "Most Kill Assists",
 	  emoji: "jumpman",
 	  query: queries.award_assists,
 	  properties: [{name: "Assists", prop: "assists"}]
 	},
-	{ name: "Crete2438g",
+	{ key: "award_melee",
+	  name: "Crete2438g",
 	  description: "Very Nice Bash. (Most Melee Kills)",
 	  emoji: "mod_melee",
 	  query: queries.award_melee,
 	  properties: [{name: "Melee Kills", prop: "kills"}]
 	},
-	{ name: "Team Captain",
+	{ key: "award_deaths",
+	  name: "Team Captain",
 	  description: "Most deaths with a KDR under 1.00",
 	  emoji: "brutalamish",
 	  query: queries.award_deaths,
 	  properties: [{name: "Deaths", prop: "deaths"},{name: "Kill-Death Ratio", prop: "ratio"}]
 	},
-	{ name: "Multiple Personality Disorder",
+	{ key: "award_alias",
+	  name: "Multiple Personality Disorder",
 	  description: "Most Aliases",
 	  emoji: "corgi_fan",
 	  query: queries.award_alias,
 	  properties: [{name: "Aliases", prop: "num_alias"}]
 	},
-	{ name: "Green Thumb",
+	{ key: "award_plant",
+	  name: "Green Thumb",
 	  description: "Most Bomb Plants",
 	  emoji: "plant",
 	  query: queries.award_plant,
 	  properties: [{name: "Bomb Plants", prop: "num_plant"}]
 	},
-	{ name: "Ninja Defuser",
+	{ key: "award_defuse",
+	  name: "Ninja Defuser",
 	  description: "Most Bomb Defusals",
 	  emoji: "defuse",
 	  query: queries.award_defuse,
 	  properties: [{name: "Bomb Defusals", prop: "num_defuse"}]
 	},
-	{ name: "Target(+)Master",
+	{ key: "award_chat",
+	  name: "Target(+)Master",
 	  description: "I'm in position with Katy Perry. (Most chat messages sent)",
 	  emoji: "targetmaster",
 	  query: queries.award_chat,
@@ -766,7 +776,16 @@ const commands = [
     .addStringOption(o => o.setName("weapon").setDescription("Weapon (partial name or exact id)"))
     .addStringOption(o => o.setName("map").setDescription("Map (partial name or exact id)"))
     .addStringOption(o => o.setName("vs").setDescription("Opponent player (partial name)"))
-    .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)")),
+    .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)"))
+	.addStringOption(o => {
+	  const opt = o.setName("award").setDescription("Award category to show placement in");
+	  opt.addChoices({name: "Best Placements", value: -1});
+	  awards.slice(0,24).map((p,i) => ({
+		  const ch = {name: p.name, value: i};
+		  opt.addChoices(ch);
+	  }));
+	  return opt;
+	}),
   new SlashCommandBuilder()
     .setName("xlr-lastseen")
     .setDescription("Show recently seen players")
@@ -974,10 +993,81 @@ async function handleSlashCommand(i) {
       const weaponOpt = i.options.getString("weapon");
       const mapOpt = i.options.getString("map");
       const vsName = i.options.getString("vs");
+	  const awardOpt = i.options.getString("award");
+	  
+	  let aw;
 
       const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
       if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
       const clientId = matches[0].client_id;
+
+	  if (awardOpt || awardOpt === 0) {
+		const aw = aw === -1 ? false : awards[awardOpt];
+	  
+		if(aw) {
+		// Top 10 for that award
+		  const topRowsRaw = await runQueryOn(serverIndex, aw.query, [10, 0]);
+		  const topRows = await Promise.all(topRowsRaw.map(async (r, idx) => ({
+			...r,
+			rank: idx + 1,
+			name: (await displayName(r, r.name, true)) || r.name
+		  })));
+
+		  // Player rank + metric(s)
+		  const { sql, params } = queries.awardRank(aw.key || aw.name, clientId);
+		  const [rankRow] = await runQueryOn(serverIndex, sql, params);
+		  const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, true)) || (rankRow?.name ?? name);
+
+		  const emote = resolveEmoji(aw.emoji) ?? "";
+
+		  const head = new EmbedBuilder()
+			.setColor(0x32d296)
+			.setTitle(`${emote} ${aw.name} — ${playerName}`)
+			.setDescription(rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "_No placement yet_")
+			.setFooter({ text: "XLRStats • B3" });
+
+		  if (rankRow) {
+			for (const p of (aw.properties || [])) {
+			  if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
+				head.addFields({ name: p.name, value: String(rankRow[p.prop]), inline: true });
+			  }
+			}
+		  }
+
+		  const list = formatAwardEmbed(topRows, `${aw.name} — Top 10`, aw.emoji, aw.properties, { thumbnail: DEFAULT_THUMB, offset: 0 });
+		  const embeds = [head, ...(Array.isArray(list) ? list : [list])];
+
+		  await i.editReply({ embeds });
+		  return;
+		} else { 			
+		  // Compute ranks across all awards, pick best 10
+		  const ranks = await Promise.all(awards.map(async (aw) => {
+			const { sql, params } = queries.awardRank(aw.key || aw.name, clientId);
+			const [row] = await runQueryOn(serverIndex, sql, params);
+			return row ? { key: aw.key, name: aw.name, emoji: aw.emoji, properties: aw.properties, rank: row.rank } : null;
+		  }));
+		  const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank).slice(0, 10);
+		  const titleName = (await displayName({ discord_id: matches[0]?.discord_id }, matches[0]?.name, true)) || matches[0]?.name;
+
+		  const emb = new EmbedBuilder()
+			.setColor(0x32d296)
+			.setTitle(`🏆 Best Award Placements — ${titleName}`)
+			.setFooter({ text: "XLRStats • B3" });
+
+		  if (!top10.length) {
+			emb.setDescription("_No placements yet_");
+		  } else {
+			const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
+			emb.setDescription(lines.join("\n"));
+		  }
+
+		  // ⬇️ clickable "Award" select
+		  await i.editReply({ embeds: [emb] });
+		  return;
+			
+		}
+		
+	  }
 
       if (weaponOpt) {
         const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
