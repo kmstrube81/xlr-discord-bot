@@ -608,6 +608,190 @@ export const award_chat = `
   LIMIT ? OFFSET ?
 `;
 
+// --- Award rank builders ---
+export function awardRank(index, clientId) {
+  const array = [ {
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pb.kills) AS kills
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN ${PLAYERBODY} pb ON pb.player_id = c.id
+            WHERE pb.bodypart_id = (SELECT id FROM xlr_bodyparts WHERE name='head')
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.kills,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.kills > me.kills) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH agg AS (
+            SELECT s.client_id,
+                   SUM(s.kills) AS kills,
+                   SUM(s.deaths) AS deaths
+            FROM ${PLAYERSTATS} s
+            GROUP BY s.client_id
+            HAVING (SUM(s.kills) + SUM(s.deaths)) >= 20
+          ),
+          per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   agg.kills, agg.deaths,
+                   CASE WHEN agg.deaths=0 THEN agg.kills ELSE ROUND(agg.kills/agg.deaths,2) END AS ratio
+            FROM agg
+            JOIN clients c ON c.id = agg.client_id
+            ${preferredAliasJoin("a","c.id")}
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.kills, me.deaths, me.ratio,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.ratio > me.ratio) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   MAX(s.skill) AS skill
+            FROM ${PLAYERSTATS} s
+            JOIN clients c ON c.id = s.client_id
+            ${preferredAliasJoin("a","c.id")}
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.skill,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.skill > me.skill) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(s.assists) AS assists
+            FROM ${PLAYERSTATS} s
+            JOIN clients c ON c.id = s.client_id
+            ${preferredAliasJoin("a","c.id")}
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.assists,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.assists > me.assists) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(wu.kills) AS kills
+            FROM xlr_weaponusage wu
+            JOIN xlr_weaponstats w ON w.id = wu.weapon_id
+            JOIN clients c ON c.id = wu.player_id
+            ${preferredAliasJoin("a","c.id")}
+            WHERE w.name = 'mod_melee'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.kills,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.kills > me.kills) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH agg AS (
+            SELECT client_id, SUM(kills) AS kills, SUM(deaths) AS deaths
+            FROM ${PLAYERSTATS}
+            GROUP BY client_id
+          ),
+          per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   agg.kills, agg.deaths,
+                   CASE WHEN agg.deaths=0 THEN agg.kills ELSE agg.kills/agg.deaths END AS ratio
+            FROM agg
+            JOIN clients c ON c.id = agg.client_id
+            ${preferredAliasJoin("a","c.id")}
+            WHERE (agg.deaths > 0) AND (CASE WHEN agg.deaths=0 THEN agg.kills ELSE agg.kills/agg.deaths END) < 1.0
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.kills, me.deaths, ROUND(me.ratio,2) AS ratio,
+                 1 + (SELECT COUNT(*) FROM per p WHERE (p.deaths > me.deaths) OR (p.deaths = me.deaths AND p.kills < me.kills)) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(al.alias) AS num_alias
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN aliases al ON al.client_id = c.id
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.num_alias,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.num_alias > me.num_alias) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_plant
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN xlr_playeractions pa ON pa.player_id = c.id
+            JOIN xlr_actionstats act ON act.id = pa.action_id
+            WHERE act.name = 'bomb_plant'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.num_plant,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.num_plant > me.num_plant) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_defuse
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN xlr_playeractions pa ON pa.player_id = c.id
+            JOIN xlr_actionstats act ON act.id = pa.action_id
+            WHERE act.name = 'bomb_defuse'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.num_defuse,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.num_defuse > me.num_defuse) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(*) AS num_chat
+            FROM chatlog ch
+            JOIN clients c ON c.id = ch.client_id
+            ${preferredAliasJoin("a","c.id")}
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.num_chat,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.num_chat > me.num_chat) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      }];
+	  
+	  return array[index];
+}
+
+
+
+
 export const queries = {
   award_headshot,
   award_ratio,
