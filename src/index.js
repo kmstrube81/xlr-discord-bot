@@ -780,10 +780,10 @@ const commands = [
 	.addStringOption(o => {
 	  const opt = o.setName("award").setDescription("Award category to show placement in");
 	  opt.addChoices({name: "Best Placements", value: -1});
-	  awards.slice(0,24).map((p,i) => ({
+	  awards.slice(0,24).map((p,i) => {
 		  const ch = {name: p.name, value: i};
 		  opt.addChoices(ch);
-	  }));
+	  });
 	  return opt;
 	}),
   new SlashCommandBuilder()
