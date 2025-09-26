@@ -28,30 +28,46 @@ function sanitize(name) {
 }
 
 export function formatPlayerEmbed(p, opts = {}) {
-  const { thumbnail } = opts;
+  const { thumbnail, title } = opts;
+
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
-  const favWeapEmoji = resolveEmoji(p.fav);
-  const favWeap = favWeapEmoji ? `${favWeapEmoji} ${p.fav}` : p.fav;
-  return new EmbedBuilder().
-	setColor(0x2b7cff).
-    setTitle(`**${p.name}**`).
-	setThumbnail(thumbnail).
-    addFields(
+  const favEmoji = resolveEmoji(p.fav);
+  const favWeap = p.fav ? (favEmoji ? `${favEmoji} ${p.fav}` : p.fav) : "—";
+
+  // New: WL totals + WaWa totals
+  const wins       = Number(p.wins ?? 0);
+  const losses     = Number(p.losses ?? 0);
+  const games      = wins + losses;
+  const winPct     = games ? ((wins / games) * 100).toFixed(1) : "0.0";
+  const wawaWins   = Number(p.wawa_wins ?? 0);
+  const wawaLosses = Number(p.wawa_losses ?? 0);
+  const wagames      = wawaWins + wawaLosses;
+  const wawinPct     = wagames ? ((wawaWins / wagames) * 100).toFixed(1) : "0.0";
+  return new EmbedBuilder()
+    .setColor(0x2b7cff)
+    .setThumbnail(thumbnail)
+    .setDescription(title ?? `**${displayName(p)}**`)
+    .addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
-	  { name: "Fav Weapon", value: String( favWeap ?? "—"), inline: true },
-	  { name: "Nemesis", value: p.nemesis ? `${p.nemesis}${typeof p.nemesis_kills === "number" ? ` (${p.nemesis_kills})` : ""}` : "—", inline: true },
-      { name: "Kills", value: `${p.kills ?? 0}`, inline: true },
-	  { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
-      { name: "KDR", value: String(kd), inline: true },
-	  { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
-	  { name: "Assists", value: String(p.assists ?? 0), inline: true },
-	  { name: "Deaths", value: String(p.deaths ?? 0), inline: true },
+      { name: "Kills", value: String(p.kills ?? 0), inline: true },
+      { name: "Kill-Death Ratio", value: String(kd), inline: true },
+
+      { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
+      { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
+      { name: "Assists", value: String(p.assists ?? 0), inline: true },
+
+      { name: "Deaths", value: String(p.deaths ?? 0), inline: true },
       { name: "Rounds Played", value: `${p.rounds ?? 0}`, inline: true },
+      { name: "Favorite Weapon", value: favWeap, inline: true },
+
+      { name: "W-L (Win%)", value: `${wins}-${losses} (${winPct}%)`, inline: true },
+      { name: "wawa W-L (Win%)", value: `${wawaWins}-${wawaLosses}(${winPct}%) `, inline: true },
       { name: "Connections", value: String(p.connections ?? 0), inline: true },
+
       { name: "Last Seen", value: lastSeen, inline: true }
-    ).
-    setFooter({ text: "XLRStats • B3" });
+    )
+    .setFooter({ text: "XLRStats • B3" });
 }
 
 export function formatPlayerWeaponEmbed(row, opts = {}) {
@@ -77,16 +93,25 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
 
 export function formatPlayerVsEmbed(row, opts = {}) {
   const { thumbnail } = opts;
+
+  const pWw = Number(row.player_wawa_wins ?? 0);
+  const pWl = Number(row.player_wawa_losses ?? 0);
+
   return new EmbedBuilder()
     .setColor(0x2b7cff)
     .setDescription(`**${row.player_name}** vs. **${row.opponent_name}**`)
-	.setThumbnail(thumbnail)
+    .setThumbnail(thumbnail)
     .addFields(
       { name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
       { name: "Skill", value: String(row.player_skill ?? "—"), inline: true },
       { name: "\u200B", value: "\u200B", inline: true },
+
       { name: "Killed By", value: String(row.deaths_vs ?? 0), inline: true },
       { name: "Opponent Skill", value: String(row.opp_skill ?? "—"), inline: true },
+      { name: "\u200B", value: "\u200B", inline: true },
+
+      // New: head-to-head WaWa lines
+      { name: "wawa record", value: `${pWw}-${pWl}`, inline: true },
       { name: "\u200B", value: "\u200B", inline: true }
     )
     .setFooter({ text: "XLRStats • B3" });
@@ -98,6 +123,10 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
     ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
     : "—";
   const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
+  const wins       = Number(p.wins ?? 0);
+  const losses     = Number(p.losses ?? 0);
+  const games      = wins + losses;
+  const winPct     = games ? ((wins / games) * 100).toFixed(1) : "0.0";
 
   return new EmbedBuilder()
     .setColor(0x2b7cff)
@@ -109,84 +138,55 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
 	  { name: "Kill-Death Ratio", value: String(kd), inline: true },
       { name: "Deaths", value: String(row.deaths ?? 0), inline: true },
       { name: "Suicides", value: String(row.suicides ?? 0), inline: true },
+	  { name: "W-L (Win%)", value: `${wins}-${losses} (${winPct}%)`, inline: true },
       { name: "Rounds Played", value: String(row.rounds ?? 0), inline: true }
     )
     .setFooter({ text: "XLRStats • B3 • " + (lastSeen === "—" ? "last seen unknown" : `last seen ${lastSeen}`) });
 }
 
 export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
-  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
+  const { thumbnail, offset = 0 } = opts;
 
-  const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(title)
-  ];
+  const embeds = [ new EmbedBuilder().setColor(0x32d296).setTitle(title) ];
 
   rows.map((r, i) => {
-	  
-    let embed;
-	
-	if(i === 0) {
-		
-		embed = embeds[0];
-		
-	} else {
-		
-		embed = new EmbedBuilder()
-			.setColor(0x32d296);
-		embeds.push(embed);
-		
-	}
-	
+    const embed = embeds[embeds.length - 1];
     const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
-    const medals = ["🥇", "🥈", "🥉"];
 
-    const absoluteIndex = offset + i;               // <— absolute rank
-    let rankDisplay;
-    if (absoluteIndex < 3) {                        // medals only for 1–3 overall
-      rankDisplay = medals[absoluteIndex];
-    } else {
-      rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
-    }
+    const medals = ["🥇", "🥈", "🥉"];
+    const absoluteIndex = offset + i;
+    const rankDisplay = absoluteIndex < 3 ? medals[absoluteIndex] : `#${absoluteIndex + 1}.`;
 
     embed.setDescription(`**${rankDisplay} ${r.name}**`);
-  embed.addFields(
-		{
-			name : `Skill`,
-			value : String(r.skill),
-			inline : true
-		},
-		{
-			name : `Kill-Death Ratio`,
-			value : String(kd),
-			inline : true
-		},
-		{
-			name : `Kills`,
-			value : String(r.kills),
-			inline : true
-		},
-		{
-			name : `Deaths`,
-			value : String(r.deaths),
-			inline : true
-		}
-	);
-        // append extra stats when present
-    if (r.suicides) embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
-    if (r.assists)  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
-    if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
+    embed.addFields(
+      { name: "Skill", value: String(r.skill), inline: true },
+      { name: "Kill-Death Ratio", value: String(kd), inline: true },
+      { name: "Kills", value: String(r.kills), inline: true },
+      { name: "Deaths", value: String(r.deaths), inline: true },
+      { name: "Assists", value: String(r.assists ?? 0), inline: true },
+      { name: "Suicides", value: String(r.suicides ?? 0), inline: true },
+      { name: "Rounds Played", value: String(r.rounds ?? 0), inline: true },
+    );
 
+    // New: show WL if present on this row
+    if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
+      const w = Number(r.wins || 0), l = Number(r.losses || 0);
+      const gp = w + l;
+      const pct = gp ? ((w / gp) * 100).toFixed(1) : "0.0";
+      embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct}%)`, inline: true });
+    }
+    if (typeof r.wawa_wins !== "undefined" && typeof r.wawa_losses !== "undefined") {
+      const w = Number(r.wawa_wins || 0), l = Number(r.wawa_losses || 0);
+      const gp = w + l;
+      const pct = gp ? ((w / gp) * 100).toFixed(1) : "0.0";
+      embed.addFields({ name: "wawa W-L (Win%)", value: `${w}-${l} (${pct}%)`, inline: true });
+	}
+
+    if (r.thumbnail) embed.setThumbnail(r.thumbnail);
   });
 
-  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
-  if (thumbnail) {
-    embeds[0].setThumbnail(thumbnail);
-  }
-  
-  if(!rows.length) {
-	embeds[0].setDescription("_No players found_");
-  }
+  embeds[embeds.length - 1].setFooter({ text: "XLRStats • B3" });
+  if (!rows.length) embeds[0].setDescription("_No maps found_");
   return embeds;
 }
 
@@ -291,6 +291,13 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset =
 			inline : true
 		}
 	);
+	
+	if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
+      const w = Number(r.wins || 0), l = Number(r.losses || 0);
+      const gp = w + l;
+      const pct = gp ? ((w / gp) * 100).toFixed(1) : "0.0";
+      embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct}%)`, inline: true });
+    }
 	
 	if (r.thumbnail) {
 		embed.setThumbnail(r.thumbnail);

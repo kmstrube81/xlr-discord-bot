@@ -99,6 +99,8 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
              s.skill AS skill,
              pm.kills AS kills,
              pm.deaths AS deaths,
+			 pm.wins,
+             pm.losses,
              CASE WHEN pm.deaths=0 THEN pm.kills ELSE ROUND(pm.kills / pm.deaths, 2) END AS ratio,
              pm.suicides AS suicides,
              NULL AS assists,
@@ -122,25 +124,31 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
 
   } else {
     select = `
-      SELECT c.id AS client_id,
-             COALESCE(a.alias, c.name) AS name,
-      c.discord_id AS discord_id,
-           c.discord_id AS discord_id,
-      c.discord_id AS discord_id,
-           c.discord_id AS discord_id,
-             s.skill,
-             s.kills,
-             s.deaths,
-             CASE WHEN s.deaths=0 THEN s.kills ELSE ROUND(s.kills/s.deaths, 2) END AS ratio,
-             s.suicides,
-             s.assists,
-             s.rounds,
-             NULL AS matched_label
+      SELECT
+        c.id AS client_id,
+        COALESCE(a.alias, c.name) AS name,
+        c.discord_id AS discord_id,
+        s.skill,
+        s.kills,
+        s.deaths,
+        CASE WHEN s.deaths = 0 THEN s.kills ELSE ROUND(s.kills / s.deaths, 2) END AS ratio,
+        s.suicides,
+        s.assists,
+        s.rounds,
+        s.wins,
+        s.losses,
+        s.wawa_wins,
+        s.wawa_losses,
+        NULL AS matched_label
     `;
     from = `FROM ${PLAYERSTATS} s`;
-    joins = nameJoin;
+    joins = `
+      JOIN clients c ON c.id = s.client_id
+      ${preferredAliasJoin("a", "c.id")}
+    `;
     where = `WHERE (s.kills > 0 OR s.deaths > 0 OR s.assists > 0)`;
   }
+
 
   const sql = `
     ${select}
@@ -194,24 +202,30 @@ function ui_ladderSlice(limit = 10, offset = 0) {
       c.id AS client_id,
       COALESCE(a.alias, c.name) AS name,
       c.discord_id AS discord_id,
-      c.discord_id AS discord_id,
-           c.discord_id AS discord_id,
       agg.skill,
       agg.kills,
       agg.deaths,
       CASE WHEN agg.deaths = 0 THEN agg.kills ELSE ROUND(agg.kills / agg.deaths, 2) END AS ratio,
       agg.suicides,
       agg.assists,
-      agg.rounds
+      agg.rounds,
+      agg.wins,
+      agg.losses,
+      agg.wawa_wins,
+      agg.wawa_losses
     FROM (
       SELECT
         s.client_id,
-        SUM(s.kills)    AS kills,
-        SUM(s.deaths)   AS deaths,
-        SUM(s.suicides) AS suicides,
-        SUM(s.assists)  AS assists,
-        SUM(s.rounds)   AS rounds,
-        MAX(s.skill)    AS skill
+        SUM(s.kills)        AS kills,
+        SUM(s.deaths)       AS deaths,
+        SUM(s.suicides)     AS suicides,
+        SUM(s.assists)      AS assists,
+        SUM(s.rounds)       AS rounds,
+        SUM(s.wins)         AS wins,
+        SUM(s.losses)       AS losses,
+        SUM(s.wawa_wins)    AS wawa_wins,
+        SUM(s.wawa_losses)  AS wawa_losses,
+        MAX(s.skill)        AS skill
       FROM ${PLAYERSTATS} s
       GROUP BY s.client_id
       HAVING (SUM(s.kills) > 0 OR SUM(s.deaths) > 0 OR SUM(s.assists) > 0)
@@ -838,13 +852,11 @@ export const queries = {
   `,
 
   // Detailed line for a single player, extended with fav weapon, assists, and nemesis
-  playerCard: `
+    playerCard: `
     SELECT
       c.id AS client_id,
       COALESCE(a.alias, c.name) AS name,
       c.discord_id AS discord_id,
-      c.discord_id AS discord_id,
-           c.discord_id AS discord_id,
       s.skill, s.kills, s.deaths,
       s.rounds,
       s.winstreak, s.losestreak,
@@ -854,7 +866,11 @@ export const queries = {
       COALESCE(ka.alias, kc.name) AS nemesis,
       nem.kills AS nemesis_kills,
       c.connections,
-      c.time_add, c.time_edit
+      c.time_add, c.time_edit,
+      s.wins,
+      s.losses,
+      s.wawa_wins,
+      s.wawa_losses
     FROM clients c
     JOIN ${PLAYERSTATS} s
       ON s.client_id = c.id
@@ -862,9 +878,7 @@ export const queries = {
     LEFT JOIN (
       SELECT player_id, SUM(kills) AS headshots
       FROM ${PLAYERBODY}
-      WHERE bodypart_id = (SELECT id
-     FROM xlr_bodyparts
-    WHERE name = 'head')
+      WHERE bodypart_id = (SELECT id FROM xlr_bodyparts WHERE name = 'head')
       GROUP BY player_id
     ) pb ON pb.player_id = c.id
 
@@ -893,6 +907,7 @@ export const queries = {
     WHERE c.id = ?
     LIMIT 1
   `,
+
 
   // Player + specific weapon usage (weapon resolved by LIKE or exact id)
   playerWeaponCard: `
@@ -935,6 +950,8 @@ export const queries = {
       pm.kills,
       pm.deaths,
       pm.suicides,
+	  pm.wins,
+	  pm.losses,
       pm.rounds,
       c.time_edit
     FROM clients c
@@ -955,7 +972,7 @@ export const queries = {
   `,
 
   // Player vs Opponent head-to-head summary from xlr_opponents
-  playerVsCard: `
+    playerVsCard: `
     SELECT
       p.id  AS player_id,
       COALESCE(pa.alias, p.name) AS player_name,
@@ -964,10 +981,16 @@ export const queries = {
       o.id  AS opponent_id,
       COALESCE(oa.alias, o.name) AS opponent_name,
       so.skill AS opp_skill,
-	  o.discord_id AS opponent_discord_id,
+      o.discord_id AS opponent_discord_id,
 
       COALESCE(kp.kills_vs, 0) AS kills_vs,
-      COALESCE(ko.kills_vs, 0) AS deaths_vs
+      COALESCE(ko.kills_vs, 0) AS deaths_vs,
+
+      COALESCE(kp.wawa_wins_vs,   0) AS player_wawa_wins,
+      COALESCE(kp.wawa_losses_vs, 0) AS player_wawa_losses,
+
+      COALESCE(ko.wawa_wins_vs,   0) AS opp_wawa_wins,
+      COALESCE(ko.wawa_losses_vs, 0) AS opp_wawa_losses
 
     FROM clients p
     JOIN ${PLAYERSTATS} sp ON sp.client_id = p.id
@@ -975,14 +998,22 @@ export const queries = {
     JOIN clients o ON o.id = ?
     LEFT JOIN ${PLAYERSTATS} so ON so.client_id = o.id
 
+    /* player -> opponent */
     LEFT JOIN (
-      SELECT SUM(kills) AS kills_vs
+      SELECT
+        SUM(kills)       AS kills_vs,
+        SUM(wawa_wins)   AS wawa_wins_vs,
+        SUM(wawa_losses) AS wawa_losses_vs
       FROM xlr_opponents
       WHERE killer_id = ? AND target_id = ?
     ) kp ON 1=1
 
+    /* opponent -> player */
     LEFT JOIN (
-      SELECT SUM(kills) AS kills_vs
+      SELECT
+        SUM(kills)       AS kills_vs,
+        SUM(wawa_wins)   AS wawa_wins_vs,
+        SUM(wawa_losses) AS wawa_losses_vs
       FROM xlr_opponents
       WHERE killer_id = ? AND target_id = ?
     ) ko ON 1=1
@@ -993,6 +1024,7 @@ export const queries = {
     WHERE p.id = ?
     LIMIT 1
   `,
+
 
   // Recently seen players (from clients)
   lastSeen: `
