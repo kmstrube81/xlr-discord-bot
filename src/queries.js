@@ -986,11 +986,11 @@ export const queries = {
       COALESCE(kp.kills_vs, 0) AS kills_vs,
       COALESCE(ko.kills_vs, 0) AS deaths_vs,
 
-      COALESCE(kp.wawa_wins_vs,   0) AS player_wawa_wins,
-      COALESCE(kp.wawa_losses_vs, 0) AS player_wawa_losses,
+      COALESCE(ko.wawa_wins_vs,   0) AS player_wawa_wins,
+      COALESCE(ko.wawa_losses_vs, 0) AS player_wawa_losses,
 
-      COALESCE(ko.wawa_wins_vs,   0) AS opp_wawa_wins,
-      COALESCE(ko.wawa_losses_vs, 0) AS opp_wawa_losses
+      COALESCE(kp.wawa_wins_vs,   0) AS opp_wawa_wins,
+      COALESCE(kp.wawa_losses_vs, 0) AS opp_wawa_losses
 
     FROM clients p
     JOIN ${PLAYERSTATS} sp ON sp.client_id = p.id
