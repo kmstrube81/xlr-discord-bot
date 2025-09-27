@@ -121,7 +121,7 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
-    .setDescription(title ?? `**${displayName(row)}** on **${row.map}**`)
+    .setDescription(title ?? `**${row.name}** on **${row.map}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Kills", value: String(row.kills ?? 0), inline: true },
