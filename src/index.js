@@ -1080,7 +1080,7 @@ async function handleSlashCommand(i) {
 		);
 		let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
-        const embed = formatPlayerMapEmbed(rows2[0], { thumbnail: thumbUrl });
+        const embed = formatPlayerMapEmbed(rows2[0], null, { thumbnail: thumbUrl });
         return i.editReply({ embeds: [embed] });
       }
 
