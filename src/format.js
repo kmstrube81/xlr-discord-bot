@@ -113,8 +113,8 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
     ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
     : "—";
   const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
-  const wins       = Number(p.wins ?? 0);
-  const losses     = Number(p.losses ?? 0);
+  const wins       = Number(row.wins ?? 0);
+  const losses     = Number(row.losses ?? 0);
   const games      = wins + losses;
   const winPct     = games ? (wins / games).toFixed(3) : ".000";
 
