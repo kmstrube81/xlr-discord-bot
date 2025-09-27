@@ -318,15 +318,15 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset =
 			name : `Suicides`,
 			value : String(r.suicides),
 			inline : true
-		},
-		
+		}
+	);	
 		if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
 		  const w = Number(r.wins || 0), l = Number(r.losses || 0);
 		  const gp = w + l;
 		  const pct = gp ? ((w / gp)).toFixed(3) : ".000";
 		  embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
 		}
-	);
+	
 	embed.addFields(
 		{
 			name : `Rounds Played`,
