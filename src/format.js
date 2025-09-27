@@ -202,10 +202,10 @@ export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
       embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
     }
     if (typeof r.wawa_wins !== "undefined" && typeof r.wawa_losses !== "undefined") {
-      const w = Number(r.waw_wins || 0), l = Number(r.wawa_losses || 0);
+      const w = Number(r.wawa_wins || 0), l = Number(r.wawa_losses || 0);
       const gp = w + l;
       const pct = gp ? ((w / gp)).toFixed(3) : ".000";
-      embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
+      embed.addFields({ name: "wawa W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
     }
 	
     if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
