@@ -11,7 +11,8 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  AttachmentBuilder
 } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
@@ -31,6 +32,12 @@ import {
   setEmojiResolver,
   resolveEmoji
 } from "./format.js";
+import {
+  generateBanner,
+  BACKGROUNDS,
+  EMBLEMS,
+  CALLSIGNS
+} from "./banner.js";
 import axios from "axios";
 import path from "node:path";
 import fs from "node:fs";
@@ -799,6 +806,37 @@ const commands = [
     .setDescription("Link your Discord user to a B3 GUID")
     .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
     .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
+   new SlashCommandBuilder()
+    .setName("xlr-banner")
+    .setDescription("Generate a 256x64 profile banner with emblem + text rows")
+    .addIntegerOption(o => o
+      .setName("background")
+      .setDescription("Background index (arrays in banner.js)")
+      .setRequired(true))
+    .addIntegerOption(o => o
+      .setName("emblem")
+      .setDescription("Emblem index (arrays in banner.js)")
+      .setRequired(true))
+    .addIntegerOption(o => o
+      .setName("callsign")
+      .setDescription("Callsign index (arrays in banner.js)")
+      .setRequired(true))
+    .addStringOption(o => o
+      .setName("name")
+      .setDescription("Player name (row 2)")
+      .setRequired(true))
+    .addIntegerOption(o => o
+      .setName("kills")
+      .setDescription("Kills value")
+      .setRequired(true))
+    .addIntegerOption(o => o
+      .setName("deaths")
+      .setDescription("Deaths value")
+      .setRequired(true))
+    .addNumberOption(o => o
+      .setName("skill")
+      .setDescription("Skill rating")
+      .setRequired(true))
 ].map(c => c.toJSON());
 
 async function register() {
@@ -1143,6 +1181,51 @@ async function handleSlashCommand(i) {
       }
       return;
     }
+
+    if (i.commandName === "xlr-banner") {
+      await i.deferReply();
+
+      try {
+        // Pull options
+        const background = i.options.getInteger("background", true);
+        const emblem     = i.options.getInteger("emblem", true);
+        const callsign   = i.options.getInteger("callsign", true);
+        const name       = i.options.getString("name", true);
+        const kills      = i.options.getInteger("kills", true);
+        const deaths     = i.options.getInteger("deaths", true);
+        const skill      = i.options.getNumber("skill", true);
+
+        // Quick sanity hints if arrays are empty
+        if (!BACKGROUNDS.length) {
+          return i.editReply("No backgrounds configured. Add file paths to BACKGROUNDS[] in banner.js.");
+        }
+        if (!EMBLEMS.length) {
+          return i.editReply("No emblems configured. Add file paths to EMBLEMS[] in banner.js.");
+        }
+        if (!CALLSIGNS.length) {
+          return i.editReply("No callsigns configured. Add phrases to CALLSIGNS[] in banner.js.");
+        }
+
+        const { buffer, filename } = await generateBanner({
+          background,
+          emblem,
+          callsign,
+          playerName: name,
+          kills,
+          deaths,
+          skill
+        });
+
+        const file = new AttachmentBuilder(buffer, { name: filename });
+        await i.editReply({ files: [file] });
+      } catch (err) {
+        console.error("[xlr-banner] error:", err);
+        await i.editReply(`Banner generation failed: ${err.message || "unknown error"}`);
+      }
+      return;
+    }
+
+	
   } catch (err) {
     console.error("[slash] error:", err);
     if (i.deferred || i.replied) {
