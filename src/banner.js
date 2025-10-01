@@ -90,6 +90,15 @@ export const CALLSIGNS = [
 	"Target(+)Master"
 ];
 
+const FONT_STACK_MONO = [
+  "Courier New",       // Windows/macOS (if present)
+  "Courier",
+  "Liberation Mono",   // Debian/Ubuntu package
+  "DejaVu Sans Mono",  // Alpine/Debian package
+  "monospace"
+];
+
+
 // Canvas constants (pixels)
 const WIDTH = 256;
 const HEIGHT = 64;
@@ -108,16 +117,23 @@ const FILL = "#ffffff";
 const STROKE = "rgba(0,0,0,0.9)";
 const SHADOW_BLUR = 0;
 
-// Helpers: picks a font size that fits given text within maxWidth, using a fallback family.
-function fitText(ctx, text, family, weight, maxWidth, startPx, minPx = 8) {
-  let size = startPx;
-  for (; size >= minPx; size--) {
-    ctx.font = `${weight} ${size}px "${family}", system-ui, -apple-system, Segoe UI, Arial, sans-serif`;
-    if (ctx.measureText(text).width <= maxWidth) break;
-  }
-  if (size < minPx) size = minPx;
-  ctx.font = `${weight} ${size}px "${family}", system-ui, -apple-system, Segoe UI, Arial, sans-serif`;
-  return size;
+function fontFamilyString(families) {
+   if (Array.isArray(families)) {
+     return families.map(f => (/\s/.test(f) ? `"${f}"` : f)).join(", ");
+   }
+   return families;
+}
+
+function fitText(ctx, text, families, weight, maxWidth, startPx, minPx = 8) {
+   const familyStr = fontFamilyString(families);
+    let size = startPx;
+    for (; size >= minPx; size--) {
+     ctx.font = `${weight} ${size}px ${familyStr}`;
+      if (ctx.measureText(text).width <= maxWidth) break;
+    }
+    if (size < minPx) size = minPx;
+	ctx.font = `${weight} ${size}px ${familyStr}`;
+    return size;
 }
 
 function sanitize(str) {
@@ -188,7 +204,7 @@ export async function generateBanner(opts) {
   // Row 1: Callsign — centered within left 192 px, 2px from top
   // Fit text to TEXT_BOX_WIDTH minus a little padding
   const maxRow1Width = TEXT_BOX_WIDTH - 8;
-  fitText(ctx, csText, "Courier New", "700", maxRow1Width, 16); // try up to 16px
+  fitText(ctx, csText, FONT_STACK_MONO, "700", maxRow1Width, 16); // try up to 16px
   const csMetrics = ctx.measureText(csText);
   const csX = Math.round((TEXT_BOX_WIDTH - csMetrics.width) / 2);
   const csBaseline = ROW1_Y + Math.ceil(csMetrics.actualBoundingBoxAscent);
@@ -198,7 +214,7 @@ export async function generateBanner(opts) {
   // Row 2: Player name — left-justified at x=4, y=20
   // Fit name in (TEXT_BOX_WIDTH - LEFT_X - 2)
   const maxRow2Width = TEXT_BOX_WIDTH - LEFT_X - 2;
-  fitText(ctx, name, "Courier New", "700", maxRow2Width, 16); // bold-ish
+  fitText(ctx, name, FONT_STACK_MONO, "700", maxRow2Width, 16); // bold-ish
   const nameMetrics = ctx.measureText(name);
   const nameBaseline = ROW2_Y + Math.ceil(nameMetrics.actualBoundingBoxAscent / 2);
   ctx.strokeText(name, LEFT_X, nameBaseline);
@@ -207,7 +223,7 @@ export async function generateBanner(opts) {
   // Row 3: Stats — "K: x  D: x  S: x" left-justified at x=4, y=40
   const stats = `K: ${Number(kills) || 0}  D: ${Number(deaths) || 0}  S: ${Number(skill) || 0}`;
   const maxRow3Width = TEXT_BOX_WIDTH - LEFT_X - 2;
-  fitText(ctx, stats, "Courier New", "600", maxRow3Width, 14); // slightly smaller
+  fitText(ctx, stats, FONT_STACK_MONO, "600", maxRow3Width, 14); // slightly smaller
   const stMetrics = ctx.measureText(stats);
   const stBaseline = ROW3_Y + Math.ceil(stMetrics.actualBoundingBoxAscent / 2);
   ctx.strokeText(stats, LEFT_X, stBaseline);
