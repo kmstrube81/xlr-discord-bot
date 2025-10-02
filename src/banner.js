@@ -108,8 +108,8 @@ const TEXT_BOX_WIDTH = EMBLEM_X;   // left 192 px reserved for text
 
 // Text rows/padding
 const ROW1_Y = 2;   // callsign top padding (row 1)
-const ROW2_Y = 20;  // player name baseline-ish (row 2)
-const ROW3_Y = 40;  // stats baseline-ish (row 3)
+const ROW2_Y = 30;  // player name baseline-ish (row 2)
+const ROW3_Y = 50;  // stats baseline-ish (row 3)
 const LEFT_X  = 4;  // left padding for rows 2 & 3
 
 // Colors
