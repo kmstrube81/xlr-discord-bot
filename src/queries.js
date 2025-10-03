@@ -59,7 +59,7 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
   if (weapon) {
     select = `
       SELECT c.id AS client_id,
-             COALESCE(a.alias, c.name) AS name,
+             COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
       c.discord_id AS discord_id,
@@ -91,7 +91,7 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
   } else if (map) {
     select = `
       SELECT c.id AS client_id,
-             COALESCE(a.alias, c.name) AS name,
+             COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
       c.discord_id AS discord_id,
@@ -126,7 +126,7 @@ export function topDynamic({ limit, sort = "skill", weapon = null, map = null })
     select = `
       SELECT
         c.id AS client_id,
-        COALESCE(a.alias, c.name) AS name,
+        COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
         c.discord_id AS discord_id,
         s.skill,
         s.kills,
@@ -200,7 +200,7 @@ function ui_ladderSlice(limit = 10, offset = 0) {
   const sql = `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       agg.skill,
       agg.kills,
@@ -242,7 +242,7 @@ function ui_playerWeaponSlice(weapon, limit = 10, offset = 0) {
   const sql = `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
@@ -299,7 +299,7 @@ function ui_playerMapsSlice(map, limit = 10, offset = 0) {
   const sql = `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
@@ -443,7 +443,7 @@ export const registerDiscordByGuid = `UPDATE clients SET discord_id = ? WHERE gu
 export const award_headshot = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     hs.kills AS kills
   FROM clients c
@@ -462,7 +462,7 @@ export const award_headshot = `
 export const award_ratio = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     agg.kills,
     agg.deaths,
@@ -485,7 +485,7 @@ export const award_ratio = `
 export const award_skill = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     smax.skill AS skill
   FROM (
@@ -503,7 +503,7 @@ export const award_skill = `
 export const award_assists = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     SUM(s.assists) AS assists
   FROM ${PLAYERSTATS} s
@@ -519,7 +519,7 @@ export const award_assists = `
 export const award_melee = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     SUM(wu.kills) AS kills
   FROM xlr_weaponusage wu
@@ -537,7 +537,7 @@ export const award_melee = `
 export const award_deaths = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     agg.kills,
     agg.deaths,
@@ -560,7 +560,7 @@ export const award_deaths = `
 export const award_alias = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     COUNT(al.alias) AS num_alias
   FROM clients c
@@ -575,7 +575,7 @@ export const award_alias = `
 export const award_plant = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     SUM(pa.count) AS num_plant
   FROM clients c
@@ -593,7 +593,7 @@ export const award_plant = `
 export const award_defuse = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     SUM(pa.count) AS num_defuse
   FROM clients c
@@ -611,7 +611,7 @@ export const award_defuse = `
 export const award_chat = `
   SELECT
     c.id AS client_id,
-    COALESCE(a.alias, c.name) AS name,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
     COUNT(*) AS num_chat
   FROM chatlog ch
@@ -627,7 +627,7 @@ export function awardRank(index, clientId) {
   const array = [ {
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pb.kills) AS kills
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pb.kills) AS kills
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN ${PLAYERBODY} pb ON pb.player_id = c.id
@@ -651,7 +651,7 @@ export function awardRank(index, clientId) {
             HAVING (SUM(s.kills) + SUM(s.deaths)) >= 20
           ),
           per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
                    agg.kills, agg.deaths,
                    CASE WHEN agg.deaths=0 THEN agg.kills ELSE ROUND(agg.kills/agg.deaths,2) END AS ratio
             FROM agg
@@ -667,7 +667,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
                    MAX(s.skill) AS skill
             FROM ${PLAYERSTATS} s
             JOIN clients c ON c.id = s.client_id
@@ -683,7 +683,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(s.assists) AS assists
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(s.assists) AS assists
             FROM ${PLAYERSTATS} s
             JOIN clients c ON c.id = s.client_id
             ${preferredAliasJoin("a","c.id")}
@@ -698,7 +698,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(wu.kills) AS kills
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(wu.kills) AS kills
             FROM xlr_weaponusage wu
             JOIN xlr_weaponstats w ON w.id = wu.weapon_id
             JOIN clients c ON c.id = wu.player_id
@@ -720,7 +720,7 @@ export function awardRank(index, clientId) {
             GROUP BY client_id
           ),
           per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id,
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
                    agg.kills, agg.deaths,
                    CASE WHEN agg.deaths=0 THEN agg.kills ELSE agg.kills/agg.deaths END AS ratio
             FROM agg
@@ -737,7 +737,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(al.alias) AS num_alias
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(al.alias) AS num_alias
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN aliases al ON al.client_id = c.id
@@ -752,7 +752,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_plant
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_plant
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN xlr_playeractions pa ON pa.player_id = c.id
@@ -769,7 +769,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_defuse
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_defuse
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN xlr_playeractions pa ON pa.player_id = c.id
@@ -786,7 +786,7 @@ export function awardRank(index, clientId) {
       },{
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(*) AS num_chat
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, COUNT(*) AS num_chat
             FROM chatlog ch
             JOIN clients c ON c.id = ch.client_id
             ${preferredAliasJoin("a","c.id")}
@@ -803,9 +803,6 @@ export function awardRank(index, clientId) {
 	  return array[index];
 }
 
-
-
-
 export const queries = {
 	
   getPlayerCardRow: `
@@ -814,14 +811,26 @@ export const queries = {
     WHERE player_id = ?
     LIMIT 1
   `,
-// Pass NULL for fields you don't want to update (COALESCE preserves existing)
-  upsertPlayerCard: `
-    INSERT INTO xlr_playercards (player_id, background, emblem, callsign)
-    VALUES (?, COALESCE(?,0), COALESCE(?,0), COALESCE(?,0))
+  // --- Player card upserts (field-specific, do not touch other columns) ---
+  setPlayerCardBackground: `
+    INSERT INTO xlr_playercards (player_id, background)
+    VALUES (?, ?)
     ON DUPLICATE KEY UPDATE
-      background = COALESCE(VALUES(background), xlr_playercards.background),
-      emblem     = COALESCE(VALUES(emblem),     xlr_playercards.emblem),
-      callsign   = COALESCE(VALUES(callsign),   xlr_playercards.callsign),
+      background = VALUES(background),
+      updated_at = CURRENT_TIMESTAMP
+  `,
+  setPlayerCardEmblem: `
+    INSERT INTO xlr_playercards (player_id, emblem)
+    VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE
+      emblem = VALUES(emblem),
+      updated_at = CURRENT_TIMESTAMP
+  `,
+  setPlayerCardCallsign: `
+    INSERT INTO xlr_playercards (player_id, callsign)
+    VALUES (?, ?)
+    ON DUPLICATE KEY UPDATE
+      callsign = VALUES(callsign),
       updated_at = CURRENT_TIMESTAMP
   `,
   awardRank,
@@ -838,7 +847,7 @@ export const queries = {
   // Top players by skill (no server_id filter)
   topBySkill: `
     SELECT c.id AS client_id,
-           COALESCE(a.alias, c.name) AS name,
+           COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
       c.discord_id AS discord_id,
@@ -872,7 +881,7 @@ export const queries = {
     playerCard: `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       s.skill, s.kills, s.deaths,
       s.rounds,
@@ -930,7 +939,7 @@ export const queries = {
   playerWeaponCard: `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
@@ -958,7 +967,7 @@ export const queries = {
   playerMapCard: `
     SELECT
       c.id AS client_id,
-      COALESCE(a.alias, c.name) AS name,
+      COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
@@ -1046,7 +1055,7 @@ export const queries = {
   // Recently seen players (from clients)
   lastSeen: `
     SELECT c.id AS client_id,
-           COALESCE(a.alias, c.name) AS name,
+           COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
       c.discord_id AS discord_id,
            c.discord_id AS discord_id,
       c.discord_id AS discord_id,

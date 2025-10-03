@@ -797,7 +797,6 @@ function chunkOptions(labels, startIndex = 0, page = 0, perPage = 25) {
   };
 }
 
-
 function buildPickerRow(kind, serverIndex, playerId, page, arrays) {
   const arr = kind==="bg" ? BACKGROUNDS : kind==="em" ? EMBLEMS : CALLSIGNS.map(c => c);
   const labels = kind==="cs" ? CALLSIGNS.slice() : arr.map(basenameNoExt);
@@ -889,6 +888,30 @@ async function buildProfileDmPayload(serverIndex, clientId, userId) {
   };
 }
 
+async function deleteOldProfileDMs(dmChannel, client) {
+  try {
+    const msgs = await dmChannel.messages.fetch({ limit: 50 });
+    const mine = msgs.filter(m =>
+      m.author?.id === client.user.id &&
+      (
+        // our profile UI has this embed title
+        (Array.isArray(m.embeds) && m.embeds.some(e => e?.title === "Your Banner Settings")) ||
+        // or any row with a customId that starts with "profile:"
+        (Array.isArray(m.components) && m.components.some(row =>
+          row?.components?.some(c => typeof c.customId === "string" && c.customId.startsWith("profile:"))
+        ))
+      )
+    );
+
+    // Delete sequentially (DMs don't support bulkDelete)
+    for (const m of mine.values()) {
+      try { await m.delete(); } catch {}
+    }
+  } catch (e) {
+    console.warn("[profile] deleteOldProfileDMs failed:", e.message || e);
+  }
+}
+
 // -------------------------------------------------------------------------------------
 // Discord wiring — multi UI
 // -------------------------------------------------------------------------------------
@@ -944,7 +967,7 @@ const commands = [
     .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
    new SlashCommandBuilder()
     .setName("xlr-profile")
-    .setDescription("DM me your playercard and let you edit profile/banner settings")
+    .setDescription("DM your playercard and let you edit profile/banner settings")
     .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)"))
 ].map(c => c.toJSON());
 
@@ -1321,9 +1344,14 @@ async function handleSlashCommand(i) {
       // DM the profile
       try {
         const dm = await i.user.createDM();
-        const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
-        await dm.send(payload);
-        await i.reply({ ephemeral: true, content: "I sent your playercard to your DMs. 📬" });
+
+		// Clean up old UI first
+		await deleteOldProfileDMs(dm, client);
+
+		const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
+		await dm.send(payload);
+		await i.reply({ ephemeral: true, content: "I sent your playercard to your DMs. 📬" });
+
       } catch (e) {
         console.error("[xlr-profile] DM failed:", e);
         await i.reply({ ephemeral: true, content: "I couldn't DM you (are DMs disabled?). Enable DMs and try again." });
@@ -1561,12 +1589,12 @@ async function handleProfileComponent(i) {
 
     try {
       if (kind === "bg") {
-        await runQueryOn(si, queries.upsertPlayerCard, [pid, picked, null, null]);
-      } else if (kind === "em") {
-        await runQueryOn(si, queries.upsertPlayerCard, [pid, null, picked, null]);
-      } else if (kind === "cs") {
-        await runQueryOn(si, queries.upsertPlayerCard, [pid, null, null, picked]);
-      }
+	    await runQueryOn(si, queries.setPlayerCardBackground, [pid, picked]);
+	  } else if (kind === "em") {
+	    await runQueryOn(si, queries.setPlayerCardEmblem, [pid, picked]);
+	  } else if (kind === "cs") {
+	    await runQueryOn(si, queries.setPlayerCardCallsign, [pid, picked]);
+	  }
       // Rebuild DM with new banner + reset to main buttons row
       const payload = await buildProfileDmPayload(si, pid, i.user.id);
       await i.update(payload);

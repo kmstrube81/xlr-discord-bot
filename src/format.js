@@ -75,7 +75,7 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
 	.setThumbnail(thumbnail)
-    .setDescription(`**${displayName(row)}**`)
+    .setDescription(`**${row.name}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
       { name: "Weapon", value: String(weap ?? "—"), inline: true },
