@@ -1195,7 +1195,7 @@ async function handleSlashCommand(i) {
 			  }
 			}
 		  }
-		  clientId = rankRow?.client_id;
+		  
 		  // Pull saved banner options (default to 0 if not set)
 		  const [pc] = await runQueryOn(
 			serverIndex,
@@ -1311,7 +1311,6 @@ async function handleSlashCommand(i) {
 		);
       const embed = formatPlayerEmbed(rows2[0]);
 	  
-	  clientId = rows2?.client_id;
 	  // Pull saved banner options (default to 0 if not set)
 	  const [pc] = await runQueryOn(
 		serverIndex,
