@@ -720,7 +720,7 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
   const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weap)];
-  return { embeds, nav, pager, files };
+  return { embeds: embedArr, nav: nav, pager: pager, files: files };
 }
 
 async function buildMaps(serverIndex, page=0) {
@@ -790,7 +790,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
   const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
-  return { embeds, nav, pager, files };
+  return { embeds: embedArr, nav: nav, pager: pager, files: files };
 }
 
 async function buildAwards(serverIndex, page=0) {
@@ -874,7 +874,7 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
   const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
   const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
-  return { embeds, nav, pager, files };
+  return { embeds: embedArr, nav: nav, pager: pager, files: files };
 }
 
 // --- PROFILE (DM) helpers ----------------------------------------------------
@@ -1775,7 +1775,7 @@ async function handleUiComponent(i, serverIndex) {
       const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
         i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
       ]);
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
