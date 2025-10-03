@@ -622,7 +622,7 @@ async function buildLadder(serverIndex, page=0) {
   const blankText = ZERO_WIDTH.repeat(padLen);
   const files = [];
   for (const [e,i] of embedArr.entries()){
-	  e.setFooter({ text: blank });
+	  e.setFooter({ text: blankText });
 	  // Pull saved banner options (default to 0 if not set)
 	  const clientId = rows[i].client_id;
 	  const [pc] = await runQueryOn(
