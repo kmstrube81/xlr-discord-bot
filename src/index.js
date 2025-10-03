@@ -621,7 +621,7 @@ async function buildLadder(serverIndex, page=0) {
   const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
   const blankText = ZERO_WIDTH.repeat(padLen);
   const files = [];
-  for (const [e,i] of embedArr.entries()){
+  for (const [i,e] of embedArr.entries()){
 	  e.setFooter({ text: blankText });
 	  // Pull saved banner options (default to 0 if not set)
 	  const clientId = rows[i].client_id;
@@ -686,7 +686,7 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
   const files = [];
-  for (const [e,i] of embedArr.entries()){
+  for (const [i,e] of embedArr.entries()){
 	  e.setFooter({ text: blank });
 	  // Pull saved banner options (default to 0 if not set)
 	  const clientId = rows[i].client_id;
@@ -756,7 +756,7 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
   const files = [];
-  for (const [e,i] of embedArr.entries()){
+  for (const [i,e] of embedArr.entries()){
 	  e.setFooter({ text: blank });
 	  // Pull saved banner options (default to 0 if not set)
 	  const clientId = rows[i].client_id;
@@ -839,7 +839,7 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const blank  = ZERO.repeat(padLen);
   
   const files = [];
-  for (const [e,i] of embedArr.entries()){
+  for (const [i,e] of embedArr.entries()){
 	  e.setFooter({ text: blank });
 	  // Pull saved banner options (default to 0 if not set)
 	  const clientId = rows[i].client_id;
@@ -1251,7 +1251,7 @@ async function handleSlashCommand(i) {
         const embeds = formatTopEmbed(rows2, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
 		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 		const files = [];
-		  for (const [e,i] of embedArr.entries()){
+		  for (const [i,e] of embedArr.entries()){
 			  e.setFooter({ text: blank });
 			  // Pull saved banner options (default to 0 if not set)
 			  const clientId = rows2[i].client_id;
@@ -1297,7 +1297,7 @@ async function handleSlashCommand(i) {
         const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
 		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 		const files = [];
-		  for (const [e,i] of embedArr.entries()){
+		  for (const [i,e] of embedArr.entries()){
 			  e.setFooter({ text: blank });
 			  // Pull saved banner options (default to 0 if not set)
 			  const clientId = rows2[i].client_id;
@@ -1342,7 +1342,7 @@ async function handleSlashCommand(i) {
       const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
       const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 		const files = [];
-		  for (const [e,i] of embedArr.entries()){
+		  for (const [i,e] of embedArr.entries()){
 			  e.setFooter({ text: blank });
 			  // Pull saved banner options (default to 0 if not set)
 			  const clientId = rows2[i].client_id;
