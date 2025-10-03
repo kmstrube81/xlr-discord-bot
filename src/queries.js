@@ -201,7 +201,7 @@ const playerCoreAndBannerById = `
   SELECT
     c.id AS client_id,
     COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
-    COALESCE(s.skill,  0) AS skill,
+    COALESCE(ROUND(s.skill, 2), 0) AS skill,
     COALESCE(s.kills,  0) AS kills,
     COALESCE(s.deaths, 0) AS deaths,
     COALESCE(pc.background, 0) AS background,
