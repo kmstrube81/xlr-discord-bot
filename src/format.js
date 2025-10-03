@@ -46,7 +46,6 @@ export function formatPlayerEmbed(p, opts = {}) {
   return new EmbedBuilder().
 	setColor(0x2b7cff).
     setTitle(`**${p.name}**`).
-	setThumbnail(thumbnail).
     addFields(
       { name: "Skill", value: String(p.skill ?? "—"), inline: true },
 	  { name: "Fav Weapon", value: String( favWeap ?? "—"), inline: true },
@@ -74,7 +73,6 @@ export function formatPlayerWeaponEmbed(row, opts = {}) {
   const weap = weapEmoji ? `${weapEmoji} ${row.weapon}` : row.weapon;
   return new EmbedBuilder()
     .setColor(0x2b7cff)
-	.setThumbnail(thumbnail)
     .setDescription(`**${row.name}**`)
     .addFields(
       { name: "Skill", value: String(row.skill ?? "—"), inline: true },
@@ -94,7 +92,6 @@ export function formatPlayerVsEmbed(row, opts = {}) {
   return new EmbedBuilder()
     .setColor(0x2b7cff)
     .setDescription(`**${row.player_name}** vs. **${row.opponent_name}**`)
-	.setThumbnail(thumbnail)
     .addFields(
       { name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
       { name: "Skill", value: String(row.player_skill ?? "—"), inline: true },

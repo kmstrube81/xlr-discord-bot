@@ -1195,9 +1195,37 @@ async function handleSlashCommand(i) {
 			  }
 			}
 		  }
+		  clientId = rankRow?.client_id;
+		  // Pull saved banner options (default to 0 if not set)
+		  const [pc] = await runQueryOn(
+			serverIndex,
+			"SELECT background, emblem, callsign FROM xlr_playercards WHERE player_id = ? LIMIT 1",
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
+
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: p.name,              
+			kills: Number(p.kills) || 0,
+			deaths: Number(p.deaths) || 0,
+			skill: Number(p.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  head.setImage(`attachment://${filename}`);
+
+		  files = [file];
+		  
 		  const embeds = [head];
 
-		  await i.editReply({ embeds });
+		  await i.editReply({ embeds, components: [], files});
 		  return;
 		} else { 			
 		  // Compute ranks across all awards, pick best 10
@@ -1237,7 +1265,10 @@ async function handleSlashCommand(i) {
         const rows2 = await Promise.all(
 		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
-		const embed = formatPlayerWeaponEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
+		const embed = formatPlayerWeaponEmbed(rows2[0]);
+		
+		
+		
         return i.editReply({ embeds: [embed] });
       }
 
@@ -1278,8 +1309,37 @@ async function handleSlashCommand(i) {
 	  const rows2 = await Promise.all(
 		  details.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
 		);
-      const embed = formatPlayerEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
-      return i.editReply({ embeds: [embed] });
+      const embed = formatPlayerEmbed(rows2[0]);
+	  
+	  clientId = rows2?.client_id;
+	  // Pull saved banner options (default to 0 if not set)
+	  const [pc] = await runQueryOn(
+		serverIndex,
+		"SELECT background, emblem, callsign FROM xlr_playercards WHERE player_id = ? LIMIT 1",
+		[clientId]
+	  );
+	  const bg = Number(pc?.background ?? 0) || 0;
+	  const em = Number(pc?.emblem ?? 0) || 0;
+	  const cs = Number(pc?.callsign ?? 0) || 0;
+
+	  // Generate the banner
+	  const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: rows2.name,              
+		kills: Number(rows2.kills) || 0,
+		deaths: Number(rows2.deaths) || 0,
+		skill: Number(rows2.skill) || 0
+	  });
+	  
+	  const file = new AttachmentBuilder(buffer, { name: filename });
+
+	  embed.setImage(`attachment://${filename}`);
+
+	  files = [file];
+
+      return i.editReply({ embeds: [embed], components: [], files });
     }
 
     if (i.commandName === "xlr-lastseen") {
