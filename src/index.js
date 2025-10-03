@@ -620,10 +620,40 @@ async function buildLadder(serverIndex, page=0) {
   const ZERO_WIDTH = "⠀";
   const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
   const blankText = ZERO_WIDTH.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blankText });
+  const files = [];
+  for (const [e,i] of embedArr.entries()){
+	  e.setFooter({ text: blank });
+	  // Pull saved banner options (default to 0 if not set)
+	  const clientId = rows[i].client_id;
+	  const [pc] = await runQueryOn(
+		serverIndex,
+		queries.playerCoreAndBannerById,
+		[clientId]
+	  );
+	  const bg = Number(pc?.background ?? 0) || 0;
+	  const em = Number(pc?.emblem ?? 0) || 0;
+	  const cs = Number(pc?.callsign ?? 0) || 0;
+
+	  // Generate the banner
+	  const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: pc.name,              
+		kills: Number(pc.kills) || 0,
+		deaths: Number(pc.deaths) || 0,
+		skill: Number(pc.skill) || 0
+	  });
+	  
+	  const file = new AttachmentBuilder(buffer, { name: filename });
+
+	  e.setImage(`attachment://${filename}`);
+
+	  files.push(file);
+  }
   embedArr[embedArr.length - 1].setFooter({ text: footerText });
 
-  return { embeds: embedArr, nav, pager };
+  return { embeds: embedArr, nav, pager, files };
 }
 async function buildWeapons(serverIndex, page=0) {
   const offset = page * V_PAGE;
@@ -655,12 +685,42 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   const ZERO = "⠀";
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blank });
+  const files = [];
+  for (const [e,i] of embedArr.entries()){
+	  e.setFooter({ text: blank });
+	  // Pull saved banner options (default to 0 if not set)
+	  const clientId = rows[i].client_id;
+	  const [pc] = await runQueryOn(
+		serverIndex,
+		queries.playerCoreAndBannerById,
+		[clientId]
+	  );
+	  const bg = Number(pc?.background ?? 0) || 0;
+	  const em = Number(pc?.emblem ?? 0) || 0;
+	  const cs = Number(pc?.callsign ?? 0) || 0;
+
+	  // Generate the banner
+	  const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: pc.name,              
+		kills: Number(pc.kills) || 0,
+		deaths: Number(pc.deaths) || 0,
+		skill: Number(pc.skill) || 0
+	  });
+	  
+	  const file = new AttachmentBuilder(buffer, { name: filename });
+
+	  e.setImage(`attachment://${filename}`);
+
+	  files.push(file);
+  }
   embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
   const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weap)];
-  return { embeds, nav, pager };
+  return { embeds, nav, pager, files };
 }
 
 async function buildMaps(serverIndex, page=0) {
@@ -672,7 +732,7 @@ async function buildMaps(serverIndex, page=0) {
   const embeds = renderMapsEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + V_PAGE < total)];
   const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(rows, page, null)];
-  return { embeds, nav, pager };
+  return { embeds, nav, pager};
 }
 
 async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) {
@@ -695,12 +755,42 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
   const ZERO = "⠀";
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blank });
+  const files = [];
+  for (const [e,i] of embedArr.entries()){
+	  e.setFooter({ text: blank });
+	  // Pull saved banner options (default to 0 if not set)
+	  const clientId = rows[i].client_id;
+	  const [pc] = await runQueryOn(
+		serverIndex,
+		queries.playerCoreAndBannerById,
+		[clientId]
+	  );
+	  const bg = Number(pc?.background ?? 0) || 0;
+	  const em = Number(pc?.emblem ?? 0) || 0;
+	  const cs = Number(pc?.callsign ?? 0) || 0;
+
+	  // Generate the banner
+	  const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: pc.name,              
+		kills: Number(pc.kills) || 0,
+		deaths: Number(pc.deaths) || 0,
+		skill: Number(pc.skill) || 0
+	  });
+	  
+	  const file = new AttachmentBuilder(buffer, { name: filename });
+
+	  e.setImage(`attachment://${filename}`);
+
+	  files.push(file);
+  }
   embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Map page ${playerPage + 1}` });
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
   const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
-  return { embeds, nav, pager };
+  return { embeds, nav, pager, files };
 }
 
 async function buildAwards(serverIndex, page=0) {
@@ -747,13 +837,44 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   const ZERO = "⠀";
   const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
   const blank  = ZERO.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blank });
+  
+  const files = [];
+  for (const [e,i] of embedArr.entries()){
+	  e.setFooter({ text: blank });
+	  // Pull saved banner options (default to 0 if not set)
+	  const clientId = rows[i].client_id;
+	  const [pc] = await runQueryOn(
+		serverIndex,
+		queries.playerCoreAndBannerById,
+		[clientId]
+	  );
+	  const bg = Number(pc?.background ?? 0) || 0;
+	  const em = Number(pc?.emblem ?? 0) || 0;
+	  const cs = Number(pc?.callsign ?? 0) || 0;
+
+	  // Generate the banner
+	  const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: pc.name,              
+		kills: Number(pc.kills) || 0,
+		deaths: Number(pc.deaths) || 0,
+		skill: Number(pc.skill) || 0
+	  });
+	  
+	  const file = new AttachmentBuilder(buffer, { name: filename });
+
+	  e.setImage(`attachment://${filename}`);
+
+	  files.push(file);
+  }
   embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Awards page ${playerPage + 1}` });
   const hasNext = rows.length === pageSize;
   const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
   const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
   const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
-  return { embeds, nav, pager };
+  return { embeds, nav, pager, files };
 }
 
 // --- PROFILE (DM) helpers ----------------------------------------------------
@@ -1128,7 +1249,40 @@ async function handleSlashCommand(i) {
         const emoji = resolveEmoji(weap);
         const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
         const embeds = formatTopEmbed(rows2, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
-        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+		const files = [];
+		  for (const [e,i] of embedArr.entries()){
+			  e.setFooter({ text: blank });
+			  // Pull saved banner options (default to 0 if not set)
+			  const clientId = rows2[i].client_id;
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+		  }
+		
+        await i.editReply({ embeds: embedArr, components: [], files: files });
         return;
       }
 
@@ -1141,7 +1295,40 @@ async function handleSlashCommand(i) {
 		);
         const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
         const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
-        await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+		const files = [];
+		  for (const [e,i] of embedArr.entries()){
+			  e.setFooter({ text: blank });
+			  // Pull saved banner options (default to 0 if not set)
+			  const clientId = rows2[i].client_id;
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+		  }
+		
+        await i.editReply({ embeds: embedArr, components: [], files: files });
         return;
       }
 
@@ -1153,7 +1340,40 @@ async function handleSlashCommand(i) {
 		);
 
       const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
-      await i.editReply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
+      const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+		const files = [];
+		  for (const [e,i] of embedArr.entries()){
+			  e.setFooter({ text: blank });
+			  // Pull saved banner options (default to 0 if not set)
+			  const clientId = rows2[i].client_id;
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+		  }
+		
+        await i.editReply({ embeds: embedArr, components: [], files: files });
       return;
     }
 
@@ -1199,7 +1419,7 @@ async function handleSlashCommand(i) {
 		  // Pull saved banner options (default to 0 if not set)
 		  const [pc] = await runQueryOn(
 			serverIndex,
-			"SELECT background, emblem, callsign FROM xlr_playercards WHERE player_id = ? LIMIT 1",
+			queries.playerCoreAndBannerById,
 			[clientId]
 		  );
 		  const bg = Number(pc?.background ?? 0) || 0;
@@ -1211,10 +1431,10 @@ async function handleSlashCommand(i) {
 			background: bg,
 			emblem: em,
 			callsign: cs,
-			playerName: p.name,              
-			kills: Number(p.kills) || 0,
-			deaths: Number(p.deaths) || 0,
-			skill: Number(p.skill) || 0
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
 		  });
 		  
 		  const file = new AttachmentBuilder(buffer, { name: filename });
@@ -1248,9 +1468,35 @@ async function handleSlashCommand(i) {
 			const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
 			emb.setDescription(lines.join("\n"));
 		  }
+		  
+		  // Pull saved banner options (default to 0 if not set)
+		  const [pc] = await runQueryOn(
+			serverIndex,
+			queries.playerCoreAndBannerById,
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
 
-		  // ⬇️ clickable "Award" select
-		  await i.editReply({ embeds: [emb] });
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  emb.setImage(`attachment://${filename}`);
+
+		  const files = [file];
+		  
+		  await i.editReply({ embeds: [emb], components: [], files });
 		  return;
 			
 		}
@@ -1267,9 +1513,34 @@ async function handleSlashCommand(i) {
 		);
 		const embed = formatPlayerWeaponEmbed(rows2[0]);
 		
+		// Pull saved banner options (default to 0 if not set)
+		  const [pc] = await runQueryOn(
+			serverIndex,
+			queries.playerCoreAndBannerById,
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
+
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  embed.setImage(`attachment://${filename}`);
+
+		  const files = [file];
 		
-		
-        return i.editReply({ embeds: [embed] });
+        return i.editReply({ embeds: [embed], components: [], files });
       }
 
       if (mapOpt) {
@@ -1282,7 +1553,35 @@ async function handleSlashCommand(i) {
 		let thumbUrl = DEFAULT_THUMB;
         thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
         const embed = formatPlayerMapEmbed(rows2[0], null, { thumbnail: thumbUrl });
-        return i.editReply({ embeds: [embed] });
+		
+		// Pull saved banner options (default to 0 if not set)
+		  const [pc] = await runQueryOn(
+			serverIndex,
+			queries.playerCoreAndBannerById,
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
+
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  embed.setImage(`attachment://${filename}`);
+
+		  const files = [file];
+		
+		  return i.editReply({ embeds: [embed], components: [], files });
       }
 
       if (vsName) {
@@ -1301,7 +1600,35 @@ async function handleSlashCommand(i) {
 		  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
 		);
 		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
-        return i.editReply({ embeds: [embed] });
+		
+		// Pull saved banner options (default to 0 if not set)
+		  const [pc] = await runQueryOn(
+			serverIndex,
+			queries.playerCoreAndBannerById,
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
+
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  embed.setImage(`attachment://${filename}`);
+
+		  const files = [file];
+		
+        return i.editReply({ embeds: [embed], components: [], files });
       }
 
       const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
@@ -1314,7 +1641,7 @@ async function handleSlashCommand(i) {
 	  // Pull saved banner options (default to 0 if not set)
 	  const [pc] = await runQueryOn(
 		serverIndex,
-		"SELECT background, emblem, callsign FROM xlr_playercards WHERE player_id = ? LIMIT 1",
+		queries.playerCoreAndBannerById,
 		[clientId]
 	  );
 	  const bg = Number(pc?.background ?? 0) || 0;
@@ -1326,10 +1653,10 @@ async function handleSlashCommand(i) {
 		background: bg,
 		emblem: em,
 		callsign: cs,
-		playerName: rows2.name,              
-		kills: Number(rows2.kills) || 0,
-		deaths: Number(rows2.deaths) || 0,
-		skill: Number(rows2.skill) || 0
+		playerName: pc?.name,              
+		kills: Number(pc?.kills) || 0,
+		deaths: Number(pc?.deaths) || 0,
+		skill: Number(pc?.skill) || 0
 	  });
 	  
 	  const file = new AttachmentBuilder(buffer, { name: filename });
@@ -1458,7 +1785,7 @@ async function handleUiComponent(i, serverIndex) {
     if (i.message.id === cfg.ui.contentId) {
       if (parsed.view === VIEWS.WEAPON_PLAYERS) {
         const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-        await i.update({ embeds: payload.embeds, components: payload.pager });
+        await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files });
         if (cfg.ui.navId) {
           const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
           const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -1469,7 +1796,7 @@ async function handleUiComponent(i, serverIndex) {
       }
       if (parsed.view === VIEWS.MAPS_PLAYERS) {
         const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-        await i.update({ embeds: payload.embeds, components: payload.pager });
+        await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files });
         if (cfg.ui.navId) {
           const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
           const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -1490,7 +1817,7 @@ async function handleUiComponent(i, serverIndex) {
       return;
     }
 	
-	if (parsed.view === VIEWS.AWARDS) {
+/*	if (parsed.view === VIEWS.AWARDS) {
         const payload = await buildView(serverIndex, parsed);
         await i.update({ embeds: payload.embeds, components: payload.pager });
         if (cfg.ui.navId) {
@@ -1500,7 +1827,7 @@ async function handleUiComponent(i, serverIndex) {
         }
         if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
         return;
-      }
+      } */
   }
 
   // Select Menus
@@ -1517,7 +1844,7 @@ async function handleUiComponent(i, serverIndex) {
       const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
         i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
       ]);
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
@@ -1530,7 +1857,7 @@ async function handleUiComponent(i, serverIndex) {
       const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
         i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
       ]);
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
@@ -1545,7 +1872,7 @@ async function handleUiComponent(i, serverIndex) {
       const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
         i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager })
+        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
       ]);
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
@@ -1567,6 +1894,33 @@ async function handleUiComponent(i, serverIndex) {
 			name: (await displayName(r, r.name, true)) || r.name,
 		  }))
 		);
+		
+		 // Pull saved banner options (default to 0 if not set)
+		 const [pc] = await runQueryOn(
+			serverIndex,
+			queries.playerCoreAndBannerById,
+			[clientId]
+		  );
+		  const bg = Number(pc?.background ?? 0) || 0;
+		  const em = Number(pc?.emblem ?? 0) || 0;
+		  const cs = Number(pc?.callsign ?? 0) || 0;
+
+		  // Generate the banner
+		  const { buffer, filename } = await generateBanner({
+			background: bg,
+			emblem: em,
+			callsign: cs,
+			playerName: pc.name,              
+			kills: Number(pc.kills) || 0,
+			deaths: Number(pc.deaths) || 0,
+			skill: Number(pc.skill) || 0
+		  });
+		  
+		  const file = new AttachmentBuilder(buffer, { name: filename });
+
+		  embed.setImage(`attachment://${filename}`);
+
+		  const files = [file];
 
 		const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRowsWithNames, page, clientId)];
 
@@ -1574,7 +1928,7 @@ async function handleUiComponent(i, serverIndex) {
       const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
       await Promise.all([
         i.update({ content: "", embeds: [], components: navComponents }),
-        contentMsg.edit({ embeds: [embed], components: [] }),
+        contentMsg.edit({ embeds: [embed], components: [], files }),
       ]);
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;

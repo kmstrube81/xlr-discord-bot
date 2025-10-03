@@ -196,6 +196,26 @@ const ui_favoriteMap = `
   LIMIT 1
 `;
 
+// Core stats + banner settings for a single player (by clients.id)
+const playerCoreAndBannerById = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    COALESCE(s.skill,  0) AS skill,
+    COALESCE(s.kills,  0) AS kills,
+    COALESCE(s.deaths, 0) AS deaths,
+    COALESCE(pc.background, 0) AS background,
+    COALESCE(pc.emblem,     0) AS emblem,
+    COALESCE(pc.callsign,   0) AS callsign
+  FROM clients c
+  LEFT JOIN ${PLAYERSTATS} s ON s.client_id = c.id
+  ${preferredAliasJoin("a", "c.id")}
+  LEFT JOIN xlr_playercards pc ON pc.player_id = c.id
+  WHERE c.id = ?
+  LIMIT 1
+`;
+
+
 function ui_ladderSlice(limit = 10, offset = 0) {
   const sql = `
     SELECT
@@ -833,6 +853,7 @@ export const queries = {
       callsign = VALUES(callsign),
       updated_at = CURRENT_TIMESTAMP
   `,
+  playerCoreAndBannerById,
   awardRank,
   award_headshot,
   award_ratio,
