@@ -14,7 +14,8 @@ export const BACKGROUNDS = [
 	"assets/backgrounds/hud@uo_mp.png",
 	"assets/backgrounds/hud@vcod-american.png",
 	"assets/backgrounds/hud@vcod-british.png",
-	"assets/backgrounds/hud@vcod-russian.png"
+	"assets/backgrounds/hud@vcod-russian.png",
+	"assets/backgrounds/hud@usa-flag.png"
 ];
 
 export const EMBLEMS = [
@@ -65,7 +66,8 @@ export const EMBLEMS = [
 	"assets/emblems/hud@thompson_mp.png",
 	"assets/emblems/hud@touchgrass.png",
 	"assets/emblems/hud@tt33_mp.png",
-	"assets/emblems/hud@webley_mp.png"
+	"assets/emblems/hud@webley_mp.png",
+	"assets/emblem/hud@sipsOJ.png"
 ];
 
 export const CALLSIGNS = [
@@ -87,7 +89,8 @@ export const CALLSIGNS = [
 	"Multiple Personality Disorder",
 	"Green Thumb",
 	"Ninja Defuser",
-	"Target(+)Master"
+	"Target(+)Master",
+	"Mrs. Bert 55"
 ];
 
 const FONT_STACK_MONO = [
