@@ -1221,7 +1221,7 @@ async function handleSlashCommand(i) {
 
 		  head.setImage(`attachment://${filename}`);
 
-		  files = [file];
+		  const files = [file];
 		  
 		  const embeds = [head];
 
@@ -1336,7 +1336,7 @@ async function handleSlashCommand(i) {
 
 	  embed.setImage(`attachment://${filename}`);
 
-	  files = [file];
+	  const files = [file];
 
       return i.editReply({ embeds: [embed], components: [], files });
     }
