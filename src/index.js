@@ -778,20 +778,25 @@ function basenameNoExt(p) {
   } catch { return String(p); }
 }
 
-function chunkOptions(labels, startIndex=0, page=0, perPage=25) {
-  const offset = page*perPage;
-  const slice = labels.slice(offset, offset+perPage);
+function chunkOptions(labels, startIndex = 0, page = 0, perPage = 25) {
+  const offset  = page * perPage;
+  const slice   = labels.slice(offset, offset + perPage);
+  const options = slice.length
+    ? slice.map((label, i) => ({
+        label: `${offset + i}. ${label}`,
+        value: String(offset + i)
+      }))
+    : [{ label: "No items", value: "noop" }]; // never 0 options
+
   return {
     page,
     total: labels.length,
-    hasPrev: page>0,
-    hasNext: offset+perPage < labels.length,
-    options: slice.map((label, i) => ({
-      label: `${offset+i}. ${label}`,
-      value: String(offset+i)
-    }))
+    hasPrev: page > 0,
+    hasNext: offset + perPage < labels.length,
+    options
   };
 }
+
 
 function buildPickerRow(kind, serverIndex, playerId, page, arrays) {
   const arr = kind==="bg" ? BACKGROUNDS : kind==="em" ? EMBLEMS : CALLSIGNS.map(c => c);
@@ -1520,15 +1525,31 @@ async function handleProfileComponent(i) {
       return;
     }
 
-    if (action === "page") {
-      const kind = sub; // bg/em/cs
-      const dir = parts[3]; // prev/next
-      const oldPage = Number(parts[4] || 0);
-      const newPage = Math.max(0, dir === "prev" ? oldPage - 1 : oldPage + 1);
-      const rows = buildPickerRow(kind, si, pid, newPage);
-      await i.update({ components: rows });
-      return;
-    }
+	if (action === "page") {
+	  // id format: profile:page:<kind>:<si>:<pid>:<dir>:<page>
+	  const parts = i.customId.split(":");
+	  const kind = parts[2];                 // "bg" | "em" | "cs"
+	  const si   = Number(parts[3]);         // server index
+	  const pid  = Number(parts[4]);         // player id
+	  const dir  = parts[5];                 // "prev" | "next"
+	  const cur  = Number(parts[6] || 0);    // current page
+
+	  // Clamp target page so we never render an empty select
+	  const total   = kind === "bg" ? BACKGROUNDS.length
+					 : kind === "em" ? EMBLEMS.length
+									  : CALLSIGNS.length;
+	  const per     = 25;
+	  const maxPage = Math.max(0, Math.ceil(total / per) - 1);
+
+	  const next    = dir === "prev" ? cur - 1 : cur + 1;
+	  const clamped = Math.min(maxPage, Math.max(0, next));
+
+	  const rows = buildPickerRow(kind, si, pid, clamped);
+	  await i.update({ components: rows });
+	  return;
+	}
+
+
   }
 
   // Selects — persist choice
