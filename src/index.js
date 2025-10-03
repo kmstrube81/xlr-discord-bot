@@ -1137,7 +1137,7 @@ async function ensureUIForServer(serverIndex) {
     upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
     cfg.ui.contentId = contentMsg.id;
   } else {
-    await contentMsg.edit({ embeds: initial.embeds, components: initial.pager });
+    await contentMsg.edit({ embeds: initial.embeds, components: initial.pager, files: [] });
   }
   
 }
@@ -1807,7 +1807,7 @@ async function handleUiComponent(i, serverIndex) {
       }
 
       const payload = await buildView(serverIndex, parsed);
-      await i.update({ embeds: payload.embeds, components: payload.pager });
+      await i.update({ embeds: payload.embeds, components: payload.pager, files: [] });
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -1935,6 +1935,7 @@ async function handleUiComponent(i, serverIndex) {
     }
   }
 }
+
 async function handleProfileComponent(i) {
 	
 	  // === PROFILE DM: Buttons & Selects & Modal ===
@@ -2036,6 +2037,7 @@ async function handleProfileComponent(i) {
   }
 	
 }
+
 client.on(Events.InteractionCreate, async (i) => {
   try {
 	  
