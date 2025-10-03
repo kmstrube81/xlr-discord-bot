@@ -12,7 +12,10 @@ import {
   ButtonStyle,
   ChannelType,
   StringSelectMenuBuilder,
-  AttachmentBuilder
+  AttachmentBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
@@ -753,6 +756,134 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
   return { embeds, nav, pager };
 }
 
+// --- PROFILE (DM) helpers ----------------------------------------------------
+const PROFILE_IDS = Object.freeze({
+  EDIT_NAME_BTN:   (si, pid) => `profile:edit:name:${si}:${pid}`,
+  EDIT_BG_BTN:     (si, pid, pg=0) => `profile:edit:bg:${si}:${pid}:${pg}`,
+  EDIT_EMBLEM_BTN: (si, pid, pg=0) => `profile:edit:em:${si}:${pid}:${pg}`,
+  EDIT_CS_BTN:     (si, pid, pg=0) => `profile:edit:cs:${si}:${pid}:${pg}`,
+  PICK_BG:         (si, pid, pg) => `profile:pick:bg:${si}:${pid}:${pg}`,
+  PICK_EM:         (si, pid, pg) => `profile:pick:em:${si}:${pid}:${pg}`,
+  PICK_CS:         (si, pid, pg) => `profile:pick:cs:${si}:${pid}:${pg}`,
+  PAGE_BG:         (si, pid, dir, pg) => `profile:page:bg:${si}:${pid}:${dir}:${pg}`,
+  PAGE_EM:         (si, pid, dir, pg) => `profile:page:em:${si}:${pid}:${dir}:${pg}`,
+  PAGE_CS:         (si, pid, dir, pg) => `profile:page:cs:${si}:${pid}:${dir}:${pg}`,
+  NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
+});
+
+function basenameNoExt(p) {
+  try {
+    const b = path.basename(p);
+    return b.replace(/\.(png|jpg|jpeg|gif|webp)$/i, "");
+  } catch { return String(p); }
+}
+
+function chunkOptions(labels, startIndex=0, page=0, perPage=25) {
+  const offset = page*perPage;
+  const slice = labels.slice(offset, offset+perPage);
+  return {
+    page,
+    total: labels.length,
+    hasPrev: page>0,
+    hasNext: offset+perPage < labels.length,
+    options: slice.map((label, i) => ({
+      label: `${offset+i}. ${label}`,
+      value: String(offset+i)
+    }))
+  };
+}
+
+function buildPickerRow(kind, serverIndex, playerId, page, arrays) {
+  const arr = kind==="bg" ? BACKGROUNDS : kind==="em" ? EMBLEMS : CALLSIGNS.map(c => c);
+  const labels = kind==="cs" ? CALLSIGNS.slice() : arr.map(basenameNoExt);
+  const chunk = chunkOptions(labels, 0, page, 25);
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(kind==="bg" ? PROFILE_IDS.PICK_BG(serverIndex, playerId, page)
+               : kind==="em" ? PROFILE_IDS.PICK_EM(serverIndex, playerId, page)
+                              : PROFILE_IDS.PICK_CS(serverIndex, playerId, page))
+    .setPlaceholder(kind==="bg" ? "Pick a background…" : kind==="em" ? "Pick an emblem…" : "Pick a callsign…")
+    .addOptions(chunk.options);
+
+  const row1 = new ActionRowBuilder().addComponents(select);
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "prev", page) :
+                   kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "prev", page) :
+                                 PROFILE_IDS.PAGE_CS(serverIndex, playerId, "prev", page))
+      .setLabel("Previous")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!chunk.hasPrev),
+    new ButtonBuilder()
+      .setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "next", page) :
+                   kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "next", page) :
+                                 PROFILE_IDS.PAGE_CS(serverIndex, playerId, "next", page))
+      .setLabel("Next")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!chunk.hasNext)
+  );
+
+  return [row1, row2];
+}
+
+async function loadProfileData(serverIndex, clientId) {
+  const [card] = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+  const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [clientId]);
+  const prefNameRow = await runQueryOn(serverIndex,
+    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [clientId]);
+  const preferredName = prefNameRow?.[0]?.preferred_name || null;
+  return { card, pc, preferredName };
+}
+
+async function buildProfileDmPayload(serverIndex, clientId, userId) {
+  const { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
+  if (!card) return { content: "No stats found for your account on this server." };
+
+  const display = preferredName || card.name;
+  const bg = Number(pc?.background ?? 0) || 0;
+  const em = Number(pc?.emblem ?? 0) || 0;
+  const cs = Number(pc?.callsign ?? 0) || 0;
+
+  const { buffer, filename } = await generateBanner({
+    background: bg,
+    emblem: em,
+    callsign: cs,
+    playerName: display,
+    kills: card.kills || 0,
+    deaths: card.deaths || 0,
+    skill: card.skill || 0
+  });
+  const file = new AttachmentBuilder(buffer, { name: filename });
+
+  // Stats embed
+  const statsEmbed = formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
+
+  // Controls
+  const rowButtons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_NAME_BTN(serverIndex, clientId)).setLabel("Edit Preferred Name").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_BG_BTN(serverIndex, clientId, 0)).setLabel("Edit Background").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_EMBLEM_BTN(serverIndex, clientId, 0)).setLabel("Edit Emblem").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_CS_BTN(serverIndex, clientId, 0)).setLabel("Edit Callsign").setStyle(ButtonStyle.Secondary)
+  );
+
+  // Show the current choices summary
+  const summary = new EmbedBuilder()
+    .setColor(0x2b7cff)
+    .setTitle("Your Banner Settings")
+    .setDescription([
+      `**Preferred Name:** ${display}`,
+      `**Background:** ${bg} — ${basenameNoExt(BACKGROUNDS[bg] || "N/A")}`,
+      `**Emblem:** ${em} — ${basenameNoExt(EMBLEMS[em] || "N/A")}`,
+      `**Callsign:** ${cs} — ${CALLSIGNS[cs] ?? "N/A"}`
+    ].join("\n"));
+
+  return {
+    files: [file],
+    embeds: [summary, statsEmbed],
+    components: [rowButtons]
+  };
+}
+
 // -------------------------------------------------------------------------------------
 // Discord wiring — multi UI
 // -------------------------------------------------------------------------------------
@@ -807,36 +938,9 @@ const commands = [
     .addStringOption(o => o.setName("guid").setDescription("Your in-game GUID").setRequired(true))
     .addStringOption(o => o.setName("server").setDescription("Which server to use (name or number)")),
    new SlashCommandBuilder()
-    .setName("xlr-banner")
-    .setDescription("Generate a 256x64 profile banner with emblem + text rows")
-    .addIntegerOption(o => o
-      .setName("background")
-      .setDescription("Background index (arrays in banner.js)")
-      .setRequired(true))
-    .addIntegerOption(o => o
-      .setName("emblem")
-      .setDescription("Emblem index (arrays in banner.js)")
-      .setRequired(true))
-    .addIntegerOption(o => o
-      .setName("callsign")
-      .setDescription("Callsign index (arrays in banner.js)")
-      .setRequired(true))
-    .addStringOption(o => o
-      .setName("name")
-      .setDescription("Player name (row 2)")
-      .setRequired(true))
-    .addIntegerOption(o => o
-      .setName("kills")
-      .setDescription("Kills value")
-      .setRequired(true))
-    .addIntegerOption(o => o
-      .setName("deaths")
-      .setDescription("Deaths value")
-      .setRequired(true))
-    .addNumberOption(o => o
-      .setName("skill")
-      .setDescription("Skill rating")
-      .setRequired(true))
+    .setName("xlr-profile")
+    .setDescription("DM me your playercard and let you edit profile/banner settings")
+    .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)"))
 ].map(c => c.toJSON());
 
 async function register() {
@@ -1182,48 +1286,46 @@ async function handleSlashCommand(i) {
       return;
     }
 
-    if (i.commandName === "xlr-banner") {
-      await i.deferReply();
+     if (i.commandName === "xlr-profile") {
+      const serverIndex = resolveServerIndexFromInteraction(i);
+      // Look up the invoking user's linked client
+      const uid = i.user.id;
+      // Prefer most-recently seen client if multiple
+      const rows = await runQueryOn(
+        serverIndex,
+        `SELECT c.id AS client_id
+           FROM clients c
+      LEFT JOIN aliases a ON a.client_id = c.id
+          WHERE c.discord_id = ?
+          GROUP BY c.id
+          ORDER BY MAX(c.time_edit) DESC, MAX(a.time_edit) DESC
+          LIMIT 5`,
+        [uid]
+      );
 
-      try {
-        // Pull options
-        const background = i.options.getInteger("background", true);
-        const emblem     = i.options.getInteger("emblem", true);
-        const callsign   = i.options.getInteger("callsign", true);
-        const name       = i.options.getString("name", true);
-        const kills      = i.options.getInteger("kills", true);
-        const deaths     = i.options.getInteger("deaths", true);
-        const skill      = i.options.getNumber("skill", true);
-
-        // Quick sanity hints if arrays are empty
-        if (!BACKGROUNDS.length) {
-          return i.editReply("No backgrounds configured. Add file paths to BACKGROUNDS[] in banner.js.");
-        }
-        if (!EMBLEMS.length) {
-          return i.editReply("No emblems configured. Add file paths to EMBLEMS[] in banner.js.");
-        }
-        if (!CALLSIGNS.length) {
-          return i.editReply("No callsigns configured. Add phrases to CALLSIGNS[] in banner.js.");
-        }
-
-        const { buffer, filename } = await generateBanner({
-          background,
-          emblem,
-          callsign,
-          playerName: name,
-          kills,
-          deaths,
-          skill
+      if (!rows.length) {
+        await i.reply({
+          ephemeral: true,
+          content: "You haven’t linked your Discord to a B3 user on this server yet. Use `/xlr-register` to link your GUID."
         });
+        return;
+      }
 
-        const file = new AttachmentBuilder(buffer, { name: filename });
-        await i.editReply({ files: [file] });
-      } catch (err) {
-        console.error("[xlr-banner] error:", err);
-        await i.editReply(`Banner generation failed: ${err.message || "unknown error"}`);
+      const clientId = rows[0].client_id;
+
+      // DM the profile
+      try {
+        const dm = await i.user.createDM();
+        const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
+        await dm.send(payload);
+        await i.reply({ ephemeral: true, content: "I sent your playercard to your DMs. 📬" });
+      } catch (e) {
+        console.error("[xlr-profile] DM failed:", e);
+        await i.reply({ ephemeral: true, content: "I couldn't DM you (are DMs disabled?). Enable DMs and try again." });
       }
       return;
     }
+
 
 	
   } catch (err) {
@@ -1387,9 +1489,99 @@ async function handleUiComponent(i, serverIndex) {
     }
   }
 }
+async function handleProfileComponent(i) {
+	
+	  // === PROFILE DM: Buttons & Selects & Modal ===
+  // Buttons — open modal or show pickers
+  if (i.isButton() && i.customId?.startsWith("profile:")) {
+    const parts = i.customId.split(":"); // profile:edit:name:si:pid or profile:edit:bg:si:pid:page
+    const [, action, sub, siStr, pidStr, pageStr] = parts;
+    const si = Number(siStr), pid = Number(pidStr);
+    const page = Number(pageStr || 0);
 
+    if (action === "edit" && sub === "name") {
+      const modal = new ModalBuilder()
+        .setCustomId(PROFILE_IDS.NAME_MODAL(si, pid))
+        .setTitle("Set Preferred Name");
+      const input = new TextInputBuilder()
+        .setCustomId("preferred_name")
+        .setLabel("Preferred display name (max 64)")
+        .setStyle(TextInputStyle.Short)
+        .setMaxLength(64)
+        .setRequired(true);
+      modal.addComponents(new ActionRowBuilder().addComponents(input));
+      await i.showModal(modal);
+      return;
+    }
+
+    if (action === "edit" && (sub === "bg" || sub === "em" || sub === "cs")) {
+      const rows = buildPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, page);
+      await i.update({ components: rows });
+      return;
+    }
+
+    if (action === "page") {
+      const kind = sub; // bg/em/cs
+      const dir = parts[3]; // prev/next
+      const oldPage = Number(parts[4] || 0);
+      const newPage = Math.max(0, dir === "prev" ? oldPage - 1 : oldPage + 1);
+      const rows = buildPickerRow(kind, si, pid, newPage);
+      await i.update({ components: rows });
+      return;
+    }
+  }
+
+  // Selects — persist choice
+  if (i.isStringSelectMenu() && i.customId?.startsWith("profile:pick:")) {
+    const [, , kind, siStr, pidStr, pageStr] = i.customId.split(":");
+    const si = Number(siStr), pid = Number(pidStr);
+    const page = Number(pageStr || 0);
+    const picked = Number(i.values[0]); // absolute index from array
+
+    try {
+      if (kind === "bg") {
+        await runQueryOn(si, queries.upsertPlayerCard, [pid, picked, null, null]);
+      } else if (kind === "em") {
+        await runQueryOn(si, queries.upsertPlayerCard, [pid, null, picked, null]);
+      } else if (kind === "cs") {
+        await runQueryOn(si, queries.upsertPlayerCard, [pid, null, null, picked]);
+      }
+      // Rebuild DM with new banner + reset to main buttons row
+      const payload = await buildProfileDmPayload(si, pid, i.user.id);
+      await i.update(payload);
+    } catch (e) {
+      console.error("[profile] save failed:", e);
+      await i.reply({ content: "Saving failed. Try again.", flags: 64 });
+    }
+    return;
+  }
+
+  // Modal — save preferred name
+  if (i.isModalSubmit() && i.customId?.startsWith("profile:name:")) {
+    const [, , siStr, pidStr] = i.customId.split(":");
+    const si = Number(siStr), pid = Number(pidStr);
+    const name = i.fields.getTextInputValue("preferred_name")?.trim()?.slice(0,64) || null;
+
+    try {
+      await runQueryOn(si, "UPDATE clients SET preferred_name = ? WHERE id = ?", [name, pid]);
+      const payload = await buildProfileDmPayload(si, pid, i.user.id);
+      await i.reply(payload);
+    } catch (e) {
+      console.error("[profile] name save failed:", e);
+      await i.reply({ content: "Saving failed. Try again.", flags: 64 });
+    }
+    return;
+  }
+	
+}
 client.on(Events.InteractionCreate, async (i) => {
   try {
+	  
+	if (i.customId?.startsWith("profile:")) {
+		await handleProfileComponent(i);
+		return;
+	}
+	  
     if (i.isChatInputCommand()) {
       await handleSlashCommand(i);
       return;

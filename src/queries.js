@@ -807,6 +807,23 @@ export function awardRank(index, clientId) {
 
 
 export const queries = {
+	
+  getPlayerCardRow: `
+    SELECT player_id, background, emblem, callsign, updated_at
+    FROM xlr_playercards
+    WHERE player_id = ?
+    LIMIT 1
+  `,
+// Pass NULL for fields you don't want to update (COALESCE preserves existing)
+  upsertPlayerCard: `
+    INSERT INTO xlr_playercards (player_id, background, emblem, callsign)
+    VALUES (?, COALESCE(?,0), COALESCE(?,0), COALESCE(?,0))
+    ON DUPLICATE KEY UPDATE
+      background = COALESCE(VALUES(background), xlr_playercards.background),
+      emblem     = COALESCE(VALUES(emblem),     xlr_playercards.emblem),
+      callsign   = COALESCE(VALUES(callsign),   xlr_playercards.callsign),
+      updated_at = CURRENT_TIMESTAMP
+  `,
   awardRank,
   award_headshot,
   award_ratio,
