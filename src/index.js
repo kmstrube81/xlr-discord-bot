@@ -1830,7 +1830,7 @@ async function handleUiComponent(i, serverIndex) {
 		  }
 	  }
 	  
-	  await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  await i.update({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
 	  
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
