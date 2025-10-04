@@ -1761,7 +1761,10 @@ async function handleUiComponent(i, serverIndex) {
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
-	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
 	  for (const e of payload.embeds){
 		  e.setFooter({ text: blankText });
 		  // Pull saved banner options (default to 0 if not set)
@@ -1841,6 +1844,11 @@ async function handleUiComponent(i, serverIndex) {
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
 	  
 	  for (const e of payload.embeds){
 		  e.setFooter({ text: blankText });
