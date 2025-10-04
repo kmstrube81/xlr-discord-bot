@@ -1,4 +1,7 @@
 import { Canvas, loadImage, FontLibrary } from "skia-canvas";
+import { Resvg } from "@resvg/resvg-js";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -101,6 +104,21 @@ const FONT_STACK_MONO = [
   "monospace"
 ];
 
+const FONT_DIR = path.resolve("assets/fonts");
+const FONT_REG_PATH = path.join(FONT_DIR, "CourierPrime-Regular.ttf");
+const FONT_BLD_PATH = path.join(FONT_DIR, "CourierPrime-Bold.ttf");
+
+let FONT_REG_B64 = null;
+let FONT_BLD_B64 = null;
+try {
+  if (fs.existsSync(FONT_REG_PATH)) {
+    FONT_REG_B64 = fs.readFileSync(FONT_REG_PATH).toString("base64");
+  }
+  if (fs.existsSync(FONT_BLD_PATH)) {
+    FONT_BLD_B64 = fs.readFileSync(FONT_BLD_PATH).toString("base64");
+  }
+} catch { /* ignore */ }
+
 
 // Canvas constants (pixels)
 const WIDTH = 256;
@@ -119,6 +137,13 @@ const LEFT_X  = 4;  // left padding for rows 2 & 3
 const FILL = "#ffffff";
 const STROKE = "rgba(0,0,0,0.9)";
 const SHADOW_BLUR = 0;
+
+// crude monospace width estimate so we can shrink to fit without measureText()
+function estimateFitSize(text, startPx, maxWidth, charWidth = 0.6, minPx = 8) {
+  const len = String(text ?? "").length || 1;
+  const cap = Math.floor(maxWidth / (len * charWidth));
+  return Math.max(minPx, Math.min(startPx, cap));
+}
 
 function fontFamilyString(families) {
    if (Array.isArray(families)) {
@@ -144,6 +169,51 @@ function sanitize(str) {
     .replace(/\^\d/g, "") // strip ^ color codes
     .replace(/\|/g, "")
     .replace(/`/g, "'");
+}
+
+function renderTextPNG({
+  text,
+  width,
+  height,
+  sizePx,
+  weight = 700,
+  color = "#ffffff",
+  stroke = null,
+  strokeWidth = 0,
+  align = "left",     // "left" or "center"
+  leftPad = 0,        // used when align === "left"
+  topPad = 0,         // y-offset from top
+}) {
+  const safe = String(text ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[s]));
+
+  // Embed font faces if available (Courier Prime). Otherwise rely on default monospace.
+  const fontFace = (FONT_REG_B64 && FONT_BLD_B64) ? `
+  @font-face { font-family: XLRMono; src: url(data:font/ttf;base64,${FONT_REG_B64}) format('truetype'); font-weight: 400; font-style: normal; }
+  @font-face { font-family: XLRMono; src: url(data:font/ttf;base64,${FONT_BLD_B64}) format('truetype'); font-weight: 700; font-style: normal; }
+  ` : ``;
+
+  const family = (FONT_REG_B64 && FONT_BLD_B64) ? "XLRMono" : "monospace";
+  const anchor = (align === "center") ? `text-anchor="middle"` : `text-anchor="start"`;
+  const x = (align === "center") ? width / 2 : leftPad;
+  const y = topPad + Math.floor(sizePx * 1.0); // approximate baseline
+
+  const strokeAttrs = (stroke && strokeWidth > 0)
+    ? ` stroke="${stroke}" stroke-width="${strokeWidth}" paint-order="stroke fill"`
+    : ``;
+
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <style>${fontFace}</style>
+    <rect width="100%" height="100%" fill="transparent"/>
+    <text x="${x}" y="${y}" ${anchor}
+          font-family="${family}"
+          font-size="${sizePx}"
+          font-weight="${weight}"
+          fill="${color}"${strokeAttrs}>${safe}</text>
+  </svg>`;
+
+  const png = new Resvg(svg).render().asPng();
+  return png; // Buffer
 }
 
 /**
@@ -204,33 +274,62 @@ export async function generateBanner(opts) {
   ctx.strokeStyle = STROKE;
   ctx.shadowBlur = SHADOW_BLUR;
 
-  // Row 1: Callsign — centered within left 192 px, 2px from top
-  // Fit text to TEXT_BOX_WIDTH minus a little padding
-  const maxRow1Width = TEXT_BOX_WIDTH - 8;
-  fitText(ctx, csText, FONT_STACK_MONO, "700", maxRow1Width, 16); // try up to 16px
-  const csMetrics = ctx.measureText(csText);
-  const csX = Math.round((TEXT_BOX_WIDTH - csMetrics.width) / 2);
-  const csBaseline = ROW1_Y + Math.ceil(csMetrics.actualBoundingBoxAscent);
-  ctx.strokeText(csText, csX, csBaseline);
-  ctx.fillText(csText, csX, csBaseline);
+	// Row 1: Callsign centered in the 192px box
+	const maxRow1Width = TEXT_BOX_WIDTH - 8;
+	const csSize = estimateFitSize(csText, 16, maxRow1Width); // shrink if long
+	const csPNG = renderTextPNG({
+	  text: csText,
+	  width: TEXT_BOX_WIDTH,
+	  height: 18,              // enough to fit 16px text
+	  sizePx: csSize,
+	  weight: 700,
+	  color: FILL,
+	  stroke: STROKE,
+	  strokeWidth: 2,
+	  align: "center",
+	  topPad: ROW1_Y          // 2px from top
+	});
+	// Draw at left edge of the 192px region
+	const csImg = await loadImage(csPNG);
+	ctx.drawImage(csImg, 0, 0);
 
-  // Row 2: Player name — left-justified at x=4, y=20
-  // Fit name in (TEXT_BOX_WIDTH - LEFT_X - 2)
-  const maxRow2Width = TEXT_BOX_WIDTH - LEFT_X - 2;
-  fitText(ctx, name, FONT_STACK_MONO, "700", maxRow2Width, 16); // bold-ish
-  const nameMetrics = ctx.measureText(name);
-  const nameBaseline = ROW2_Y + Math.ceil(nameMetrics.actualBoundingBoxAscent / 2);
-  ctx.strokeText(name, LEFT_X, nameBaseline);
-  ctx.fillText(name, LEFT_X, nameBaseline);
 
-  // Row 3: Stats — "K: x  D: x  S: x" left-justified at x=4, y=40
-  const stats = `K: ${Number(kills) || 0}  D: ${Number(deaths) || 0}  S: ${Number(skill) || 0}`;
-  const maxRow3Width = TEXT_BOX_WIDTH - LEFT_X - 2;
-  fitText(ctx, stats, FONT_STACK_MONO, "600", maxRow3Width, 14); // slightly smaller
-  const stMetrics = ctx.measureText(stats);
-  const stBaseline = ROW3_Y + Math.ceil(stMetrics.actualBoundingBoxAscent / 2);
-  ctx.strokeText(stats, LEFT_X, stBaseline);
-  ctx.fillText(stats, LEFT_X, stBaseline);
+	const maxRow2Width = TEXT_BOX_WIDTH - LEFT_X - 2;
+	const nameSize = estimateFitSize(name, 16, maxRow2Width);
+	const namePNG = renderTextPNG({
+	  text: name,
+	  width: TEXT_BOX_WIDTH,
+	  height: 22,              // a bit taller
+	  sizePx: nameSize,
+	  weight: 700,
+	  color: FILL,
+	  stroke: STROKE,
+	  strokeWidth: 2,
+	  align: "left",
+	  leftPad: LEFT_X,
+	  topPad: ROW2_Y - Math.floor(nameSize * 0.75) // align visually near your old baseline
+	});
+	const nameImg = await loadImage(namePNG);
+	ctx.drawImage(nameImg, 0, 0);
+
+	const stats = `K: ${Number(kills) || 0}  D: ${Number(deaths) || 0}  S: ${Number(skill) || 0}`;
+	const maxRow3Width = TEXT_BOX_WIDTH - LEFT_X - 2;
+	const statsSize = estimateFitSize(stats, 14, maxRow3Width, 0.6);
+	const statsPNG = renderTextPNG({
+	  text: stats,
+	  width: TEXT_BOX_WIDTH,
+	  height: 22,
+	  sizePx: statsSize,
+	  weight: 600,
+	  color: FILL,
+	  stroke: STROKE,
+	  strokeWidth: 2,
+	  align: "left",
+	  leftPad: LEFT_X,
+	  topPad: ROW3_Y - Math.floor(statsSize * 0.75)
+	});
+	const statsImg = await loadImage(statsPNG);
+	ctx.drawImage(statsImg, 0, 0);
 
   const filename = `xlr-banner-${Date.now()}.png`;
   const buffer = await canvas.png;
