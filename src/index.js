@@ -1744,14 +1744,58 @@ async function handleUiComponent(i, serverIndex) {
 
     // NAV toolbar button
     if (i.message.id === cfg.ui.navId) {
+		
+		try {
+		  if (!i.deferred && !i.replied) {
+			await i.deferUpdate(); // acknowledges the interaction
+		  }
+		} catch (e) {
+		  // If already acknowledged somewhere else, ignore
+		}
       const payload = await buildView(serverIndex, parsed);
-      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+	  const files = [];
+
+      await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
 	  
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] })
-      ]);
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+		  }
+	  }
+	  
+	  await i.update({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+		
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }
