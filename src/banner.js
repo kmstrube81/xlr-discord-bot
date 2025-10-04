@@ -70,7 +70,7 @@ export const EMBLEMS = [
 	"assets/emblems/hud@touchgrass.png",
 	"assets/emblems/hud@tt33_mp.png",
 	"assets/emblems/hud@webley_mp.png",
-	"assets/emblem/hud@sipsOJ.png"
+	"assets/emblems/hud@sipsOJ.png"
 ];
 
 export const CALLSIGNS = [
