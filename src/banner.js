@@ -1,4 +1,4 @@
-import { Canvas, Image, FontLibrary } from "skia-canvas";
+import { Canvas, loadImage, FontLibrary } from "skia-canvas";
 import path from "node:path";
 
 /**
@@ -186,7 +186,7 @@ export async function generateBanner(opts) {
   const name   = sanitize(playerName);
 
   // Load images
-  const [bgImg, emblemImg] = await Promise.all([Image.load(bgPath), Image.load(emPath)]);
+  const [bgImg, emblemImg] = await Promise.all([loadImage(bgPath), loadImage(emPath)]);
 
   // Canvas
   const canvas = new Canvas(WIDTH, HEIGHT);
