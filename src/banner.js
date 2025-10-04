@@ -1,4 +1,4 @@
-import { createCanvas, loadImage, registerFont } from "skia-canvas";
+import { Canvas, Image, FontLibrary } from "skia-canvas";
 import path from "node:path";
 
 /**
@@ -186,10 +186,10 @@ export async function generateBanner(opts) {
   const name   = sanitize(playerName);
 
   // Load images
-  const [bgImg, emblemImg] = await Promise.all([loadImage(bgPath), loadImage(emPath)]);
+  const [bgImg, emblemImg] = await Promise.all([Image.load(bgPath), Image.load(emPath)]);
 
   // Canvas
-  const canvas = createCanvas(WIDTH, HEIGHT);
+  const canvas = new Canvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
   // Draw background
@@ -233,6 +233,6 @@ export async function generateBanner(opts) {
   ctx.fillText(stats, LEFT_X, stBaseline);
 
   const filename = `xlr-banner-${Date.now()}.png`;
-  const buffer = canvas.toBuffer("image/png");
+  const buffer = await canvas.png;
   return { buffer, filename };
 }
