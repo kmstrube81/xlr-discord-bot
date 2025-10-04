@@ -1099,9 +1099,8 @@ async function ensureUIForServer(serverIndex) {
     navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
     upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
     cfg.ui.navId = navMsg.id;
-    try { await navMsg.pin(); } catch {}
-  } else {
-    await navMsg.edit({ content: "", embeds: [], components: initial.nav });
+    
+    await navMsg.edit({ content: "", embeds: [], components: initial.nav }, files: []);
   }
 
   // CONTENT (bottom)
