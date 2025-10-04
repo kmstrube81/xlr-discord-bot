@@ -1772,7 +1772,7 @@ async function handleUiComponent(i, serverIndex) {
 			  const [pc] = await runQueryOn(
 				serverIndex,
 				queries.playerCoreAndBannerById,
-				[clientId]
+				[e.clientId]
 			  );
 			  const bg = Number(pc?.background ?? 0) || 0;
 			  const em = Number(pc?.emblem ?? 0) || 0;
@@ -1857,7 +1857,7 @@ async function handleUiComponent(i, serverIndex) {
 			  const [pc] = await runQueryOn(
 				serverIndex,
 				queries.playerCoreAndBannerById,
-				[clientId]
+				[e.clientId]
 			  );
 			  const bg = Number(pc?.background ?? 0) || 0;
 			  const em = Number(pc?.emblem ?? 0) || 0;
