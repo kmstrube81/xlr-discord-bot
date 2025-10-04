@@ -1755,7 +1755,7 @@ async function handleUiComponent(i, serverIndex) {
       const payload = await buildView(serverIndex, parsed);
 	  const files = [];
 
-      await i.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+      await i.message.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -1794,7 +1794,7 @@ async function handleUiComponent(i, serverIndex) {
 		  }
 	  }
 	  
-	  await i.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+	  await i.message.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
 		
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
@@ -1835,7 +1835,7 @@ async function handleUiComponent(i, serverIndex) {
       const payload = await buildView(serverIndex, parsed);
 	  const files = [];
 
-      await i.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+      await i.message.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
@@ -1874,7 +1874,7 @@ async function handleUiComponent(i, serverIndex) {
 		  }
 	  }
 	  
-	  await i.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+	  await i.message.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
 	  
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
