@@ -174,15 +174,14 @@ function sanitize(str) {
 function renderTextPNG({
   text,
   width,
-  height,
   sizePx,
+  baselineY,          // absolute baseline within a full-height (64px) canvas
   weight = 700,
   color = "#ffffff",
   stroke = null,
   strokeWidth = 0,
-  align = "left",     // "left" or "center"
-  leftPad = 0,        // used when align === "left"
-  topPad = 0,         // y-offset from top
+  align = "left",     // "left" | "center"
+  leftPad = 0,        // when align === "left"
 }) {
   const safe = String(text ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[s]));
 
@@ -195,14 +194,14 @@ function renderTextPNG({
   const family = (FONT_REG_B64 && FONT_BLD_B64) ? "XLRMono" : "monospace";
   const anchor = (align === "center") ? `text-anchor="middle"` : `text-anchor="start"`;
   const x = (align === "center") ? width / 2 : leftPad;
-  const y = topPad + Math.floor(sizePx * 1.0); // approximate baseline
+  const y = baselineY; // draw at the real baseline (within 64px banner)
 
   const strokeAttrs = (stroke && strokeWidth > 0)
     ? ` stroke="${stroke}" stroke-width="${strokeWidth}" paint-order="stroke fill"`
     : ``;
 
   const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${HEIGHT}">
     <style>${fontFace}</style>
     <rect width="100%" height="100%" fill="transparent"/>
     <text x="${x}" y="${y}" ${anchor}
@@ -279,15 +278,14 @@ export async function generateBanner(opts) {
 	const csSize = estimateFitSize(csText, 16, maxRow1Width); // shrink if long
 	const csPNG = renderTextPNG({
 	  text: csText,
-	  width: TEXT_BOX_WIDTH,
-	  height: 18,              // enough to fit 16px text
+	  width: TEXT_BOX_WIDTH,          // enough to fit 16px text
 	  sizePx: csSize,
 	  weight: 700,
 	  color: FILL,
 	  stroke: STROKE,
 	  strokeWidth: 2,
 	  align: "center",
-	  topPad: ROW1_Y          // 2px from top
+	  baselineY: ROW1_Y + csSize
 	});
 	// Draw at left edge of the 192px region
 	const csImg = await loadImage(csPNG);
@@ -299,7 +297,6 @@ export async function generateBanner(opts) {
 	const namePNG = renderTextPNG({
 	  text: name,
 	  width: TEXT_BOX_WIDTH,
-	  height: 22,              // a bit taller
 	  sizePx: nameSize,
 	  weight: 700,
 	  color: FILL,
@@ -307,7 +304,7 @@ export async function generateBanner(opts) {
 	  strokeWidth: 2,
 	  align: "left",
 	  leftPad: LEFT_X,
-	  topPad: ROW2_Y - Math.floor(nameSize * 0.75) // align visually near your old baseline
+	  baselineY: ROW2_Y
 	});
 	const nameImg = await loadImage(namePNG);
 	ctx.drawImage(nameImg, 0, 0);
@@ -318,7 +315,6 @@ export async function generateBanner(opts) {
 	const statsPNG = renderTextPNG({
 	  text: stats,
 	  width: TEXT_BOX_WIDTH,
-	  height: 22,
 	  sizePx: statsSize,
 	  weight: 600,
 	  color: FILL,
@@ -326,7 +322,7 @@ export async function generateBanner(opts) {
 	  strokeWidth: 2,
 	  align: "left",
 	  leftPad: LEFT_X,
-	  topPad: ROW3_Y - Math.floor(statsSize * 0.75)
+      baselineY: ROW3_Y
 	});
 	const statsImg = await loadImage(statsPNG);
 	ctx.drawImage(statsImg, 0, 0);
