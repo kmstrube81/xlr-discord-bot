@@ -1100,7 +1100,7 @@ async function ensureUIForServer(serverIndex) {
     upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
     cfg.ui.navId = navMsg.id;
     
-    await navMsg.edit({ content: "", embeds: [], components: initial.nav }, files: []);
+    await navMsg.edit({ content: "", embeds: [], components: initial.nav, files: [] });
   }
 
   // CONTENT (bottom)
