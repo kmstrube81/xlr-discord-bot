@@ -1146,8 +1146,8 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 			]);
 
 			await Promise.all([
-			  navMsg.edit({ content: "", embeds: [], components: payload.nav }),
-			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager }),
+			  navMsg.edit({ content: "", embeds: [], components: payload.nav, files: [] }),
+			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: [] }),
 			]);
 		  }
 		} catch (e) {
