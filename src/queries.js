@@ -765,7 +765,7 @@ export const award_lossper = `
 // 17) Headshot % — total headshots / total kills
 // Headshot % — (headshots from xlr_playerbody) / (kills from xlr_playerstats)
 // Minimum 50 kills to avoid tiny-sample outliers
-export const award_headshot_percent = `
+export const award_headper = `
   WITH kills_agg AS (
     SELECT
       s.client_id,
