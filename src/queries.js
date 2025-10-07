@@ -642,7 +642,7 @@ export const award_chat = `
   LIMIT ? OFFSET ?
 `;
 
-// 11) Most Final Killcams — xlr_playeractivities (activity = 'final_killcam')
+// 11) Most Final Killcams — xlr_playeractions (activity = 'final_killcam')
 export const award_killcam = `
   SELECT
     c.id AS client_id,
@@ -651,7 +651,7 @@ export const award_killcam = `
     SUM(pa.count) AS num_killcam
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
-  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  JOIN xlr_playeractions pa ON pa.player_id = c.id
   WHERE pa.activity = 'final_killcam'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
@@ -659,7 +659,7 @@ export const award_killcam = `
   LIMIT ? OFFSET ?
 `;
 
-// 12) Most SD Clutches — xlr_playeractivities (activity = 'sd_clutch')
+// 12) Most SD Clutches — xlr_playeractions (activity = 'sd_clutch')
 export const award_clutch = `
   SELECT
     c.id AS client_id,
@@ -668,7 +668,7 @@ export const award_clutch = `
     SUM(pa.count) AS clutches
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
-  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  JOIN xlr_playeractions pa ON pa.player_id = c.id
   WHERE pa.activity = 'sd_clutch'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
@@ -676,7 +676,7 @@ export const award_clutch = `
   LIMIT ? OFFSET ?
 `;
 
-// 13) Most SD Aces — xlr_playeractivities (activity = 'sd_ace')
+// 13) Most SD Aces — xlr_playeractions (activity = 'sd_ace')
 export const award_ace = `
   SELECT
     c.id AS client_id,
@@ -685,7 +685,7 @@ export const award_ace = `
     SUM(pa.count) AS aces
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
-  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  JOIN xlr_playeractions pa ON pa.player_id = c.id
   WHERE pa.activity = 'sd_ace'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
@@ -969,7 +969,7 @@ export function awardRank(index, clientId) {
                    SUM(pa.count) AS num_killcam
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
-            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            JOIN xlr_playeractions pa ON pa.player_id = c.id
             WHERE pa.activity = 'final_killcam'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
@@ -987,7 +987,7 @@ export function awardRank(index, clientId) {
                    SUM(pa.count) AS clutches
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
-            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            JOIN xlr_playeractions pa ON pa.player_id = c.id
             WHERE pa.activity = 'sd_clutch'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
@@ -1005,7 +1005,7 @@ export function awardRank(index, clientId) {
                    SUM(pa.count) AS aces
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
-            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            JOIN xlr_playeractions pa ON pa.player_id = c.id
             WHERE pa.activity = 'sd_ace'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
