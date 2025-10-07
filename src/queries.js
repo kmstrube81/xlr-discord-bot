@@ -1153,7 +1153,7 @@ export const queries = {
   award_plant,
   award_defuse,
   award_chat,
-    award_killcam,
+  award_killcam,
   award_clutch,
   award_ace,
   award_wins,

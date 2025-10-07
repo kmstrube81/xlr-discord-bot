@@ -220,13 +220,6 @@ const awards = [
 	  query: queries.award_chat,
 	  properties: [{name: "Chats sent", prop: "num_chat"}]
 	},
-	{ key: "award_headshot_percent",
-	  name: "Clicking Heads",
-	  description: "Highest Headshot Kill Percentage",
-	  emoji: "death_headshot",
-	  query: queries.award_headshot_percent,
-	  properties: [{name: "Headshots", prop: "kills"}, {name: "Percent", prop: "percent"}]
-	},
 	{ key: "award_killcam",
 	  name: "Mom, Get the Camera!",
 	  description: "Most Final Kill Cams",
@@ -237,7 +230,7 @@ const awards = [
 	{ key: "award_clutch",
 	  name: "Michael Jordan",
 	  description: "Most SD Cluthes (minimum 3 kills)",
-	  emoji: "death_headshot",
+	  emoji: "jumpman",
 	  query: queries.award_clutch,
 	  properties: [{name: "Clutches", prop: "clutches"}]
 	},
@@ -258,7 +251,7 @@ const awards = [
 	{ key: "award_winper",
 	  name: "VIII Rings",
 	  description: "Best Win Percentage (minimum 10 games)",
-	  emoji: "death_headshot",
+	  emoji: "sipsOJ",
 	  query: queries.award_winper,
 	  properties: [{name: "Wins", prop: "wins"}, {name: "Losses", prop: "losses"}, {name: "Win Percentage", prop: "winper"}]
 	},
@@ -268,6 +261,13 @@ const awards = [
 	  emoji: "death_headshot",
 	  query: queries.award_lossper,
 	  properties: [{name: "Wins", prop: "wins"}, {name: "Losses", prop: "losses"}, {name: "Win Percentage", prop: "winper"}]
+	},
+	{ key: "award_headper",
+	  name: "Clicking Heads",
+	  description: "Highest Headshot Kill Percentage",
+	  emoji: "death_headshot",
+	  query: queries.award_headper,
+	  properties: [{name: "Headshots", prop: "kills"}, {name: "Percent", prop: "headper"}]
 	}
 ];
 
