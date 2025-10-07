@@ -749,9 +749,7 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   return { embeds: embedArr, nav: nav, pager: pager, files: files };
 }
 
-async function buildMaps(serverIndex, page=0, ctx = {
-  const { signal, token, channelId } = ctx;
-}) {
+async function buildMaps(serverIndex, page=0, ctx = { signal, token, channelId }) {
   const offset = page * V_PAGE;
   const [rows, total] = await Promise.all([
     getMapsSlice(serverIndex, offset, V_PAGE, signal),
@@ -764,9 +762,7 @@ async function buildMaps(serverIndex, page=0, ctx = {
   return { embeds, nav, pager};
 }
 
-async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0, ctx = {
-  const { signal, token, channelId } = ctx;
-}) {
+async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0, ctx = { signal, token, channelId }) {
   const pageSize = 10;
   const offset   = playerPage * pageSize;
   const [rows, total, mapsRows] = await Promise.all([
