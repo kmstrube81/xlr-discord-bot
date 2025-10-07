@@ -611,8 +611,15 @@ async function getPlayerMapCount(serverIndex, map) {
 // -------------------------------------------------------------------------------------
 const V_PAGE = 10;
 
-async function buildHome(serverIndex, ctx = { signal, token, channelId }) {
+async function buildHome(serverIndex, ctx = {}) {
+  // Safely pull values; if ctx is missing, these are undefined
+  const hasCtx   = ctx && typeof ctx === 'object';
+  const signal   = hasCtx ? ctx.signal   : undefined;
+  const token    = hasCtx ? ctx.token    : undefined;
+  const channelId= hasCtx ? ctx.channelId: undefined;
+
   const cfg = byIndex.get(serverIndex);
+
   let totals, status;
   let hadError = false;
 
@@ -634,16 +641,20 @@ async function buildHome(serverIndex, ctx = { signal, token, channelId }) {
     status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port, signal);
     if (status && status.error) hadError = true;
   } catch (e) {
+    // If this was canceled by a newer click, just return "stale" when we have a ctx
+    if ((e?.name === "CanceledError" || e?.code === "ERR_CANCELED") && hasCtx) {
+      return { stale: true };
+    }
     hadError = true;
     status = { error: summarizeAxiosError(e) };
   }
 
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  // Only do staleness checks if a ctx was provided
+  if (hasCtx && isStale(channelId, token)) return { stale: true };
 
   const embeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
   return { embeds, nav: [navRow(VIEWS.HOME)], pager: [], hadError };
 }
-
 
 async function buildLadder(serverIndex, page=0) {
   const offset = page * V_PAGE;
@@ -680,6 +691,7 @@ async function buildLadder(serverIndex, page=0) {
 
   return { embeds: embedArr, nav, pager, files };
 }
+
 async function buildWeapons(serverIndex, page=0) {
   const offset = page * V_PAGE;
   const [rows, total] = await Promise.all([
@@ -1166,9 +1178,15 @@ async function ensureUIForServer(serverIndex) {
   if (!channel || channel.type !== ChannelType.GuildText) return;
 
   // initial HOME
+  // Start cancellable initial HOME load
   const gate = beginChannelLoad(cfg.channelId);
-  const initial = await buildHome(serverIndex, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-  if (initial?.stale || isStale(cfg.channelId, gate.token)) return;
+  const initial = await buildHome(serverIndex, {
+    signal: gate.signal,
+    token: gate.token,
+    channelId: cfg.channelId
+  });
+  if (initial?.stale) return; // superseded before finishing
+
 
   // NAV (top)
   let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
