@@ -611,10 +611,7 @@ async function getPlayerMapCount(serverIndex, map) {
 // -------------------------------------------------------------------------------------
 const V_PAGE = 10;
 
-async function buildHome(serverIndex, ctx = {
-  const { signal, token, channelId } = ctx;
-  const cfg = byIndex.get(serverIndex);
-}) {
+async function buildHome(serverIndex, ctx = { signal, token, channelId }) {
   const cfg = byIndex.get(serverIndex);
   let totals, status;
   let hadError = false;
