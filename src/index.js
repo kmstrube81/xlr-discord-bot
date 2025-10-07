@@ -306,10 +306,10 @@ function summarizeAxiosError(err) {
   return (err?.code || "ERROR");
 }
 
-async function fetchServerStatus(ip, port) {
+async function fetchServerStatus(ip, port, signal) {
   const url = `https://api.cod.pm/getstatus/${ip}/${port}`;
   try {
-    const res = await axios.get(url, { timeout: 5000 });
+    const res = await axios.get(url, { timeout: 5000 , signal });
     return res.data;
   } catch (err) {
     const summary = summarizeAxiosError(err);
@@ -318,9 +318,9 @@ async function fetchServerStatus(ip, port) {
   }
 }
 
-async function checkUrlFor404(url) {
+async function checkUrlFor404(url, signal) {
   try {
-    const res = await axios.head(url, { timeout: 4000, validateStatus: () => true });
+    const res = await axios.head(url, { timeout: 4000, validateStatus: () => true, signal });
     return res.status === 404;
   } catch (err) {
     const summary = summarizeAxiosError(err);
@@ -329,10 +329,10 @@ async function checkUrlFor404(url) {
   }
 }
 
-async function getMapImageUrl(label) {
+async function getMapImageUrl(label, signal) {
   try {
-    if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`)) {
-      if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`)) {
+    if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`, signal)) {
+      if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`, signal)) {
         return null;
       } else {
         return `https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`;
@@ -340,7 +340,7 @@ async function getMapImageUrl(label) {
     } else {
       return `https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`;
     }
-  } catch {
+  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }
     return null;
   }
 }
@@ -381,14 +381,14 @@ async function displayName(row, rowname, isTitle = false, isOpponent = false) {
       const dn = member?.displayName || null;
       __memberNameCache.set(cacheKey, dn);
       if (dn) return isTitle ? dn : `<@${id}>`;
-    } catch {}
+    } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
   }
 
   try {
     const user = await client.users.fetch(id);
     const uName = user?.globalName ?? user?.username ?? null;
     if (uName) return isTitle ? uName : `<@${id}>`;
-  } catch {}
+  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
 
   return sanitized;
 }
@@ -564,12 +564,12 @@ async function getWeaponsAll(serverIndex) {
   return rows;
 }
 
-async function getMapsSlice(serverIndex, offset=0, limit=10) {
+async function getMapsSlice(serverIndex, offset=0, limit=10, signal) {
   const { sql, params } = queries.ui_mapsSlice(limit, offset);
   const rows = await runQueryOn(serverIndex, sql, params);
   const slice = await Promise.all(rows.map(async (r, i) => {
     let url;
-    try { url = await getMapImageUrl(r.label); } catch { url = DEFAULT_THUMB; }
+    try { url = await getMapImageUrl(r.label, signal); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } url = DEFAULT_THUMB; }
     return { ...r, rank: offset + i + 1, thumbnail: url || DEFAULT_THUMB };
   }));
   return slice;
@@ -611,7 +611,10 @@ async function getPlayerMapCount(serverIndex, map) {
 // -------------------------------------------------------------------------------------
 const V_PAGE = 10;
 
-async function buildHome(serverIndex) {
+async function buildHome(serverIndex, ctx = {
+  const { signal, token, channelId } = ctx;
+  const cfg = byIndex.get(serverIndex);
+}) {
   const cfg = byIndex.get(serverIndex);
   let totals, status;
   let hadError = false;
@@ -631,12 +634,14 @@ async function buildHome(serverIndex) {
   }
 
   try {
-    status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port);
+    status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port, signal);
     if (status && status.error) hadError = true;
   } catch (e) {
     hadError = true;
     status = { error: summarizeAxiosError(e) };
   }
+
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
 
   const embeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
   return { embeds, nav: [navRow(VIEWS.HOME)], pager: [], hadError };
@@ -684,6 +689,7 @@ async function buildWeapons(serverIndex, page=0) {
     getWeaponsSlice(serverIndex, offset, V_PAGE),
     getWeaponsCount(serverIndex)
   ]);
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
   const embeds = renderWeaponsEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + V_PAGE < total)];
   const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(rows, page, null)];
@@ -746,19 +752,24 @@ async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weapon
   return { embeds: embedArr, nav: nav, pager: pager, files: files };
 }
 
-async function buildMaps(serverIndex, page=0) {
+async function buildMaps(serverIndex, page=0, ctx = {
+  const { signal, token, channelId } = ctx;
+}) {
   const offset = page * V_PAGE;
   const [rows, total] = await Promise.all([
-    getMapsSlice(serverIndex, offset, V_PAGE),
+    getMapsSlice(serverIndex, offset, V_PAGE, signal),
     getMapsCount(serverIndex)
   ]);
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
   const embeds = renderMapsEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + V_PAGE < total)];
   const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(rows, page, null)];
   return { embeds, nav, pager};
 }
 
-async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) {
+async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0, ctx = {
+  const { signal, token, channelId } = ctx;
+}) {
   const pageSize = 10;
   const offset   = playerPage * pageSize;
   const [rows, total, mapsRows] = await Promise.all([
@@ -769,9 +780,10 @@ async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0) 
       return mapped;
     })(),
     getPlayerMapCount(serverIndex, mapLabel),
-    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize),
+    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize, signal),
   ]);
-  const thumbUrl = (await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
   const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
   const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
@@ -853,7 +865,8 @@ async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
     })(),
     pageSize,
   ]);
-  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel)) || DEFAULT_THUMB;
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
   const embeds = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
   const embedArr = Array.isArray(embeds) ? embeds : [embeds];
   const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
@@ -919,7 +932,7 @@ function basenameNoExt(p) {
   try {
     const b = path.basename(p);
     return b.replace(/\.(png|jpg|jpeg|gif|webp)$/i, "");
-  } catch { return String(p); }
+  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } return String(p); }
 }
 
 function chunkOptions(labels, startIndex = 0, page = 0, perPage = 25) {
@@ -1049,7 +1062,7 @@ async function deleteOldProfileDMs(dmChannel, client) {
 
     // Delete sequentially (DMs don't support bulkDelete)
     for (const m of mine.values()) {
-      try { await m.delete(); } catch {}
+      try { await m.delete(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
     }
   } catch (e) {
     console.warn("[profile] deleteOldProfileDMs failed:", e.message || e);
@@ -1132,6 +1145,26 @@ function upsertEnvForServer(n, keyBase, value) {
 
 const perChannelState = new Map(); // channelId => { serverIndex, collectors }
 
+// One "load" in flight per channel. Starting a new load cancels the previous one.
+const perChannelLoadGate = new Map(); // channelId => { controller, token }
+
+/** Begin a new load for a channel. Aborts any previous one. */
+function beginChannelLoad(channelId) {
+  const prev = perChannelLoadGate.get(channelId);
+  if (prev?.controller) {
+    try { prev.controller.abort(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+  }
+  const controller = new AbortController();
+  const token = Symbol(`load:${channelId}:${Date.now()}`);
+  perChannelLoadGate.set(channelId, { controller, token });
+  return { signal: controller.signal, token };
+}
+
+/** Has this load become stale (superseded by a newer click)? */
+function isStale(channelId, token) {
+  return perChannelLoadGate.get(channelId)?.token !== token;
+}
+
 async function ensureUIForServer(serverIndex) {
   const cfg = byIndex.get(serverIndex);
   if (!cfg?.channelId) return;
@@ -1140,12 +1173,15 @@ async function ensureUIForServer(serverIndex) {
   if (!channel || channel.type !== ChannelType.GuildText) return;
 
   // initial HOME
-  const initial = await buildHome(serverIndex);
+  const gate = beginChannelLoad(cfg.channelId);
+  const initial = await buildHome(serverIndex, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+  if (initial?.stale || isStale(cfg.channelId, gate.token)) return;
 
   // NAV (top)
   let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
   if (!navMsg) {
-    navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
+    navMsg = if (isStale(cfg.channelId, gate.token)) return;
+    await channel.send({ content: "", embeds: [], components: initial.nav });
     upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
     cfg.ui.navId = navMsg.id;
     
@@ -1155,10 +1191,12 @@ async function ensureUIForServer(serverIndex) {
   // CONTENT (bottom)
   let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
   if (!contentMsg) {
-    contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
+    contentMsg = if (isStale(cfg.channelId, gate.token)) return;
+    await channel.send({ embeds: initial.embeds, components: initial.pager });
     upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
     cfg.ui.contentId = contentMsg.id;
   } else {
+    if (isStale(cfg.channelId, gate.token)) return;
     await contentMsg.edit({ embeds: initial.embeds, components: initial.pager, files: [] });
   }
   
@@ -1167,7 +1205,7 @@ async function ensureUIForServer(serverIndex) {
 async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   // Stop an old one if it exists
   if (uiCollector) {
-    try { uiCollector.stop('restart'); } catch {}
+    try { uiCollector.stop('restart'); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
     uiCollector = null;
   }
 
@@ -1183,7 +1221,9 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 	  if (reason === 'idle') {
 		try {
 		  // Auto-refresh Home on idle, even if already on Home
-		  const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0 });
+		  const gate = beginChannelLoad(cfg.channelId);
+		  const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+		  if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
 
 		  if (payload?.hadError) {
 			console.warn("[ui] idle refresh: aborting edit due to upstream error");
@@ -1194,6 +1234,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 			  channel.messages.fetch(cfg.ui.contentId),
 			]);
 
+			if (isStale(cfg.channelId, gate.token)) return;
 			await Promise.all([
 			  navMsg.edit({ content: "", embeds: [], components: payload.nav, files: [] }),
 			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: [] }),
@@ -1209,10 +1250,10 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 	});
 }
 
-async function buildView(serverIndex, { view, page, param, weaponsPage }) {
+async function buildView(serverIndex, { view, page, param, weaponsPage, signal, token, channelId }) {
   
   if (view === VIEWS.HOME) {
-    return await buildHome(serverIndex);
+    return await buildHome(serverIndex, { signal, token, channelId });
   }
   if (view === VIEWS.LADDER) {
     return await buildLadder(serverIndex, page);
@@ -1221,13 +1262,13 @@ async function buildView(serverIndex, { view, page, param, weaponsPage }) {
     return await buildWeapons(serverIndex, page);
   }
   if (view === VIEWS.WEAPON_PLAYERS) {
-    return await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    return await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0, { signal, token, channelId });
   }
   if (view === VIEWS.MAPS) {
-    return await buildMaps(serverIndex, page);
+    return await buildMaps(serverIndex, page, { signal, token, channelId });
   }
   if (view === VIEWS.MAPS_PLAYERS) {
-    return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0);
+    return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0, { signal, token, channelId });
   }
   if(view === VIEWS.AWARDS) {
 	return param ? await buildAward(serverIndex, awards.find(a => a.name === param) || awards[0], page, weaponsPage ?? 0) : await buildAwards(serverIndex, page);
@@ -1800,19 +1841,25 @@ async function handleUiComponent(i, serverIndex) {
 
     // NAV toolbar button
     if (i.message.id === cfg.ui.navId) {
+      const gate = beginChannelLoad(cfg.channelId);
 		
-      const payload = await buildView(serverIndex, parsed);
+      const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
 	  const files = [];
 		
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-	    await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	    if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 	  
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
@@ -1866,19 +1913,25 @@ async function handleUiComponent(i, serverIndex) {
 
     // CONTENT pager buttons
     if (i.message.id === cfg.ui.contentId) {
+      const gate = beginChannelLoad(cfg.channelId);
       if (parsed.view === VIEWS.WEAPON_PLAYERS) {
-        const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
         const files = [];
 
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -1930,18 +1983,23 @@ async function handleUiComponent(i, serverIndex) {
         return;
       }
       if (parsed.view === VIEWS.MAPS_PLAYERS) {
-        const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
+        const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
         const files = [];
 
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -1994,18 +2052,23 @@ async function handleUiComponent(i, serverIndex) {
       }
 	
 		
-      const payload = await buildView(serverIndex, parsed);
+      const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
 	  const files = [];
 
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -2059,12 +2122,15 @@ async function handleUiComponent(i, serverIndex) {
     }
 	
 /*	if (parsed.view === VIEWS.AWARDS) {
-        const payload = await buildView(serverIndex, parsed);
+        const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
+      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
         await i.update({ embeds: payload.embeds, components: payload.pager });
         if (cfg.ui.navId) {
           const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
           const navMsg = await channel.messages.fetch(cfg.ui.navId);
-          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+          if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
         }
         if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
         return;
@@ -2095,12 +2161,16 @@ async function handleUiComponent(i, serverIndex) {
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -2160,12 +2230,16 @@ async function handleUiComponent(i, serverIndex) {
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -2227,12 +2301,16 @@ async function handleUiComponent(i, serverIndex) {
 	  if (cfg.ui.contentId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+		if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
+        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
 	  }
 
       if (cfg.ui.navId) {
         const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
         const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        if (isStale(cfg.channelId, gate.token)) return;
+        if (isStale(cfg.channelId, gate.token)) return;
         await navMsg.edit({ content: "", embeds: [], components: payload.nav });
       }
 	  
@@ -2467,7 +2545,7 @@ client.on(Events.InteractionCreate, async (i) => {
       } else {
         await i.reply({ content: "Something went wrong.", flags: 64 });
       }
-    } catch {}
+    } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
   }
 });
 
