@@ -1173,8 +1173,8 @@ async function ensureUIForServer(serverIndex) {
   // NAV (top)
   let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
   if (!navMsg) {
-    navMsg = if (isStale(cfg.channelId, gate.token)) return;
-    await channel.send({ content: "", embeds: [], components: initial.nav });
+	if (isStale(cfg.channelId, gate.token)) return;
+    navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
     upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
     cfg.ui.navId = navMsg.id;
     
@@ -1184,8 +1184,8 @@ async function ensureUIForServer(serverIndex) {
   // CONTENT (bottom)
   let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
   if (!contentMsg) {
-    contentMsg = if (isStale(cfg.channelId, gate.token)) return;
-    await channel.send({ embeds: initial.embeds, components: initial.pager });
+    if (isStale(cfg.channelId, gate.token)) return;
+    contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
     upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
     cfg.ui.contentId = contentMsg.id;
   } else {
