@@ -219,6 +219,55 @@ const awards = [
 	  emoji: "targetmaster",
 	  query: queries.award_chat,
 	  properties: [{name: "Chats sent", prop: "num_chat"}]
+	},
+	{ key: "award_headshot_percent",
+	  name: "Clicking Heads",
+	  description: "Highest Headshot Kill Percentage",
+	  emoji: "death_headshot",
+	  query: queries.award_headshot_percent,
+	  properties: [{name: "Headshots", prop: "kills"}, {name: "Percent", prop: "percent"}]
+	},
+	{ key: "award_killcam",
+	  name: "Mom, Get the Camera!",
+	  description: "Most Final Kill Cams",
+	  emoji: "death_headshot",
+	  query: queries.award_killcam,
+	  properties: [{name: "Final Killcams", prop: "num_killcam"}]
+	},
+	{ key: "award_clutch",
+	  name: "Michael Jordan",
+	  description: "Most SD Cluthes (minimum 3 kills)",
+	  emoji: "death_headshot",
+	  query: queries.award_clutch,
+	  properties: [{name: "Clutches", prop: "clutches"}]
+	},
+	{ key: "award_ace",
+	  name: "Texas Hold'em",
+	  description: "Most SD Aces (minimum 3 kills)",
+	  emoji: "death_headshot",
+	  query: queries.award_ace,
+	  properties: [{name: "Aces", prop: "aces"}]
+	},
+	{ key: "award_wins",
+	  name: "All I Do is Win",
+	  description: "Most Match Wins",
+	  emoji: "death_headshot",
+	  query: queries.award_wins,
+	  properties: [{name: "Wins", prop: "win"}]
+	},
+	{ key: "award_winper",
+	  name: "VIII Rings",
+	  description: "Best Win Percentage (minimum 10 games)",
+	  emoji: "death_headshot",
+	  query: queries.award_winper,
+	  properties: [{name: "Wins", prop: "wins"}, {name: "Losses", prop: "losses"}, {name: "Win Percentage", prop: "winper"}]
+	},
+	{ key: "award_lossper",
+	  name: "Bad Luck Boda",
+	  description: "Lowest Win Percentage (minimum 10 games)",
+	  emoji: "death_headshot",
+	  query: queries.award_lossper,
+	  properties: [{name: "Wins", prop: "wins"}, {name: "Losses", prop: "losses"}, {name: "Win Percentage", prop: "winper"}]
 	}
 ];
 
@@ -1741,16 +1790,17 @@ async function handleUiComponent(i, serverIndex) {
     const parsed = parseCustomId(i.customId);
     if (!parsed) return; // ignore non-UI buttons
 
+	try {
+	  if (!i.deferred && !i.replied) {
+		await i.deferUpdate(); // acknowledges the interaction
+	  }
+	} catch (e) {
+	  // If already acknowledged somewhere else, ignore
+	}
+
     // NAV toolbar button
     if (i.message.id === cfg.ui.navId) {
 		
-		try {
-		  if (!i.deferred && !i.replied) {
-			await i.deferUpdate(); // acknowledges the interaction
-		  }
-		} catch (e) {
-		  // If already acknowledged somewhere else, ignore
-		}
       const payload = await buildView(serverIndex, parsed);
 	  const files = [];
 		
@@ -1798,13 +1848,16 @@ async function handleUiComponent(i, serverIndex) {
 			  e.setImage(`attachment://${filename}`);
 
 			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+			  
 		  }
-	  }
-	  
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-	    await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
 	  }
 		
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
@@ -1815,34 +1868,132 @@ async function handleUiComponent(i, serverIndex) {
     if (i.message.id === cfg.ui.contentId) {
       if (parsed.view === VIEWS.WEAPON_PLAYERS) {
         const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-        await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files });
-        if (cfg.ui.navId) {
-          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-          const navMsg = await channel.messages.fetch(cfg.ui.navId);
-          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-        }
+        const files = [];
+
+	  if (cfg.ui.contentId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  }
+
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+	  
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[e.clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+		  }
+	  }
         if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
         return;
       }
       if (parsed.view === VIEWS.MAPS_PLAYERS) {
         const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0);
-        await i.update({ embeds: payload.embeds, components: payload.pager, files: payload.files });
-        if (cfg.ui.navId) {
-          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-          const navMsg = await channel.messages.fetch(cfg.ui.navId);
-          await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-        }
+        const files = [];
+
+	  if (cfg.ui.contentId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  }
+
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+	  
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[e.clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+		  }
+	  }
         if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
         return;
       }
 	
-		try {
-		  if (!i.deferred && !i.replied) {
-			await i.deferUpdate(); // acknowledges the interaction
-		  }
-		} catch (e) {
-		  // If already acknowledged somewhere else, ignore
-		}
+		
       const payload = await buildView(serverIndex, parsed);
 	  const files = [];
 
@@ -1892,14 +2043,17 @@ async function handleUiComponent(i, serverIndex) {
 			  e.setImage(`attachment://${filename}`);
 
 			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
 		  }
 	  }
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-	  }
-	  
+	 
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }
@@ -1922,17 +2076,78 @@ async function handleUiComponent(i, serverIndex) {
     console.log(`[ui:select] ${i.customId} -> ${JSON.stringify(i.values)} in #${i.channel?.id || '?'} user=${i.user?.id || '?'}`);
     const [prefix, view, kind, pageStr] = i.customId.split(":");
     if (prefix !== "ui") return;
+	
+	try {
+	  if (!i.deferred && !i.replied) {
+		await i.deferUpdate(); // acknowledges the interaction
+	  }
+	} catch (e) {
+	  // If already acknowledged somewhere else, ignore
+	}
+	
     const page = Math.max(0, parseInt(pageStr, 10) || 0);
 
     if (view === "weapons" && kind === "select") {
       const label = i.values[0];
       const payload = await buildWeaponPlayers(serverIndex, label, 0, page);
-      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
-      ]);
+      const files = [];
+
+	  if (cfg.ui.contentId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  }
+
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+	  
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[e.clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+		  }
+	  }
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }
@@ -1940,12 +2155,64 @@ async function handleUiComponent(i, serverIndex) {
     if (view === "maps" && kind === "select") {
       const label = i.values[0];
       const payload = await buildMapPlayers(serverIndex, label, 0, page);
-      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
-      ]);
+      const files = [];
+
+	  if (cfg.ui.contentId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  }
+
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+	  
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[e.clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+		  }
+	  }
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }
@@ -1955,12 +2222,64 @@ async function handleUiComponent(i, serverIndex) {
       const globalIndex = page * V_PAGE + selIndex;
       const award = awards[globalIndex];
       const payload = await buildAward(serverIndex, award, 0, page);
-      const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: payload.nav }),
-        contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files })
-      ]);
+      const files = [];
+
+	  if (cfg.ui.contentId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+		await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
+	  }
+
+      if (cfg.ui.navId) {
+        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+        const navMsg = await channel.messages.fetch(cfg.ui.navId);
+        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
+      }
+	  
+	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	  const ZERO_WIDTH = "⠀";
+	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	  const blankText = ZERO_WIDTH.repeat(padLen);
+	  
+	  for (const e of payload.embeds){
+		  e.setFooter({ text: blankText });
+		  // Pull saved banner options (default to 0 if not set)
+		  if(e.clientId){
+			  const [pc] = await runQueryOn(
+				serverIndex,
+				queries.playerCoreAndBannerById,
+				[e.clientId]
+			  );
+			  const bg = Number(pc?.background ?? 0) || 0;
+			  const em = Number(pc?.emblem ?? 0) || 0;
+			  const cs = Number(pc?.callsign ?? 0) || 0;
+
+			  // Generate the banner
+			  const { buffer, filename } = await generateBanner({
+				background: bg,
+				emblem: em,
+				callsign: cs,
+				playerName: pc.name,              
+				kills: Number(pc.kills) || 0,
+				deaths: Number(pc.deaths) || 0,
+				skill: Number(pc.skill) || 0
+			  });
+			  
+			  const file = new AttachmentBuilder(buffer, { name: filename });
+
+			  e.setImage(`attachment://${filename}`);
+
+			  files.push(file);
+			  
+			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
+			  
+			  if (cfg.ui.contentId) {
+				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
+				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
+			  }
+		  }
+	  }
       if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
       return;
     }

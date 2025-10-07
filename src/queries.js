@@ -642,6 +642,149 @@ export const award_chat = `
   LIMIT ? OFFSET ?
 `;
 
+// 11) Most Final Killcams — xlr_playeractivities (activity = 'final_killcam')
+export const award_killcam = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(pa.count) AS num_killcam
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  WHERE pa.activity = 'final_killcam'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(pa.count) > 0
+  ORDER BY num_killcam DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 12) Most SD Clutches — xlr_playeractivities (activity = 'sd_clutch')
+export const award_clutch = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(pa.count) AS clutches
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  WHERE pa.activity = 'sd_clutch'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(pa.count) > 0
+  ORDER BY clutches DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 13) Most SD Aces — xlr_playeractivities (activity = 'sd_ace')
+export const award_ace = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(pa.count) AS aces
+  FROM clients c
+  ${preferredAliasJoin("a","c.id")}
+  JOIN xlr_playeractivities pa ON pa.player_id = c.id
+  WHERE pa.activity = 'sd_ace'
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(pa.count) > 0
+  ORDER BY aces DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 14) Most Wins — xlr_playerstats
+// NOTE: alias is "win" (singular) to match index.js properties
+export const award_wins = `
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    SUM(s.wins) AS win
+  FROM ${PLAYERSTATS} s
+  JOIN clients c ON c.id = s.client_id
+  ${preferredAliasJoin("a","c.id")}
+  GROUP BY c.id, a.alias, c.name, c.discord_id
+  HAVING SUM(s.wins) > 0
+  ORDER BY win DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 15) Best Win % (min 10 games) — xlr_playerstats
+export const award_winper = `
+  WITH agg AS (
+    SELECT
+      s.client_id,
+      SUM(s.wins)   AS wins,
+      SUM(s.losses) AS losses
+    FROM ${PLAYERSTATS} s
+    GROUP BY s.client_id
+  )
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    agg.wins    AS wins,
+    agg.losses  AS losses,
+    ROUND(100.0 * agg.wins / NULLIF(agg.wins + agg.losses, 0), 2) AS winper
+  FROM agg
+  JOIN clients c ON c.id = agg.client_id
+  ${preferredAliasJoin("a","c.id")}
+  WHERE (agg.wins + agg.losses) >= 10
+  ORDER BY winper DESC, wins DESC
+  LIMIT ? OFFSET ?
+`;
+
+// 16) Worst Win % (min 10 games) — xlr_playerstats
+export const award_lossper = `
+  WITH agg AS (
+    SELECT
+      s.client_id,
+      SUM(s.wins)   AS wins,
+      SUM(s.losses) AS losses
+    FROM ${PLAYERSTATS} s
+    GROUP BY s.client_id
+  )
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    agg.wins    AS wins,
+    agg.losses  AS losses,
+    ROUND(100.0 * agg.wins / NULLIF(agg.wins + agg.losses, 0), 2) AS winper
+  FROM agg
+  JOIN clients c ON c.id = agg.client_id
+  ${preferredAliasJoin("a","c.id")}
+  WHERE (agg.wins + agg.losses) >= 10
+  ORDER BY winper ASC, losses DESC
+  LIMIT ? OFFSET ?
+`;
+// 17) Headshot % — total headshots / total kills
+export const award_headper = `
+  WITH agg AS (
+    SELECT
+      s.client_id,
+      SUM(s.kills) AS kills,
+      SUM(s.headshots) AS headshots
+    FROM ${PLAYERSTATS} s
+    GROUP BY s.client_id
+  )
+  SELECT
+    c.id AS client_id,
+    COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+    c.discord_id AS discord_id,
+    agg.kills,
+    agg.headshots,
+    ROUND(100.0 * agg.headshots / NULLIF(agg.kills, 0), 2) AS headper
+  FROM agg
+  JOIN clients c ON c.id = agg.client_id
+  ${preferredAliasJoin("a","c.id")}
+  WHERE agg.kills >= 50
+  ORDER BY headper DESC, agg.kills DESC
+  LIMIT ? OFFSET ?
+`;
+
+
 // --- Award rank builders ---
 export function awardRank(index, clientId) {
   const array = [ {
@@ -818,7 +961,152 @@ export function awardRank(index, clientId) {
           FROM me
         `,
         params: [clientId]
-      }];
+      }      ,{
+        // 10 → Most Final Killcams
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   SUM(pa.count) AS num_killcam
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            WHERE pa.activity = 'final_killcam'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.num_killcam,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.num_killcam > me.num_killcam) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 11 → Most SD Clutches
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   SUM(pa.count) AS clutches
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            WHERE pa.activity = 'sd_clutch'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.clutches,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.clutches > me.clutches) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 12 → Most SD Aces
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   SUM(pa.count) AS aces
+            FROM clients c
+            ${preferredAliasJoin("a","c.id")}
+            JOIN xlr_playeractivities pa ON pa.player_id = c.id
+            WHERE pa.activity = 'sd_ace'
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.aces,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.aces > me.aces) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 13 → Most Wins
+        sql: `
+          WITH per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   SUM(s.wins) AS win
+            FROM ${PLAYERSTATS} s
+            JOIN clients c ON c.id = s.client_id
+            ${preferredAliasJoin("a","c.id")}
+            GROUP BY c.id, a.alias, c.name, c.discord_id
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.win,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.win > me.win) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 14 → Best Win %
+        sql: `
+          WITH agg AS (
+            SELECT client_id, SUM(wins) AS wins, SUM(losses) AS losses
+            FROM ${PLAYERSTATS}
+            GROUP BY client_id
+          ),
+          per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   agg.wins AS wins, agg.losses AS losses,
+                   ROUND(100.0 * agg.wins / NULLIF(agg.wins + agg.losses, 0), 2) AS winper
+            FROM agg
+            JOIN clients c ON c.id = agg.client_id
+            ${preferredAliasJoin("a","c.id")}
+            WHERE (agg.wins + agg.losses) >= 10
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.wins, me.losses, me.winper,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.winper > me.winper) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 15 → Worst Win %
+        sql: `
+          WITH agg AS (
+            SELECT client_id, SUM(wins) AS wins, SUM(losses) AS losses
+            FROM ${PLAYERSTATS}
+            GROUP BY client_id
+          ),
+          per AS (
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
+                   agg.wins AS wins, agg.losses AS losses,
+                   ROUND(100.0 * agg.wins / NULLIF(agg.wins + agg.losses, 0), 2) AS winper
+            FROM agg
+            JOIN clients c ON c.id = agg.client_id
+            ${preferredAliasJoin("a","c.id")}
+            WHERE (agg.wins + agg.losses) >= 10
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.wins, me.losses, me.winper,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.winper < me.winper) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      },{
+        // 16 → Headshot %
+        sql: `
+          WITH agg AS (
+            SELECT client_id, SUM(kills) AS kills, SUM(headshots) AS headshots
+            FROM ${PLAYERSTATS}
+            GROUP BY client_id
+          ),
+          per AS (
+            SELECT c.id AS client_id,
+                   COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+                   c.discord_id AS discord_id,
+                   agg.kills,
+                   agg.headshots,
+                   ROUND(100.0 * agg.headshots / NULLIF(agg.kills, 0), 2) AS headper
+            FROM agg
+            JOIN clients c ON c.id = agg.client_id
+            ${preferredAliasJoin("a","c.id")}
+            WHERE agg.kills >= 50
+          ),
+          me AS ( SELECT * FROM per WHERE client_id = ? )
+          SELECT me.client_id, me.name, me.discord_id, me.kills, me.headshots, me.headper,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.headper > me.headper) AS rank
+          FROM me
+        `,
+        params: [clientId]
+      }
+
+];
 	  
 	  return array[index];
 }
@@ -865,6 +1153,13 @@ export const queries = {
   award_plant,
   award_defuse,
   award_chat,
+    award_killcam,
+  award_clutch,
+  award_ace,
+  award_wins,
+  award_winper,
+  award_lossper,
+  award_headper,
   // Top players by skill (no server_id filter)
   topBySkill: `
     SELECT c.id AS client_id,
