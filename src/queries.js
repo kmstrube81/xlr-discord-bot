@@ -763,27 +763,39 @@ export const award_lossper = `
   LIMIT ? OFFSET ?
 `;
 // 17) Headshot % — total headshots / total kills
-export const award_headper = `
-  WITH agg AS (
+// Headshot % — (headshots from xlr_playerbody) / (kills from xlr_playerstats)
+// Minimum 50 kills to avoid tiny-sample outliers
+export const award_headshot_percent = `
+  WITH kills_agg AS (
     SELECT
       s.client_id,
-      SUM(s.kills) AS kills,
-      SUM(s.headshots) AS headshots
+      SUM(s.kills) AS kills
     FROM ${PLAYERSTATS} s
     GROUP BY s.client_id
+  ),
+  hs_agg AS (
+    SELECT
+      pb.player_id AS client_id,
+      SUM(pb.kills) AS headshots
+    FROM ${PLAYERBODY} pb
+    WHERE pb.bodypart_id = (
+      SELECT id FROM xlr_bodyparts WHERE name = 'head'
+    )
+    GROUP BY pb.player_id
   )
   SELECT
     c.id AS client_id,
     COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
     c.discord_id AS discord_id,
-    agg.kills,
-    agg.headshots,
-    ROUND(100.0 * agg.headshots / NULLIF(agg.kills, 0), 2) AS headper
-  FROM agg
-  JOIN clients c ON c.id = agg.client_id
+    kills_agg.kills,
+    COALESCE(hs_agg.headshots, 0) AS headshots,
+    ROUND(100.0 * COALESCE(hs_agg.headshots, 0) / NULLIF(kills_agg.kills, 0), 2) AS percent
+  FROM kills_agg
+  JOIN clients c ON c.id = kills_agg.client_id
   ${preferredAliasJoin("a","c.id")}
-  WHERE agg.kills >= 50
-  ORDER BY headper DESC, agg.kills DESC
+  LEFT JOIN hs_agg ON hs_agg.client_id = kills_agg.client_id
+  WHERE kills_agg.kills >= 50
+  ORDER BY percent DESC, kills_agg.kills DESC
   LIMIT ? OFFSET ?
 `;
 
@@ -1082,32 +1094,41 @@ export function awardRank(index, clientId) {
         `,
         params: [clientId]
       },{
-        // 16 → Headshot %
+        // 16 Headshot %
         sql: `
-          WITH agg AS (
-            SELECT client_id, SUM(kills) AS kills, SUM(headshots) AS headshots
+          WITH kills_agg AS (
+            SELECT client_id, SUM(kills) AS kills
             FROM ${PLAYERSTATS}
             GROUP BY client_id
           ),
+          hs_agg AS (
+            SELECT pb.player_id AS client_id, SUM(pb.kills) AS headshots
+            FROM ${PLAYERBODY} pb
+            WHERE pb.bodypart_id = (SELECT id FROM xlr_bodyparts WHERE name = 'head')
+            GROUP BY pb.player_id
+          ),
           per AS (
-            SELECT c.id AS client_id,
-                   COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
-                   c.discord_id AS discord_id,
-                   agg.kills,
-                   agg.headshots,
-                   ROUND(100.0 * agg.headshots / NULLIF(agg.kills, 0), 2) AS headper
-            FROM agg
-            JOIN clients c ON c.id = agg.client_id
+            SELECT
+              c.id AS client_id,
+              COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name,
+              c.discord_id AS discord_id,
+              kills_agg.kills,
+              COALESCE(hs_agg.headshots, 0) AS headshots,
+              ROUND(100.0 * COALESCE(hs_agg.headshots, 0) / NULLIF(kills_agg.kills, 0), 2) AS percent
+            FROM kills_agg
+            JOIN clients c ON c.id = kills_agg.client_id
             ${preferredAliasJoin("a","c.id")}
-            WHERE agg.kills >= 50
+            LEFT JOIN hs_agg ON hs_agg.client_id = kills_agg.client_id
+            WHERE kills_agg.kills >= 50
           ),
           me AS ( SELECT * FROM per WHERE client_id = ? )
-          SELECT me.client_id, me.name, me.discord_id, me.kills, me.headshots, me.headper,
-                 1 + (SELECT COUNT(*) FROM per p WHERE p.headper > me.headper) AS rank
+          SELECT me.client_id, me.name, me.discord_id, me.kills, me.headshots, me.percent,
+                 1 + (SELECT COUNT(*) FROM per p WHERE p.percent > me.percent) AS rank
           FROM me
         `,
         params: [clientId]
       }
+
 
 ];
 	  
