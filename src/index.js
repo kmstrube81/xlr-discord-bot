@@ -267,7 +267,7 @@ const awards = [
 	  description: "Highest Headshot Kill Percentage",
 	  emoji: "death_headshot",
 	  query: queries.award_headper,
-	  properties: [{name: "Headshots", prop: "kills"}, {name: "Percent", prop: "headper"}]
+	  properties: [{name: "Headshots", prop: "headshots"}, {name: "Percent", prop: "percents"}]
 	}
 ];
 
