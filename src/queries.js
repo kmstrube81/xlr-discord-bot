@@ -652,7 +652,8 @@ export const award_killcam = `
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
   JOIN xlr_playeractions pa ON pa.player_id = c.id
-  WHERE pa.activity = 'final_killcam'
+  JOIN xlr_actionstats act ON act.id = pa.action_id
+  WHERE act.name = 'final_killcam'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
   ORDER BY num_killcam DESC
@@ -669,7 +670,8 @@ export const award_clutch = `
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
   JOIN xlr_playeractions pa ON pa.player_id = c.id
-  WHERE pa.activity = 'sd_clutch'
+  JOIN xlr_actionstats act ON act.id = pa.action_id
+  WHERE act.name = 'sd_clutch'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
   ORDER BY clutches DESC
@@ -686,7 +688,8 @@ export const award_ace = `
   FROM clients c
   ${preferredAliasJoin("a","c.id")}
   JOIN xlr_playeractions pa ON pa.player_id = c.id
-  WHERE pa.activity = 'sd_ace'
+  JOIN xlr_actionstats act ON act.id = pa.action_id
+  WHERE act.name = 'sd_ace'
   GROUP BY c.id, a.alias, c.name, c.discord_id
   HAVING SUM(pa.count) > 0
   ORDER BY aces DESC
@@ -965,12 +968,12 @@ export function awardRank(index, clientId) {
         // 10 → Most Final Killcams
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
-                   SUM(pa.count) AS num_killcam
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS num_killcam
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN xlr_playeractions pa ON pa.player_id = c.id
-            WHERE pa.activity = 'final_killcam'
+            JOIN xlr_actionstats act ON act.id = pa.action_id
+            WHERE act.name = 'final_killcam'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
           me AS ( SELECT * FROM per WHERE client_id = ? )
@@ -983,12 +986,12 @@ export function awardRank(index, clientId) {
         // 11 → Most SD Clutches
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
-                   SUM(pa.count) AS clutches
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS clutches
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN xlr_playeractions pa ON pa.player_id = c.id
-            WHERE pa.activity = 'sd_clutch'
+            JOIN xlr_actionstats act ON act.id = pa.action_id
+            WHERE act.name = 'sd_clutch'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
           me AS ( SELECT * FROM per WHERE client_id = ? )
@@ -1001,12 +1004,12 @@ export function awardRank(index, clientId) {
         // 12 → Most SD Aces
         sql: `
           WITH per AS (
-            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id,
-                   SUM(pa.count) AS aces
+            SELECT c.id AS client_id, COALESCE(NULLIF(c.preferred_name,''), a.alias, c.name) AS name, c.discord_id AS discord_id, SUM(pa.count) AS aces
             FROM clients c
             ${preferredAliasJoin("a","c.id")}
             JOIN xlr_playeractions pa ON pa.player_id = c.id
-            WHERE pa.activity = 'sd_ace'
+            JOIN xlr_actionstats act ON act.id = pa.action_id
+            WHERE act.name = 'sd_ace'
             GROUP BY c.id, a.alias, c.name, c.discord_id
           ),
           me AS ( SELECT * FROM per WHERE client_id = ? )
