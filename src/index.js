@@ -1229,25 +1229,6 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
   });
 
   uiCollector.on('end', async (_collected, reason) => {
-  if (reason === 'idle') {
-    try {
-      const gate = beginChannelLoad(cfg.channelId);
-      // If you refresh HOME:
-      const payload = await buildHome(serverIndex, {
-        signal: gate.signal,
-        token: gate.token,
-        channelId: cfg.channelId
-      });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-
-      await contentMsg.edit({ embeds: payload.embeds, components: payload.pager }).catch(()=>{});
-      await navMsg.edit({ components: payload.nav }).catch(()=>{});
-    } catch (e) {
-      console.warn("[ui] idle refresh failed:", e);
-    }
-  }
-});
-
 	  if (reason === 'idle') {
 		try {
 		  // Auto-refresh Home on idle, even if already on Home
