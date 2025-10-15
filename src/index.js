@@ -543,7 +543,7 @@ client.on(Events.InteractionCreate, async (i) => {
 			return;
 		}
 		//get serverIndex from ui click
-		const serverIndex = SERVER_CONFIGS.findIndex(c => c.ui.channelId === i.channelId);
+		const serverIndex = getServerIndexFromComponent(i);
 		//abort if invalid config
 		if (serverIndex < 0){
 			console.warn("ERR: Invalid Server Config!");
@@ -700,7 +700,7 @@ function readEnvSet(env, n = 1) {
 	};
 	//store discord server related vars to ui object
 	const ui = {
-		channelID: get("CHANNEL_ID") || null,
+		channelId: get("CHANNEL_ID") || null,
 		navId: get("UI_NAV_MESSAGE_ID") || null,
 		contentId: get("UI_CONTENT_MESSAGE_ID") || null,
 	};
@@ -2366,9 +2366,10 @@ returns the index of the server from the slash commands
 function resolveServerIndexFromInteraction(interaction) {
 	//get the server index from slash command
 	const arg = interaction.options?.getString("server")?.trim();
-	//if an argument wasn't specified use the first server by defualt
-	if (!arg) return 0; // default
-
+	//if an argument wasn't specified check if the channel id matches a server
+	if (!arg) {
+		return 0; // default
+	}
 	//if the argument can be cast to a valid number, use that index
 	const asNum = Number(arg);
 	if (Number.isFinite(asNum) && asNum >= 1 && asNum <= SERVER_CONFIGS.length) return asNum - 1;
@@ -2379,6 +2380,17 @@ function resolveServerIndexFromInteraction(interaction) {
   
 	//if its not the server name and not a number, fallback to the first server by default
 	return 0;
+}
+
+function getServerIndexFromComponent(interaction) {
+	
+	const channelId = interaction?.channelId ?? null;
+	
+	for( let i = 0; i < SERVER_CONFIGS.length; i++){
+		if(SERVER_CONFIGS[i].ui.channelId === channelId)
+			return i;
+	}
+	return -1;
 }
 
 /* ***************************************************************
