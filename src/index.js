@@ -1183,7 +1183,7 @@ async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
 	]);
 
 	// PRE-ENRICH: fetch Discord username for titles/labels
-	const rowsWithNames = await insertPlayerCardDetails(rows);
+	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
 	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.LADDER, rowsWithNames, page, null)];
@@ -1869,7 +1869,6 @@ handles ui component click
 **************************************************************** */
 async function handleUiComponent(i, serverIndex) {
 	const cfg = byIndex.get(serverIndex);
-	if(XLR_DEBUG) console.log(cfg);
 	const state = perChannelState.get(cfg.channelId);
 	const uiCollector = state?.collectors || null;
 
