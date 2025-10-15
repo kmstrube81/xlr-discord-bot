@@ -1599,6 +1599,9 @@ async function handleSlashCommand(i) {
 		const cfg = byIndex.get(serverIndex);
 		//defer reply for long executing
 		await i.deferReply();
+		
+		let count;
+		
 		switch(i.commandName){
 			case "xlr-servers":
 				//get the server 
@@ -1610,7 +1613,7 @@ async function handleSlashCommand(i) {
 				return;
 			case "xlr-top":
 				//get the top list of players based on specified filters
-				const count  = i.options.getInteger("count") ?? 0;
+				count  = i.options.getInteger("count") ?? 0;
 				const weapon = i.options.getString("weapon");
 				const map    = i.options.getString("map");
 				const sort   = i.options.getString("sort") || "skill";
@@ -1756,7 +1759,7 @@ async function handleSlashCommand(i) {
 				return;
 				
 			case "xlr-lastseen":
-				let count = i.options.getInteger("count") ?? 10;
+				count = i.options.getInteger("count") ?? 10;
 				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows);
 				//format embed
