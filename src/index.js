@@ -953,7 +953,7 @@ async function ensureUIForServer(serverIndex) {
 		cfg.ui.contentId = contentMsg.id;
 	}
     //Send message
-	sendMessage(channel, cfg, initial.navComponents, intial.contentEmbeds, initial.footerText)
+	sendMessage(channel, cfg, initial.navComponents, initial.contentEmbeds, initial.footerText)
 }
 
 /* ***************************************************************
