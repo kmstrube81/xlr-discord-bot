@@ -1869,6 +1869,7 @@ handles ui component click
 **************************************************************** */
 async function handleUiComponent(i, serverIndex) {
 	const cfg = byIndex.get(serverIndex);
+	if(XLR_DEBUG) console.log(cfg);
 	const state = perChannelState.get(cfg.channelId);
 	const uiCollector = state?.collectors || null;
 
