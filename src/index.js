@@ -1756,11 +1756,11 @@ async function handleSlashCommand(i) {
 				return;
 				
 			case "xlr-lastseen":
-				const count = i.options.getInteger("count") ?? 10;
+				let count = i.options.getInteger("count") ?? 10;
 				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows);
 				//format embed
-				const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+				let embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
 				await sendMessage(i,cfg,[],[embed]);
 				return;
 			
