@@ -1600,7 +1600,7 @@ async function handleSlashCommand(i) {
 		//defer reply for long executing
 		await i.deferReply();
 		
-		let count;
+		let count, rows;
 		
 		switch(i.commandName){
 			case "xlr-servers":
@@ -1713,7 +1713,7 @@ async function handleSlashCommand(i) {
 				else if (weaponOpt) {
 					const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
 					const { sql, params } = queries.playerWeaponCard;
-					const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
+					rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
 					if (!rows.length){
 						await sendWhisper(i,`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
 						return;
@@ -1740,7 +1740,7 @@ async function handleSlashCommand(i) {
 						await sendWhisper( i,`Pick a different opponent than the player.`);
 						return;
 					}
-					const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
+					rows = await runQueryOn(serverIndex, queries.playerVsCard, [
 						opponentId,
 						clientId, opponentId,
 						opponentId, clientId,
@@ -1750,7 +1750,7 @@ async function handleSlashCommand(i) {
 						await sendWhisper(i,`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
 						return;
 					}
-					const rows2 = await Promise.all(
+					rows = await Promise.all(
 					  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
 					);
 					/* TODO add fields to main embed */
@@ -1760,7 +1760,7 @@ async function handleSlashCommand(i) {
 				
 			case "xlr-lastseen":
 				count = i.options.getInteger("count") ?? 10;
-				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+				rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows);
 				//format embed
 				let embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
