@@ -2210,7 +2210,7 @@ async function fetchServerStatus(ip, port, signal) {
 		const summary = summarizeAxiosError(err);
 		//log error
 		console.warn(`[http] status api error ${ip}:${port} → ${summary}`);
-		return error summary
+
 		return { error: summary };
 	}
 }
