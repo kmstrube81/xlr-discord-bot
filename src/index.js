@@ -1,3 +1,6 @@
+/* ***************************************************************
+IMPORTS
+**************************************************************** */
 import "dotenv/config";
 import {
   Client,
@@ -15,7 +18,8 @@ import {
   AttachmentBuilder,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  MessageFlags
 } from "discord.js";
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
@@ -45,109 +49,43 @@ import axios from "axios";
 import path from "node:path";
 import fs from "node:fs";
 
-// -------------------------------------------------------------------------------------
-// ENV + helpers
-// -------------------------------------------------------------------------------------
-
+/* *******************************************************
+END IMPORTS
+**********************************************************
+START CONSTANTS
+******************************************************** */
 const {
-  DISCORD_TOKEN, APPLICATION_ID, GUILD_ID, TZ,
-  XLR_DEFAULT_IMAGE
+  DISCORD_TOKEN, //Token for the bot from the discord dev portal
+  APPLICATION_ID, //Application ID for bot from the discord dev portal
+  GUILD_ID, //The Discord server the bot is being installed to
+  TZ, //Time Zone
+  XLR_DEFAULT_IMAGE //link to a default image to use when thumbnails fail to load
 } = process.env;
 
-const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png";
+const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png"; //init default thumbnail
 
-// Write a key=value into .env (create if missing)
-function upsertEnv(key, value) {
-  const ENV_PATH = path.resolve(process.cwd(), ".env");
-  const lines = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf8").split(/\r?\n/) : [];
-  const idx = lines.findIndex(l => l.startsWith(`${key}=`));
-  if (idx >= 0) lines[idx] = `${key}=${value}`;
-  else lines.push(`${key}=${value}`);
-  fs.writeFileSync(ENV_PATH, lines.join("\n"), "utf8");
-  process.env[key] = value;
-}
+const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
+const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c])); //create map for servers by index (for use with slash commands)
+const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }])); //create map for servers by server name cast to lower case (for use with slash commands)
+const __memberNameCache = new Map(); //cache everyones discord names
 
-function suffixKey(n, base) {
-  return n === 1 ? base : `${base}_${n}`;
-}
+const INACTIVITY_MS = 2 * 60 * 1000; // Inactivity timer 2 minutes 
 
-function readEnvSet(env, n = 1) {
-  const suf = n === 1 ? "" : `_${n}`;
-  const get = (k) => env[`${k}${suf}`]?.toString().trim();
+/* ***************************************************************
+AWARDS DEFINITION ARRAY
+---
+an array of objects in the following format
+key: the canonical name of the award
+name: a pretty version of the name for Discord
+description: a description of the award for Discord
+emoji: an emoji to display on discord pages for the award
+query: the coresponding SQL query as defined in queries.js
+properties: fields to be shown on the award page. An Array of Objects
+with the name being what shows as the field name in discord and
+prop being the sql variable name for the value
 
-  const db = {
-    host: get("MYSQL_B3_HOST") || "db",
-    name: get("MYSQL_B3_DB"),
-    user: get("MYSQL_B3_USER"),
-    pass: get("MYSQL_B3_PASSWORD"),
-  };
-  const rcon = { ip: get("B3_RCON_IP"), port: get("B3_RCON_PORT") };
-  const channelId = get("CHANNEL_ID") || null;
-  const ui = {
-    navId: get("UI_NAV_MESSAGE_ID") || null,
-    contentId: get("UI_CONTENT_MESSAGE_ID") || null,
-  };
-  const name = get("XLR_SERVER_NAME") || null;
-
-  const hasAny = db.name || db.user || db.pass || db.host || rcon.ip || rcon.port || channelId || name;
-  return { n, db, rcon, channelId, ui, name, hasAny };
-}
-
-function collectServerConfigs(env) {
-  const configs = [];
-  // always include base
-  const first = readEnvSet(env, 1);
-  if (first.hasAny) configs.push(first);
-
-  // find all numeric suffixes present
-  const suffixes = new Set(
-    Object.keys(env)
-      .map(k => (k.match(/_(\d+)$/)?.[1]))
-      .filter(Boolean)
-      .map(s => Number(s))
-      .filter(n => Number.isFinite(n) && n >= 2)
-  );
-
-  [...suffixes].sort((a,b)=>a-b).forEach(n => {
-    const cfg = readEnvSet(env, n);
-    if (cfg.hasAny) configs.push(cfg);
-  });
-
-  // fill missing fields from base
-  const base = configs[0] || readEnvSet(env, 1);
-  for (const c of configs) {
-    c.db.host ||= base.db.host || "db";
-    c.db.name ||= base.db.name;
-    c.db.user ||= base.db.user;
-    c.db.pass ||= base.db.pass;
-    c.rcon.ip ||= base.rcon.ip;
-    c.rcon.port ||= base.rcon.port;
-  }
-
-  // derive default name
-  for (const c of configs) {
-    if (!c.name) c.name = `Server ${c.n}`;
-  }
-
-  // de-dup by unique tuple
-  const seen = new Set();
-  const uniq = [];
-  for (const c of configs) {
-    const key = `${c.channelId ?? "nochan"}|${c.db.host}|${c.db.name}|${c.rcon.ip}:${c.rcon.port}|${c.name}`;
-    if (!seen.has(key)) { seen.add(key); uniq.push(c); }
-  }
-  return uniq;
-}
-
-const SERVER_CONFIGS = collectServerConfigs(process.env);
-const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c]));
-const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }]));
-const __memberNameCache = new Map();
-
-// --- inactivity / auto-home ---
-const INACTIVITY_MS = 2 * 60 * 1000; // 2 minutes 
-
-// --- Awards Array ---
+TODO: read name, description, and emoji values from csv or similar for customization
+**************************************************************** */
 const awards = [
 
 	{ key: "award_headshot",
@@ -283,642 +221,129 @@ const pools = SERVER_CONFIGS.map(c => mysql.createPool({
   connectionLimit: 5
 }));
 
-function getPoolByIndex(idx) {
-  const pool = pools[idx];
-  if (!pool) throw new Error(`No DB pool for server index ${idx}`);
-  return pool;
-}
-async function runQueryOn(idx, sql, params) {
-  const [rows] = await getPoolByIndex(idx).query(sql, params);
-  return rows;
-}
-
-// -------------------------------------------------------------------------------------
-// HTTP helpers
-// -------------------------------------------------------------------------------------
-function summarizeAxiosError(err) {
-  if (err?.response) {
-    const s = err.response.status;
-    const t = (err.response.statusText || "").trim();
-    return t ? `${s} ${t}` : `${s}`;
-  }
-  if (err?.request) return "NETWORK ERROR";
-  return (err?.code || "ERROR");
-}
-
-async function fetchServerStatus(ip, port, signal) {
-  const url = `https://api.cod.pm/getstatus/${ip}/${port}`;
-  try {
-    const res = await axios.get(url, { timeout: 5000 , signal });
-    return res.data;
-  } catch (err) {
-    const summary = summarizeAxiosError(err);
-    console.warn(`[http] status api error ${ip}:${port} → ${summary}`);
-    return { error: summary };
-  }
-}
-
-async function checkUrlFor404(url, signal) {
-  try {
-    const res = await axios.head(url, { timeout: 4000, validateStatus: () => true, signal });
-    return res.status === 404;
-  } catch (err) {
-    const summary = summarizeAxiosError(err);
-    console.warn(`[http] head error ${url} → ${summary}`);
-    return false;
-  }
-}
-
-async function getMapImageUrl(label, signal) {
-  try {
-    if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`, signal)) {
-      if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`, signal)) {
-        return null;
-      } else {
-        return `https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`;
-      }
-    } else {
-      return `https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`;
-    }
-  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }
-    return null;
-  }
-}
-
-// -------------------------------------------------------------------------------------
-// UI components
-// -------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------
+// View definitions
+// --------------------------------------------------------------------------------------
 const VIEWS = Object.freeze({
-  HOME: "home",
-  LADDER: "ladder",
-  WEAPONS: "weapons",
-  MAPS: "maps",
-  WEAPON_PLAYERS: "weaponPlayers",
-  MAPS_PLAYERS: "mapsPlayers",
-  AWARDS: "awards",
+  HOME: "home", //the cod.pm server status page with a few xlr stats for server
+  LADDER: "ladder", //the ladder of competing players sorted by skill
+  WEAPONS: "weapons", //the most popular weapons, a string select for showing top players by weapon
+  MAPS: "maps", //the most popular maps, a string select for showing top players by map
+  WEAPON_PLAYERS: "weaponPlayers", // the players with the most kills for the selected weapon
+  MAPS_PLAYERS: "mapsPlayers", // the players with the most rounds played for the selected map
+  AWARDS: "awards", // the list of awards with the top player for each category listed.
 });
 
-async function displayName(row, rowname, isTitle = false, isOpponent = false) {
-  const raw = rowname ?? row?.name ?? "";
-  const base = typeof raw === "string" ? raw : String(raw ?? "");
-  const sanitized = base
-    .replace(/\^\d/g, "")
-    .replace(/\|/g, "")
-    .replace(/`/g, "'");
-
-  const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
-  if (!id) return sanitized;
-
-  if (GUILD_ID) {
-    const cacheKey = `${GUILD_ID}:${id}`;
-    if (__memberNameCache.has(cacheKey)) {
-      const dn = __memberNameCache.get(cacheKey);
-      return isTitle ? (dn || sanitized) : `<@${id}>`;
-    }
-    try {
-      const guild = await client.guilds.fetch(GUILD_ID);
-      const member = await guild.members.fetch(id).catch(() => null);
-      const dn = member?.displayName || null;
-      __memberNameCache.set(cacheKey, dn);
-      if (dn) return isTitle ? dn : `<@${id}>`;
-    } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-  }
-
-  try {
-    const user = await client.users.fetch(id);
-    const uName = user?.globalName ?? user?.username ?? null;
-    if (uName) return isTitle ? uName : `<@${id}>`;
-  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-
-  return sanitized;
-}
-
-
+// --------------------------------------------------------------------------------------
+// NAVROW definitions
+// --------------------------------------------------------------------------------------
 const navRow = (active) =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`ui:${VIEWS.HOME}`).setLabel("Home").setStyle(active==="home"?ButtonStyle.Primary:ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`ui:${VIEWS.LADDER}`).setLabel("Ladder").setStyle(active==="ladder"?ButtonStyle.Primary:ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`ui:${VIEWS.WEAPONS}`).setLabel("Weapons").setStyle(active==="weapons"?ButtonStyle.Primary:ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`ui:${VIEWS.MAPS}`).setLabel("Maps").setStyle(active==="maps"?ButtonStyle.Primary:ButtonStyle.Secondary),
-	new ButtonBuilder().setCustomId(`ui:${VIEWS.AWARDS}`).setLabel("Awards").setStyle(active==="awards"?ButtonStyle.Primary:ButtonStyle.Secondary),
+	new ActionRowBuilder().addComponents(
+		new ButtonBuilder().setCustomId(`ui:${VIEWS.HOME}`).setLabel("Home").setStyle(active==="home"?ButtonStyle.Primary:ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(`ui:${VIEWS.LADDER}`).setLabel("Ladder").setStyle(active==="ladder"?ButtonStyle.Primary:ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(`ui:${VIEWS.WEAPONS}`).setLabel("Weapons").setStyle(active==="weapons"?ButtonStyle.Primary:ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(`ui:${VIEWS.MAPS}`).setLabel("Maps").setStyle(active==="maps"?ButtonStyle.Primary:ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(`ui:${VIEWS.AWARDS}`).setLabel("Awards").setStyle(active==="awards"?ButtonStyle.Primary:ButtonStyle.Secondary),
+);
 
-  );
-
+// --------------------------------------------------------------------------------------
+// PAGERROW definitions
+// --------------------------------------------------------------------------------------
 const pagerRow = (view, page, hasPrev, hasNext) =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
-    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
-  );
-  
-function pagerRowWithParams(view, page, hasPrev, hasNext, weaponLabel, weaponsPage) {
-  const encWeap = encodeURIComponent(weaponLabel);
-  const encPage = String(weaponsPage);
+	new ActionRowBuilder().addComponents(
+		new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+		new ButtonBuilder().setCustomId(`ui:${view}:next:${page}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
+);
+// -------------------------------------------------------------------------------------
+// PAGERROW HELPERS
+// -------------------------------------------------------------------------------------
+function pagerRowWithParams(view, page, hasPrev, hasNext, embedLabel, embedPage) {
+  const encLabel = encodeURIComponent(embedLabel);
+  const encPage = String(embedPage);
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}:${encWeap}:${encPage}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
     new ButtonBuilder().setCustomId(`ui:${view}:next:${page}:${encWeap}:${encPage}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
   );
 }
 
-function weaponSelectRowForPage(rows, page, selectedLabel = null) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`ui:weapons:select:${page}`)
-    .setPlaceholder("Select Weapon to View More Stats...")
-    .addOptions(
-      ...rows.map((w) => ({
-        label: w.label,
-        value: w.label,
-        default: selectedLabel ? w.label === selectedLabel : false,
-      }))
-    );
-  return new ActionRowBuilder().addComponents(menu);
-}
+function stringSelectRowForPage(view, rows, embedPage, selected = null) {
+	let placeholder;
+	const medals = ["🥇", "🥈", "🥉"];
+	switch(view){
+		case "weapons":
+			placeholder = "Select Weapon to View More Stats...";
+			const menu = new StringSelectMenuBuilder()
+				.setCustomId(`ui:${view}:select:${page}`)
+				.setPlaceholder(placeholder)
+				.addOptions(
+				  ...rows.map((w) => ({
+					label: w.label,
+					value: w.label,
+					default: selected ? w.label === selected : false,
+				  }))
+				);
+			return new ActionRowBuilder().addComponents(menu);
 
-function mapSelectRowForPage(rows, page, selectedLabel = null) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`ui:maps:select:${page}`)
-    .setPlaceholder("Select Map to View More Stats...")
-    .addOptions(
-      ...rows.map((w) => ({
-        label: w.label,
-        value: w.label,
-        default: selectedLabel ? w.label === selectedLabel : false,
-      }))
-    );
-  return new ActionRowBuilder().addComponents(menu);
-}
+		case "maps":
+			placeholder = "Select Map to View More Stats...";
+			const menu = new StringSelectMenuBuilder()
+				.setCustomId(`ui:${view}:select:${page}`)
+				.setPlaceholder(placeholder)
+				.addOptions(
+				  ...rows.map((w) => ({
+					label: w.label,
+					value: w.label,
+					default: selected ? w.label === selected : false,
+				  }))
+				);
+			return new ActionRowBuilder().addComponents(menu);
 
-function playerSelectRowForPage(rows, page, selectedId = null) {
-  const medals = ["🥇", "🥈", "🥉"];
-  const PAGE_SIZE = 10;
-  const options = rows.map((r, i) => {
-    const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
-    const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
-    const maxName = Math.max(0, 100 - (prefix.length + 1));
-    const name = (r?.name ?? r?.player_name ?? "");
-    const label = `${prefix} ${String(name).slice(0, maxName)}`;
-    return {
-      label,
-      value: String(r.client_id),
-      default: selectedId != null && String(r.client_id) === String(selectedId),
-    };
-  });
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`ui:ladder:select:${page}`)
-    .setPlaceholder("Select a Player to View More Stats...")
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(options);
-  return new ActionRowBuilder().addComponents(menu);
-}
-
-function awardSelectRowForPage(rows, page, selectedIndex = null) {
-  const options = rows.map((r, i) => {
+		case "ladder":
+			placeholder = "Select a Player to View More Stats..."
+			const options = rows.map((r, i) => {
+				const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
+				const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
+				const maxName = Math.max(0, 100 - (prefix.length + 1));
+				const name = (r?.name ?? r?.player_name ?? "");
+				const label = `${prefix} ${String(name).slice(0, maxName)}`;
+				return {
+				  label,
+				  value: String(r.client_id),
+				  default: selected != null && String(r.client_id) === String(selected),
+				};
+			});
+			const menu = new StringSelectMenuBuilder()
+				.setCustomId(`ui:ladder:select:${page}`)
+				.setPlaceholder(placeholder)
+				.setMinValues(1)
+				.setMaxValues(1)
+				.addOptions(options);
+			return new ActionRowBuilder().addComponents(menu);
+		
+		case "awards":
+			placeholder = "Select an Award to View the Winner...";
+			const options = rows.map((r, i) => {
     
-    const label = `${String(r.name).slice(0, 100)}`.trim();
-    return {
-      label,
-      value: String(i),
-      default: selectedIndex != null && String(i) === String(selectedIndex),
-    };
-  });
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`ui:awards:select:${page}`)
-    .setPlaceholder("Select an Award to View the Winner...")
-    .setMinValues(1)
-    .setMaxValues(1)
-    .addOptions(options);
-  return new ActionRowBuilder().addComponents(menu);
-}
-
-function toolbarPayload(activeView) {
-  return { content: "", embeds: [], components: [navRow(activeView)] };
-}
-
-function parseCustomId(id) {
-  const p = id.split(":");
-  if (p[0] !== "ui") return null;
-  if (p.length === 2) return { view: p[1], page: 0 };
-  if (p.length === 4) {
-    const cur = Math.max(0, parseInt(p[3], 10) || 0);
-    return { view: p[1], page: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1) };
-  }
-  if (p.length === 6) {
-    const cur = Math.max(0, parseInt(p[3], 10) || 0);
-    const param = decodeURIComponent(p[4]);
-    const weaponsPage = Math.max(0, parseInt(p[5], 10) || 0);
-    return { view: p[1], page: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1), param, weaponsPage };
-  }
-  return null;
+			const label = `${String(r.name).slice(0, 100)}`.trim();
+			return {
+			  label,
+			  value: String(i),
+			  default: selected != null && String(i) === String(selected),
+			};
+		  });
+		  const menu = new StringSelectMenuBuilder()
+			.setCustomId(`ui:awards:select:${page}`)
+			.setPlaceholder(placeholder)
+			.setMinValues(1)
+			.setMaxValues(1)
+			.addOptions(options);
+		  return new ActionRowBuilder().addComponents(menu);
+	}
 }
 
 // -------------------------------------------------------------------------------------
-// Data helpers — per-server
+// Profile Editor component custom id definitions
 // -------------------------------------------------------------------------------------
-async function getHomeTotals(serverIndex) {
-  const rq = (sql, p=[]) => runQueryOn(serverIndex, sql, p);
-  const [[{totalPlayers=0 }],[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
-    rq(queries.ui_totalPlayers,[]),
-    rq(queries.ui_totalKills, []),
-    rq(queries.ui_totalRounds, []),
-    rq(queries.ui_favoriteWeapon, []),
-    rq(queries.ui_favoriteMap, []),
-  ]);
-  return {
-    totalPlayers: +totalPlayers || 0,
-    totalKills: +totalKills || 0,
-    totalRounds: +totalRounds || 0,
-    favoriteWeapon: { label: favW?.label ?? "—", kills: +(favW?.kills ?? 0) },
-    favoriteMap: { label: favM?.label ?? "—", rounds: +(favM?.rounds ?? 0) },
-  };
-}
-
-async function getLadderSlice(serverIndex, offset = 0, limit = 10) {
-  const { sql, params } = queries.ui_ladderSlice(limit, offset);
-  const rows = await runQueryOn(serverIndex, sql, params);
-  const enriched = await Promise.all(
-    rows.map(async (r, i) => ({
-      ...r,
-      rank: offset + i + 1,
-      name: (await displayName(r, r.name, true)) ?? r.name,
-    }))
-  );
-  return enriched;
-}
-
-async function getLadderCount(serverIndex) {
-  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
-  return +cnt || 0;
-}
-
-async function getWeaponsSlice(serverIndex, offset=0, limit=10) {
-  const { sql, params } = queries.ui_weaponsSlice(limit, offset);
-  const rows = await runQueryOn(serverIndex, sql, params);
-  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
-}
-async function getWeaponsCount(serverIndex) {
-  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_weaponsCount, []);
-  return +cnt || 0;
-}
-async function getWeaponsAll(serverIndex) {
-  const rows = await runQueryOn(serverIndex, queries.ui_weaponsAll, []);
-  return rows;
-}
-
-async function getMapsSlice(serverIndex, offset=0, limit=10, signal) {
-  const { sql, params } = queries.ui_mapsSlice(limit, offset);
-  const rows = await runQueryOn(serverIndex, sql, params);
-  const slice = await Promise.all(rows.map(async (r, i) => {
-    let url;
-    try { url = await getMapImageUrl(r.label, signal); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } url = DEFAULT_THUMB; }
-    return { ...r, rank: offset + i + 1, thumbnail: url || DEFAULT_THUMB };
-  }));
-  return slice;
-}
-async function getMapsCount(serverIndex) {
-  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_mapsCount, []);
-  return +cnt || 0;
-}
-async function getMapsAll(serverIndex) {
-  const rows = await runQueryOn(serverIndex, queries.ui_mapsAll, []);
-  return rows;
-}
-
-async function getPlayerWeaponSlice(serverIndex, weapon, offset = 0, limit = 10) {
-  const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
-  const rows = await runQueryOn(serverIndex, sql, params);
-  const enriched = await Promise.all(
-    rows.map(async (r, i) => ({
-      ...r,
-      rank: offset + i + 1,
-      name: (await displayName(r, r.name, true)) ?? r.name,
-    }))
-  );
-  return enriched;
-}
-
-async function getPlayerWeaponCount(serverIndex, weapon) {
-  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
-  return +cnt || 0;
-}
-
-async function getPlayerMapCount(serverIndex, map) {
-  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerMapsCount, [ `%${map}%`, /^\d+$/.test(map) ? Number(map) : -1 ]);
-  return +cnt || 0;
-}
-
-// -------------------------------------------------------------------------------------
-// View builders — per server
-// -------------------------------------------------------------------------------------
-const V_PAGE = 10;
-
-async function buildHome(serverIndex, ctx = {}) {
-  // Safely pull values; if ctx is missing, these are undefined
-  const hasCtx   = ctx && typeof ctx === 'object';
-  const signal   = hasCtx ? ctx.signal   : undefined;
-  const token    = hasCtx ? ctx.token    : undefined;
-  const channelId= hasCtx ? ctx.channelId: undefined;
-
-  const cfg = byIndex.get(serverIndex);
-
-  let totals, status;
-  let hadError = false;
-
-  try {
-    totals = await getHomeTotals(serverIndex);
-  } catch (e) {
-    hadError = true;
-    console.warn("[home] totals error → falling back to zeros");
-    totals = {
-      totalPlayers: 0,
-      totalKills: 0,
-      totalRounds: 0,
-      favoriteWeapon: { label: "—", kills: 0 },
-      favoriteMap: { label: "—", rounds: 0 },
-    };
-  }
-
-  try {
-    status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port, signal);
-    if (status && status.error) hadError = true;
-  } catch (e) {
-    // If this was canceled by a newer click, just return "stale" when we have a ctx
-    if ((e?.name === "CanceledError" || e?.code === "ERR_CANCELED") && hasCtx) {
-      return { stale: true };
-    }
-    hadError = true;
-    status = { error: summarizeAxiosError(e) };
-  }
-
-  // Only do staleness checks if a ctx was provided
-  if (hasCtx && isStale(channelId, token)) return { stale: true };
-
-  const embeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
-  return { embeds, nav: [navRow(VIEWS.HOME)], pager: [], hadError };
-}
-
-async function buildLadder(serverIndex, page=0) {
-  const offset = page * V_PAGE;
-  const [rows, total] = await Promise.all([
-    getLadderSlice(serverIndex, offset, V_PAGE),
-    getLadderCount(serverIndex)
-  ]);
-
-  // PRE-ENRICH: fetch Discord username for titles/labels
-  const rowsWithNames = await Promise.all(
-    rows.map(async (r) => ({
-      ...r,
-      // use the fetched discord username when available; fall back to r.name
-      name: (await displayName(r, r.name, true)) || r.name,
-    }))
-  );
-
-  const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
-  const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + V_PAGE < total)];
-  const nav   = [navRow(VIEWS.LADDER), playerSelectRowForPage(rowsWithNames, page, null)];
-
-  // Keep footer balancing so pages line up visually
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const footerText = embedArr[embedArr.length - 1].data.footer.text;
-  const ZERO_WIDTH = "⠀";
-  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-  const blankText = ZERO_WIDTH.repeat(padLen);
-  const files = [];
-  for (const [i,e] of embedArr.entries()){
-	  e.setFooter({ text: blankText });
-	  e.clientId = rows[i].client_id;
-  }
-  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-
-  return { embeds: embedArr, nav, pager, files };
-}
-
-async function buildWeapons(serverIndex, page=0) {
-  const offset = page * V_PAGE;
-  const [rows, total] = await Promise.all([
-    getWeaponsSlice(serverIndex, offset, V_PAGE),
-    getWeaponsCount(serverIndex)
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const embeds = renderWeaponsEmbeds({ rows, page });
-  const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(rows, page, null)];
-  return { embeds, nav, pager };
-}
-
-async function buildWeaponPlayers(serverIndex, weaponLabel, playerPage=0, weaponsPage=0) {
-  const pageSize = 10;
-  const offset   = playerPage * pageSize;
-  const [rows, total, weaponsRows] = await Promise.all([
-    getPlayerWeaponSlice(serverIndex, weaponLabel, offset, pageSize),
-    getPlayerWeaponCount(serverIndex, weaponLabel),
-    getWeaponsSlice(serverIndex, weaponsPage * pageSize, pageSize),
-  ]);
-  
-  const weap = (rows && rows[0]?.matched_label) || weaponLabel;
-  const emoji = resolveEmoji(weap);
-  const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
-  const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset });
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
-  const ZERO = "⠀";
-  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
-  const blank  = ZERO.repeat(padLen);
-  const files = [];
-  for (const [i,e] of embedArr.entries()){
-	  e.setFooter({ text: blank });
-	  // Pull saved banner options (default to 0 if not set)
-	  const clientId = rows[i].client_id;
-	  const [pc] = await runQueryOn(
-		serverIndex,
-		queries.playerCoreAndBannerById,
-		[clientId]
-	  );
-	  const bg = Number(pc?.background ?? 0) || 0;
-	  const em = Number(pc?.emblem ?? 0) || 0;
-	  const cs = Number(pc?.callsign ?? 0) || 0;
-
-	  // Generate the banner
-	  const { buffer, filename } = await generateBanner({
-		background: bg,
-		emblem: em,
-		callsign: cs,
-		playerName: pc.name,              
-		kills: Number(pc.kills) || 0,
-		deaths: Number(pc.deaths) || 0,
-		skill: Number(pc.skill) || 0
-	  });
-	  
-	  const file = new AttachmentBuilder(buffer, { name: filename });
-
-	  e.setImage(`attachment://${filename}`);
-
-	  files.push(file);
-  }
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Weapon page ${playerPage + 1}` });
-  const hasNext = offset + pageSize < total;
-  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
-  const nav = [navRow(VIEWS.WEAPONS), weaponSelectRowForPage(weaponsRows, weaponsPage, weap)];
-  return { embeds: embedArr, nav: nav, pager: pager, files: files };
-}
-
-async function buildMaps(serverIndex, page=0, ctx = { signal, token, channelId }) {
-  const offset = page * V_PAGE;
-  const [rows, total] = await Promise.all([
-    getMapsSlice(serverIndex, offset, V_PAGE, signal),
-    getMapsCount(serverIndex)
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const embeds = renderMapsEmbeds({ rows, page });
-  const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + V_PAGE < total)];
-  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(rows, page, null)];
-  return { embeds, nav, pager};
-}
-
-async function buildMapPlayers(serverIndex, mapLabel, playerPage=0, mapsPage=0, ctx = { signal, token, channelId }) {
-  const pageSize = 10;
-  const offset   = playerPage * pageSize;
-  const [rows, total, mapsRows] = await Promise.all([
-    (async () => {
-      const { sql, params } = queries.ui_playerMapsSlice(mapLabel, pageSize, offset);
-      const data = await runQueryOn(serverIndex, sql, params);
-      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
-      return mapped;
-    })(),
-    getPlayerMapCount(serverIndex, mapLabel),
-    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize, signal),
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
-  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
-  const ZERO = "⠀";
-  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
-  const blank  = ZERO.repeat(padLen);
-  const files = [];
-  for (const [i,e] of embedArr.entries()){
-	  e.setFooter({ text: blank });
-	  // Pull saved banner options (default to 0 if not set)
-	  const clientId = rows[i].client_id;
-	  const [pc] = await runQueryOn(
-		serverIndex,
-		queries.playerCoreAndBannerById,
-		[clientId]
-	  );
-	  const bg = Number(pc?.background ?? 0) || 0;
-	  const em = Number(pc?.emblem ?? 0) || 0;
-	  const cs = Number(pc?.callsign ?? 0) || 0;
-
-	  // Generate the banner
-	  const { buffer, filename } = await generateBanner({
-		background: bg,
-		emblem: em,
-		callsign: cs,
-		playerName: pc.name,              
-		kills: Number(pc.kills) || 0,
-		deaths: Number(pc.deaths) || 0,
-		skill: Number(pc.skill) || 0
-	  });
-	  
-	  const file = new AttachmentBuilder(buffer, { name: filename });
-
-	  e.setImage(`attachment://${filename}`);
-
-	  files.push(file);
-  }
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Map page ${playerPage + 1}` });
-  const hasNext = offset + pageSize < total;
-  const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
-  const nav = [navRow(VIEWS.MAPS), mapSelectRowForPage(mapsRows, mapsPage, mapLabel)];
-  return { embeds: embedArr, nav: nav, pager: pager, files: files };
-}
-
-async function buildAwards(serverIndex, page=0) {
-  const offset = page * V_PAGE;
-  const baseRows = awards.slice(offset, offset + V_PAGE);
-  const rows = await Promise.all(baseRows.map(async (aw) => {
-	  const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
-	  if (top) top.name = await displayName(top, top.name, true);
-	  return { ...aw, top };
-  }));
-
-  const total  = awards.length;
-
-  const embeds = renderAwardsEmbeds({ rows, page });
-  const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + V_PAGE < total)];
-  const nav    = [navRow(VIEWS.AWARDS), awardSelectRowForPage(rows, page, null)];
-   // Keep footer balancing so pages line up visually
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const footerText = embedArr[embedArr.length - 1].data.footer.text;
-  const ZERO_WIDTH = "⠀";
-  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-  const blankText = ZERO_WIDTH.repeat(padLen);
-  for (const e of embedArr) e.setFooter({ text: blankText });
-  embedArr[embedArr.length - 1].setFooter({ text: footerText });
-
-  return { embeds: embedArr, nav, pager };
-}
-
-async function buildAward(serverIndex, award, playerPage=0, awardsPage=0) {
-  const pageSize = 10;
-  const offset   = playerPage * pageSize;
-  const [rows, total] = await Promise.all([
-    (async () => {
-      const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
-      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
-      return mapped;
-    })(),
-    pageSize,
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
-  const embeds = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
-  const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-  const lastFooter = embedArr[embedArr.length - 1].data.footer?.text || "XLRStats • B3";
-  const ZERO = "⠀";
-  const padLen = Math.min(Math.floor(lastFooter.length * 0.65), 2048);
-  const blank  = ZERO.repeat(padLen);
-  
-  const files = [];
-  for (const [i,e] of embedArr.entries()){
-	  e.setFooter({ text: blank });
-	  // Pull saved banner options (default to 0 if not set)
-	  const clientId = rows[i].client_id;
-	  const [pc] = await runQueryOn(
-		serverIndex,
-		queries.playerCoreAndBannerById,
-		[clientId]
-	  );
-	  const bg = Number(pc?.background ?? 0) || 0;
-	  const em = Number(pc?.emblem ?? 0) || 0;
-	  const cs = Number(pc?.callsign ?? 0) || 0;
-
-	  // Generate the banner
-	  const { buffer, filename } = await generateBanner({
-		background: bg,
-		emblem: em,
-		callsign: cs,
-		playerName: pc.name,              
-		kills: Number(pc.kills) || 0,
-		deaths: Number(pc.deaths) || 0,
-		skill: Number(pc.skill) || 0
-	  });
-	  
-	  const file = new AttachmentBuilder(buffer, { name: filename });
-
-	  e.setImage(`attachment://${filename}`);
-
-	  files.push(file);
-  }
-  embedArr[embedArr.length - 1].setFooter({ text: `${lastFooter} • Awards page ${playerPage + 1}` });
-  const hasNext = rows.length === pageSize;
-  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
-  const currentAwardsPageRows = awards.slice(awardsPage * V_PAGE, awardsPage * V_PAGE + V_PAGE);
-  const nav = [navRow(VIEWS.AWARDS), awardSelectRowForPage(currentAwardsPageRows, awardsPage, null)];
-  return { embeds: embedArr, nav: nav, pager: pager, files: files };
-}
-
-// --- PROFILE (DM) helpers ----------------------------------------------------
 const PROFILE_IDS = Object.freeze({
   EDIT_NAME_BTN:   (si, pid) => `profile:edit:name:${si}:${pid}`,
   EDIT_BG_BTN:     (si, pid, pg=0) => `profile:edit:bg:${si}:${pid}:${pg}`,
@@ -927,158 +352,15 @@ const PROFILE_IDS = Object.freeze({
   PICK_BG:         (si, pid, pg) => `profile:pick:bg:${si}:${pid}:${pg}`,
   PICK_EM:         (si, pid, pg) => `profile:pick:em:${si}:${pid}:${pg}`,
   PICK_CS:         (si, pid, pg) => `profile:pick:cs:${si}:${pid}:${pg}`,
-  PAGE_BG:         (si, pid, dir, pg) => `profile:page:bg:${si}:${pid}:${dir}:${pg}`,
-  PAGE_EM:         (si, pid, dir, pg) => `profile:page:em:${si}:${pid}:${dir}:${pg}`,
-  PAGE_CS:         (si, pid, dir, pg) => `profile:page:cs:${si}:${pid}:${dir}:${pg}`,
+  PAGE_BG:         (si, pid, dir, pg) => `profile:page:bg:${si}:${pid}:${pg}:${dir}`,
+  PAGE_EM:         (si, pid, dir, pg) => `profile:page:em:${si}:${pid}:${pg}:${dir}`,
+  PAGE_CS:         (si, pid, dir, pg) => `profile:page:cs:${si}:${pid}:${pg}:${dir}`,
   NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
 });
 
-function basenameNoExt(p) {
-  try {
-    const b = path.basename(p);
-    return b.replace(/\.(png|jpg|jpeg|gif|webp)$/i, "");
-  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } return String(p); }
-}
-
-function chunkOptions(labels, startIndex = 0, page = 0, perPage = 25) {
-  const offset  = page * perPage;
-  const slice   = labels.slice(offset, offset + perPage);
-  const options = slice.length
-    ? slice.map((label, i) => ({
-        label: `${offset + i}. ${label}`,
-        value: String(offset + i)
-      }))
-    : [{ label: "No items", value: "noop" }]; // never 0 options
-
-  return {
-    page,
-    total: labels.length,
-    hasPrev: page > 0,
-    hasNext: offset + perPage < labels.length,
-    options
-  };
-}
-
-function buildPickerRow(kind, serverIndex, playerId, page, arrays) {
-  const arr = kind==="bg" ? BACKGROUNDS : kind==="em" ? EMBLEMS : CALLSIGNS.map(c => c);
-  const labels = kind==="cs" ? CALLSIGNS.slice() : arr.map(basenameNoExt);
-  const chunk = chunkOptions(labels, 0, page, 25);
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(kind==="bg" ? PROFILE_IDS.PICK_BG(serverIndex, playerId, page)
-               : kind==="em" ? PROFILE_IDS.PICK_EM(serverIndex, playerId, page)
-                              : PROFILE_IDS.PICK_CS(serverIndex, playerId, page))
-    .setPlaceholder(kind==="bg" ? "Pick a background…" : kind==="em" ? "Pick an emblem…" : "Pick a callsign…")
-    .addOptions(chunk.options);
-
-  const row1 = new ActionRowBuilder().addComponents(select);
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "prev", page) :
-                   kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "prev", page) :
-                                 PROFILE_IDS.PAGE_CS(serverIndex, playerId, "prev", page))
-      .setLabel("Previous")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!chunk.hasPrev),
-    new ButtonBuilder()
-      .setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "next", page) :
-                   kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "next", page) :
-                                 PROFILE_IDS.PAGE_CS(serverIndex, playerId, "next", page))
-      .setLabel("Next")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!chunk.hasNext)
-  );
-
-  return [row1, row2];
-}
-
-async function loadProfileData(serverIndex, clientId) {
-  const [card] = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-  const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [clientId]);
-  const prefNameRow = await runQueryOn(serverIndex,
-    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [clientId]);
-  const preferredName = prefNameRow?.[0]?.preferred_name || null;
-  return { card, pc, preferredName };
-}
-
-async function buildProfileDmPayload(serverIndex, clientId, userId) {
-  const { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
-  if (!card) return { content: "No stats found for your account on this server." };
-
-  const display = preferredName || card.name;
-  const bg = Number(pc?.background ?? 0) || 0;
-  const em = Number(pc?.emblem ?? 0) || 0;
-  const cs = Number(pc?.callsign ?? 0) || 0;
-
-  const { buffer, filename } = await generateBanner({
-    background: bg,
-    emblem: em,
-    callsign: cs,
-    playerName: display,
-    kills: card.kills || 0,
-    deaths: card.deaths || 0,
-    skill: card.skill || 0
-  });
-  const file = new AttachmentBuilder(buffer, { name: filename });
-
-  // Stats embed
-  const statsEmbed = formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
-
-  // Controls
-  const rowButtons = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_NAME_BTN(serverIndex, clientId)).setLabel("Edit Preferred Name").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_BG_BTN(serverIndex, clientId, 0)).setLabel("Edit Background").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_EMBLEM_BTN(serverIndex, clientId, 0)).setLabel("Edit Emblem").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_CS_BTN(serverIndex, clientId, 0)).setLabel("Edit Callsign").setStyle(ButtonStyle.Secondary)
-  );
-
-  // Show the current choices summary
-  const summary = new EmbedBuilder()
-    .setColor(0x2b7cff)
-    .setTitle("Your Banner Settings")
-    .setDescription([
-      `**Preferred Name:** ${display}`,
-      `**Background:** ${bg} — ${basenameNoExt(BACKGROUNDS[bg] || "N/A")}`,
-      `**Emblem:** ${em} — ${basenameNoExt(EMBLEMS[em] || "N/A")}`,
-      `**Callsign:** ${cs} — ${CALLSIGNS[cs] ?? "N/A"}`
-    ].join("\n"));
-
-  return {
-    files: [file],
-    embeds: [summary, statsEmbed],
-    components: [rowButtons]
-  };
-}
-
-async function deleteOldProfileDMs(dmChannel, client) {
-  try {
-    const msgs = await dmChannel.messages.fetch({ limit: 50 });
-    const mine = msgs.filter(m =>
-      m.author?.id === client.user.id &&
-      (
-        // our profile UI has this embed title
-        (Array.isArray(m.embeds) && m.embeds.some(e => e?.title === "Your Banner Settings")) ||
-        // or any row with a customId that starts with "profile:"
-        (Array.isArray(m.components) && m.components.some(row =>
-          row?.components?.some(c => typeof c.customId === "string" && c.customId.startsWith("profile:"))
-        ))
-      )
-    );
-
-    // Delete sequentially (DMs don't support bulkDelete)
-    for (const m of mine.values()) {
-      try { await m.delete(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-    }
-  } catch (e) {
-    console.warn("[profile] deleteOldProfileDMs failed:", e.message || e);
-  }
-}
-
-// -------------------------------------------------------------------------------------
-// Discord wiring — multi UI
-// -------------------------------------------------------------------------------------
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers] });
-
+// --------------------------------------------------------------------------------------
+// Slash Command Definitions
+// --------------------------------------------------------------------------------------
 const commands = [
   new SlashCommandBuilder()
     .setName("xlr-top")
@@ -1133,1499 +415,1967 @@ const commands = [
     .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)"))
 ].map(c => c.toJSON());
 
-async function register() {
-  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
-  if (GUILD_ID) {
-    await rest.put(Routes.applicationGuildCommands(APPLICATION_ID, GUILD_ID), { body: commands });
-    console.log("Registered guild commands");
-  } else {
-    await rest.put(Routes.applicationCommands(APPLICATION_ID), { body: commands });
-    console.log("Registered global commands");
-  }
-}
-
-function upsertEnvForServer(n, keyBase, value) {
-  upsertEnv(suffixKey(n, keyBase), value);
-}
-
-const perChannelState = new Map(); // channelId => { serverIndex, collectors }
-
-// One "load" in flight per channel. Starting a new load cancels the previous one.
-const perChannelLoadGate = new Map(); // channelId => { controller, token }
-
-/** Begin a new load for a channel. Aborts any previous one. */
-function beginChannelLoad(channelId) {
-  const prev = perChannelLoadGate.get(channelId);
-  if (prev?.controller) {
-    try { prev.controller.abort(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-  }
-  const controller = new AbortController();
-  const token = Symbol(`load:${channelId}:${Date.now()}`);
-  perChannelLoadGate.set(channelId, { controller, token });
-  return { signal: controller.signal, token };
-}
-
-/** Has this load become stale (superseded by a newer click)? */
-function isStale(channelId, token) {
-  return perChannelLoadGate.get(channelId)?.token !== token;
-}
-
-async function ensureUIForServer(serverIndex) {
-  const cfg = byIndex.get(serverIndex);
-  if (!cfg?.channelId) return;
-
-  const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
-  if (!channel || channel.type !== ChannelType.GuildText) return;
-
-  // initial HOME
-  // Start cancellable initial HOME load
-  const gate = beginChannelLoad(cfg.channelId);
-  const initial = await buildHome(serverIndex, {
-    signal: gate.signal,
-    token: gate.token,
-    channelId: cfg.channelId
-  });
-  if (initial?.stale) return; // superseded before finishing
-
-
-  // NAV (top)
-  let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
-  if (!navMsg) {
-	if (isStale(cfg.channelId, gate.token)) return;
-    navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
-    upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
-    cfg.ui.navId = navMsg.id;
-    
-    await navMsg.edit({ content: "", embeds: [], components: initial.nav, files: [] });
-  }
-
-  // CONTENT (bottom)
-  let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
-  if (!contentMsg) {
-    if (isStale(cfg.channelId, gate.token)) return;
-    contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
-    upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
-    cfg.ui.contentId = contentMsg.id;
-  } else {
-    if (isStale(cfg.channelId, gate.token)) return;
-    await contentMsg.edit({ embeds: initial.embeds, components: initial.pager, files: [] });
-  }
-  
-}
-
-async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
-  // Stop an old one if it exists
-  if (uiCollector) {
-    try { uiCollector.stop('restart'); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-    uiCollector = null;
-  }
-
-  // Only collect our UI buttons in the target channel + for our 2 UI messages
-  uiCollector = channel.createMessageComponentCollector({
-    idle: INACTIVITY_MS,
-    filter: (i) =>
-      i.customId?.startsWith('ui:') &&
-      (i.message?.id === cfg.ui.contentId || i.message?.id === cfg.ui.navId)
-  });
-
-  uiCollector.on('end', async (_collected, reason) => {
-	  if (reason === 'idle') {
-		try {
-		  // Auto-refresh Home on idle, even if already on Home
-		  const gate = beginChannelLoad(cfg.channelId);
-		  const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-		  if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-
-		  if (payload?.hadError) {
-			console.warn("[ui] idle refresh: aborting edit due to upstream error");
-		  } else {
-			// Update toolbar + content
-			const [navMsg, contentMsg] = await Promise.all([
-			  channel.messages.fetch(cfg.ui.navId),
-			  channel.messages.fetch(cfg.ui.contentId),
-			]);
-
-			if (isStale(cfg.channelId, gate.token)) return;
-			await Promise.all([
-			  navMsg.edit({ content: "", embeds: [], components: payload.nav, files: [] }),
-			  contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: [] }),
-			]);
-		  }
-		} catch (e) {
-		  console.error("[ui] idle refresh failed:", e);
-		} finally {
-		  // Restart the idle watcher
-		  startUiInactivitySession(uiCollector, serverIndex, cfg, channel);
-		}
-	  }
-	});
-}
-
-async function buildView(serverIndex, { view, page, param, weaponsPage, signal, token, channelId }) {
-  
-  if (view === VIEWS.HOME) {
-    return await buildHome(serverIndex, { signal, token, channelId });
-  }
-  if (view === VIEWS.LADDER) {
-    return await buildLadder(serverIndex, page);
-  }
-  if (view === VIEWS.WEAPONS) {
-    return await buildWeapons(serverIndex, page);
-  }
-  if (view === VIEWS.WEAPON_PLAYERS) {
-    return await buildWeaponPlayers(serverIndex, param, page, weaponsPage ?? 0, { signal, token, channelId });
-  }
-  if (view === VIEWS.MAPS) {
-    return await buildMaps(serverIndex, page, { signal, token, channelId });
-  }
-  if (view === VIEWS.MAPS_PLAYERS) {
-    return await buildMapPlayers(serverIndex, param, page, weaponsPage ?? 0, { signal, token, channelId });
-  }
-  if(view === VIEWS.AWARDS) {
-	return param ? await buildAward(serverIndex, awards.find(a => a.name === param) || awards[0], page, weaponsPage ?? 0) : await buildAwards(serverIndex, page);
-  }
-}
-//String Select processing here
-
-// -------------------------------------------------------------------------------------
-// Handlers
-// -------------------------------------------------------------------------------------
-async function handleSlashCommand(i) {
-  console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
-
-  try {
-    if (i.commandName === "xlr-servers") {
-      const lines = SERVER_CONFIGS.map((c, idx) => {
-        const chan = c.channelId ? `#${c.channelId}` : "(no channel)";
-        return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
-      });
-      await i.reply({ ephemeral: true, content: lines.join("\n") || "No servers configured." });
-      return;
-    }
-
-    const serverIndex = resolveServerIndexFromInteraction(i);
-
-    if (i.commandName === "xlr-top") {
-      await i.deferReply();
-
-      const count  = i.options.getInteger("count") ?? 0;
-      const weapon = i.options.getString("weapon");
-      const map    = i.options.getString("map");
-      const sort   = i.options.getString("sort") || "skill";
-
-      if (weapon) {
-        const limit = count && count > 0 ? Math.min(count, 10) : 10;
-        const rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
-		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-        const weap = (rows && rows[0]?.matched_label) || weapon;
-        const emoji = resolveEmoji(weap);
-        const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
-        const embeds = formatTopEmbed(rows2, title, { thumbnail: DEFAULT_THUMB, offset: 0 });
-		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-		const files = [];
-		  for (const [i,e] of embedArr.entries()){
-			  e.setFooter({ text: blank });
-			  // Pull saved banner options (default to 0 if not set)
-			  const clientId = rows2[i].client_id;
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-		  }
-		
-        await i.editReply({ embeds: embedArr, components: [], files: files });
-        return;
-      }
-
-      if (map) {
-        const limit = count && count > 0 ? Math.min(count, 10) : 10;
-        const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
-        const rows = await runQueryOn(serverIndex, sql, params);
-		const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-        const thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
-        const embeds = formatTopEmbed(rows2, `Top Players by Map: ${map}`, { thumbnail: thumbUrl, offset: 0 });
-		const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-		const files = [];
-		  for (const [i,e] of embedArr.entries()){
-			  e.setFooter({ text: blank });
-			  // Pull saved banner options (default to 0 if not set)
-			  const clientId = rows2[i].client_id;
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-		  }
-		
-        await i.editReply({ embeds: embedArr, components: [], files: files });
-        return;
-      }
-
-      const limit = count && count > 0 ? Math.min(count, 10) : 10;
-      const { sql, params } = queries.topDynamic({ limit, sort });
-      const rows = await runQueryOn(serverIndex, sql, params);
-	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-
-      const embeds = formatTopEmbed(rows2, `Top by ${sort}`, { thumbnail: DEFAULT_THUMB, offset: 0 });
-      const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-		const files = [];
-		  for (const [i,e] of embedArr.entries()){
-			  e.setFooter({ text: blank });
-			  // Pull saved banner options (default to 0 if not set)
-			  const clientId = rows2[i].client_id;
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-		  }
-		
-        await i.editReply({ embeds: embedArr, components: [], files: files });
-      return;
-    }
-
-    if (i.commandName === "xlr-player") {
-      await i.deferReply();
-      const name = i.options.getString("name", true);
-      const weaponOpt = i.options.getString("weapon");
-      const mapOpt = i.options.getString("map");
-      const vsName = i.options.getString("vs");
-	  const awardOpt = i.options.getString("award");
-	  
-	  let aw;
-
-      const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
-      if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
-      const clientId = matches[0].client_id;
-
-	  if (awardOpt) {
-		const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
-	  
-		if(aw) {
-		  // Player rank + metric(s)
-		  const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
-		  const [rankRow] = await runQueryOn(serverIndex, sql, params);
-		  const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, true)) || (rankRow?.name ?? name);
-
-		  const emote = resolveEmoji(aw.emoji) ?? "";
-
-		  const head = new EmbedBuilder()
-			.setColor(0x32d296)
-			.setTitle(`${emote} ${aw.name} — ${playerName}`)
-			.setDescription(rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "_No placement yet_")
-			.setFooter({ text: "XLRStats • B3" });
-
-		  if (rankRow) {
-			for (const p of (aw.properties || [])) {
-			  if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
-				head.addFields({ name: p.name, value: String(rankRow[p.prop]), inline: true });
-			  }
-			}
-		  }
-		  
-		  // Pull saved banner options (default to 0 if not set)
-		  const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  head.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-		  
-		  const embeds = [head];
-
-		  await i.editReply({ embeds, components: [], files});
-		  return;
-		} else { 			
-		  // Compute ranks across all awards, pick best 10
-		  const ranks = await Promise.all(awards.map(async (aw,i) => {
-			const { sql, params } = queries.awardRank(i, clientId);
-			const [row] = await runQueryOn(serverIndex, sql, params);
-			return row ? { key: aw.key, name: aw.name, emoji: aw.emoji, properties: aw.properties, rank: row.rank } : null;
-		  }));
-		  const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
-		  const titleName = (await displayName({ discord_id: matches[0]?.discord_id }, matches[0]?.name, true)) || matches[0]?.name;
-
-		  const emb = new EmbedBuilder()
-			.setColor(0x32d296)
-			.setTitle(`🏆 Best Award Placements — ${titleName}`)
-			.setFooter({ text: "XLRStats • B3" });
-
-		  if (!top10.length) {
-			emb.setDescription("_No placements yet_");
-		  } else {
-			const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
-			emb.setDescription(lines.join("\n"));
-		  }
-		  
-		  // Pull saved banner options (default to 0 if not set)
-		  const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  emb.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-		  
-		  await i.editReply({ embeds: [emb], components: [], files });
-		  return;
-			
-		}
-		
-	  }
-
-      if (weaponOpt) {
-        const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
-        const { sql, params } = queries.playerWeaponCard;
-        const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
-        if (!rows.length) return i.editReply(`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
-        const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-		const embed = formatPlayerWeaponEmbed(rows2[0]);
-		
-		// Pull saved banner options (default to 0 if not set)
-		  const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  embed.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-		
-        return i.editReply({ embeds: [embed], components: [], files });
-      }
-
-      if (mapOpt) {
-        const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
-        const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
-        if (!rows.length) return i.editReply(`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-        const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-		let thumbUrl = DEFAULT_THUMB;
-        thumbUrl = (await getMapImageUrl(rows2[0].map)) || DEFAULT_THUMB;
-        const embed = formatPlayerMapEmbed(rows2[0], null, { thumbnail: thumbUrl });
-		
-		// Pull saved banner options (default to 0 if not set)
-		  const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  embed.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-		
-		  return i.editReply({ embeds: [embed], components: [], files });
-      }
-
-      if (vsName) {
-        const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
-        if (!opp.length) return i.editReply(`No opponent found matching **${vsName}**.`);
-        const opponentId = opp[0].client_id;
-        if (opponentId === clientId) return i.editReply(`Pick a different opponent than the player.`);
-        const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
-          opponentId,
-          clientId, opponentId,
-          opponentId, clientId,
-          clientId
-        ]);
-        if (!rows.length) return i.editReply(`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-        const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
-		);
-		const embed = formatPlayerVsEmbed(rows2[0], { thumbnail: DEFAULT_THUMB });
-		
-		// Pull saved banner options (default to 0 if not set)
-		  const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  embed.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-		
-        return i.editReply({ embeds: [embed], components: [], files });
-      }
-
-      const details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-      if (!details.length) return i.editReply(`No stats on this server for **${matches[0].name}**.`);
-	  const rows2 = await Promise.all(
-		  details.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-      const embed = formatPlayerEmbed(rows2[0]);
-	  
-	  // Pull saved banner options (default to 0 if not set)
-	  const [pc] = await runQueryOn(
-		serverIndex,
-		queries.playerCoreAndBannerById,
-		[clientId]
-	  );
-	  const bg = Number(pc?.background ?? 0) || 0;
-	  const em = Number(pc?.emblem ?? 0) || 0;
-	  const cs = Number(pc?.callsign ?? 0) || 0;
-
-	  // Generate the banner
-	  const { buffer, filename } = await generateBanner({
-		background: bg,
-		emblem: em,
-		callsign: cs,
-		playerName: pc?.name,              
-		kills: Number(pc?.kills) || 0,
-		deaths: Number(pc?.deaths) || 0,
-		skill: Number(pc?.skill) || 0
-	  });
-	  
-	  const file = new AttachmentBuilder(buffer, { name: filename });
-
-	  embed.setImage(`attachment://${filename}`);
-
-	  const files = [file];
-
-      return i.editReply({ embeds: [embed], components: [], files });
-    }
-
-    if (i.commandName === "xlr-lastseen") {
-      await i.deferReply();
-      const count = i.options.getInteger("count") ?? 10;
-      const rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
-	  const rows2 = await Promise.all(
-		  rows.map(async (r) => ({ ...r, name: (await displayName(r, r.name, true)) || r.name }))
-		);
-      const embed = formatLastSeenEmbed(rows2, { thumbnail: DEFAULT_THUMB });
-      await i.editReply({ embeds: [embed] });
-      return;
-    }
-	
-	if (i.commandName === "xlr-register") {
-      const guid = i.options.getString("guid", true).trim();
-      const serverIndex = resolveServerIndexFromInteraction(i);
-      try {
-        // Look up client by GUID first for a friendly error if not found
-        const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
-        if (!rows.length) {
-          await i.reply({ ephemeral: true, content: `No client found with GUID **${guid}** on server ${serverIndex + 1}.` });
-          return;
-        }
-        const clientId = rows[0].id;
-        await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
-        await i.reply({ ephemeral: true, content: `Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` });
-      } catch (e) {
-        console.error("xlr-register failed:", e);
-        await i.reply({ ephemeral: true, content: "Sorry, linking failed. Try again later or contact an admin." });
-      }
-      return;
-    }
-
-     if (i.commandName === "xlr-profile") {
-      const serverIndex = resolveServerIndexFromInteraction(i);
-      // Look up the invoking user's linked client
-      const uid = i.user.id;
-      // Prefer most-recently seen client if multiple
-      const rows = await runQueryOn(
-        serverIndex,
-        `SELECT c.id AS client_id
-           FROM clients c
-      LEFT JOIN aliases a ON a.client_id = c.id
-          WHERE c.discord_id = ?
-          GROUP BY c.id
-          ORDER BY MAX(c.time_edit) DESC, MAX(a.time_edit) DESC
-          LIMIT 5`,
-        [uid]
-      );
-
-      if (!rows.length) {
-        await i.reply({
-          ephemeral: true,
-          content: "You haven’t linked your Discord to a B3 user on this server yet. Use `/xlr-register` to link your GUID."
-        });
-        return;
-      }
-
-      const clientId = rows[0].client_id;
-
-      // DM the profile
-      try {
-        const dm = await i.user.createDM();
-
-		// Clean up old UI first
-		await deleteOldProfileDMs(dm, client);
-
-		const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
-		await dm.send(payload);
-		await i.reply({ ephemeral: true, content: "I sent your playercard to your DMs. 📬" });
-
-      } catch (e) {
-        console.error("[xlr-profile] DM failed:", e);
-        await i.reply({ ephemeral: true, content: "I couldn't DM you (are DMs disabled?). Enable DMs and try again." });
-      }
-      return;
-    }
-
-
-	
-  } catch (err) {
-    console.error("[slash] error:", err);
-    if (i.deferred || i.replied) {
-      await i.editReply("Error talking to the stats database.");
-    } else {
-      await i.reply({ content: "Error talking to the stats database.", ephemeral: true });
-    }
-  }
-}
-
-async function handleUiComponent(i, serverIndex) {
-  const cfg = byIndex.get(serverIndex);
-  const state = perChannelState.get(cfg.channelId);
-  const uiCollector = state?.collectors || null;
-
-  // Buttons
-  if (i.isButton()) {
-    console.log(`[ui:button] ${i.customId} in #${i.channel?.id || '?'} msg=${i.message?.id || '?'} user=${i.user?.id || '?'}`);
-    const parsed = parseCustomId(i.customId);
-    if (!parsed) return; // ignore non-UI buttons
-
-	try {
-	  if (!i.deferred && !i.replied) {
-		await i.deferUpdate(); // acknowledges the interaction
-	  }
-	} catch (e) {
-	  // If already acknowledged somewhere else, ignore
-	}
-
-    // NAV toolbar button
-    if (i.message.id === cfg.ui.navId) {
-      const gate = beginChannelLoad(cfg.channelId);
-		
-      const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-	  const files = [];
-		
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-	    if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-	  
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-			  
-		  }
-	  }
-		
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-
-    // CONTENT pager buttons
-    if (i.message.id === cfg.ui.contentId) {
-      const gate = beginChannelLoad(cfg.channelId);
-      if (parsed.view === VIEWS.WEAPON_PLAYERS) {
-        const payload = await buildWeaponPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-        const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-        return;
-      }
-      if (parsed.view === VIEWS.MAPS_PLAYERS) {
-        const payload = await buildMapPlayers(serverIndex, parsed.param, parsed.page, parsed.weaponsPage ?? 0, { signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-        const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-        return;
-      }
-	
-		
-      const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-	  const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-	 
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-	
-/*	if (parsed.view === VIEWS.AWARDS) {
-        const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.channelId });
-      if (payload?.stale || isStale(cfg.channelId, gate.token)) return;
-        await i.update({ embeds: payload.embeds, components: payload.pager });
-        if (cfg.ui.navId) {
-          const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-          const navMsg = await channel.messages.fetch(cfg.ui.navId);
-          if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-        }
-        if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-        return;
-      } */
-  }
-
-  // Select Menus
-  if (i.isStringSelectMenu()) {
-    console.log(`[ui:select] ${i.customId} -> ${JSON.stringify(i.values)} in #${i.channel?.id || '?'} user=${i.user?.id || '?'}`);
-    const [prefix, view, kind, pageStr] = i.customId.split(":");
-    if (prefix !== "ui") return;
-	
-	try {
-	  if (!i.deferred && !i.replied) {
-		await i.deferUpdate(); // acknowledges the interaction
-	  }
-	} catch (e) {
-	  // If already acknowledged somewhere else, ignore
-	}
-	
-    const page = Math.max(0, parseInt(pageStr, 10) || 0);
-
-    if (view === "weapons" && kind === "select") {
-      const label = i.values[0];
-      const payload = await buildWeaponPlayers(serverIndex, label, 0, page);
-      const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-
-    if (view === "maps" && kind === "select") {
-      const label = i.values[0];
-      const payload = await buildMapPlayers(serverIndex, label, 0, page);
-      const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-	
-	if (view === "awards" && kind === "select") {
-      const selIndex = Number(i.values[0]);
-      const globalIndex = page * V_PAGE + selIndex;
-      const award = awards[globalIndex];
-      const payload = await buildAward(serverIndex, award, 0, page);
-      const files = [];
-
-	  if (cfg.ui.contentId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-		if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: payload.files ?? [] });
-	  }
-
-      if (cfg.ui.navId) {
-        const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-        const navMsg = await channel.messages.fetch(cfg.ui.navId);
-        if (isStale(cfg.channelId, gate.token)) return;
-        if (isStale(cfg.channelId, gate.token)) return;
-        await navMsg.edit({ content: "", embeds: [], components: payload.nav });
-      }
-	  
-	  const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	  const ZERO_WIDTH = "⠀";
-	  const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
-	  const blankText = ZERO_WIDTH.repeat(padLen);
-	  
-	  for (const e of payload.embeds){
-		  e.setFooter({ text: blankText });
-		  // Pull saved banner options (default to 0 if not set)
-		  if(e.clientId){
-			  const [pc] = await runQueryOn(
-				serverIndex,
-				queries.playerCoreAndBannerById,
-				[e.clientId]
-			  );
-			  const bg = Number(pc?.background ?? 0) || 0;
-			  const em = Number(pc?.emblem ?? 0) || 0;
-			  const cs = Number(pc?.callsign ?? 0) || 0;
-
-			  // Generate the banner
-			  const { buffer, filename } = await generateBanner({
-				background: bg,
-				emblem: em,
-				callsign: cs,
-				playerName: pc.name,              
-				kills: Number(pc.kills) || 0,
-				deaths: Number(pc.deaths) || 0,
-				skill: Number(pc.skill) || 0
-			  });
-			  
-			  const file = new AttachmentBuilder(buffer, { name: filename });
-
-			  e.setImage(`attachment://${filename}`);
-
-			  files.push(file);
-			  
-			  payload.embeds[payload.embeds.length - 1].data.footer.text = footerText;
-			  
-			  if (cfg.ui.contentId) {
-				const channel = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-				const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
-				await contentMsg.edit({ embeds: payload.embeds, components: payload.pager, files: files ?? [] });
-			  }
-		  }
-	  }
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-
-    if (view === "ladder" && kind === "select") {
-        const clientId = i.values[0];
-		const rows = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
-		const embed = rows.length
-		  ? formatPlayerEmbed(rows[0], { thumbnail: DEFAULT_THUMB })
-		  : new EmbedBuilder().setColor(0xcc0000).setDescription("No stats for that player.");
-
-		const ladderRows = await getLadderSlice(serverIndex, page * 10, 10);
-
-		// PRE-ENRICH: compute display names for select menu labels
-		const ladderRowsWithNames = await Promise.all(
-		  ladderRows.map(async (r) => ({
-			...r,
-			name: (await displayName(r, r.name, true)) || r.name,
-		  }))
-		);
-		
-		 // Pull saved banner options (default to 0 if not set)
-		 const [pc] = await runQueryOn(
-			serverIndex,
-			queries.playerCoreAndBannerById,
-			[clientId]
-		  );
-		  const bg = Number(pc?.background ?? 0) || 0;
-		  const em = Number(pc?.emblem ?? 0) || 0;
-		  const cs = Number(pc?.callsign ?? 0) || 0;
-
-		  // Generate the banner
-		  const { buffer, filename } = await generateBanner({
-			background: bg,
-			emblem: em,
-			callsign: cs,
-			playerName: pc.name,              
-			kills: Number(pc.kills) || 0,
-			deaths: Number(pc.deaths) || 0,
-			skill: Number(pc.skill) || 0
-		  });
-		  
-		  const file = new AttachmentBuilder(buffer, { name: filename });
-
-		  embed.setImage(`attachment://${filename}`);
-
-		  const files = [file];
-
-		const navComponents = [navRow(VIEWS.LADDER), playerSelectRowForPage(ladderRowsWithNames, page, clientId)];
-
-      const channel   = i.channel ?? await i.client.channels.fetch(cfg.channelId);
-      const contentMsg= await channel.messages.fetch(cfg.ui.contentId);
-      await Promise.all([
-        i.update({ content: "", embeds: [], components: navComponents }),
-        contentMsg.edit({ embeds: [embed], components: [], files }),
-      ]);
-      if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
-      return;
-    }
-  }
-}
-
-async function handleProfileComponent(i) {
-	
-	  // === PROFILE DM: Buttons & Selects & Modal ===
-  // Buttons — open modal or show pickers
-  if (i.isButton() && i.customId?.startsWith("profile:")) {
-    const parts = i.customId.split(":"); // profile:edit:name:si:pid or profile:edit:bg:si:pid:page
-    const [, action, sub, siStr, pidStr, pageStr] = parts;
-    const si = Number(siStr), pid = Number(pidStr);
-    const page = Number(pageStr || 0);
-
-    if (action === "edit" && sub === "name") {
-      const modal = new ModalBuilder()
-        .setCustomId(PROFILE_IDS.NAME_MODAL(si, pid))
-        .setTitle("Set Preferred Name");
-      const input = new TextInputBuilder()
-        .setCustomId("preferred_name")
-        .setLabel("Preferred display name (max 64)")
-        .setStyle(TextInputStyle.Short)
-        .setMaxLength(64)
-        .setRequired(true);
-      modal.addComponents(new ActionRowBuilder().addComponents(input));
-      await i.showModal(modal);
-      return;
-    }
-
-    if (action === "edit" && (sub === "bg" || sub === "em" || sub === "cs")) {
-      const rows = buildPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, page);
-      await i.update({ components: rows });
-      return;
-    }
-
-	if (action === "page") {
-	  // id format: profile:page:<kind>:<si>:<pid>:<dir>:<page>
-	  const parts = i.customId.split(":");
-	  const kind = parts[2];                 // "bg" | "em" | "cs"
-	  const si   = Number(parts[3]);         // server index
-	  const pid  = Number(parts[4]);         // player id
-	  const dir  = parts[5];                 // "prev" | "next"
-	  const cur  = Number(parts[6] || 0);    // current page
-
-	  // Clamp target page so we never render an empty select
-	  const total   = kind === "bg" ? BACKGROUNDS.length
-					 : kind === "em" ? EMBLEMS.length
-									  : CALLSIGNS.length;
-	  const per     = 25;
-	  const maxPage = Math.max(0, Math.ceil(total / per) - 1);
-
-	  const next    = dir === "prev" ? cur - 1 : cur + 1;
-	  const clamped = Math.min(maxPage, Math.max(0, next));
-
-	  const rows = buildPickerRow(kind, si, pid, clamped);
-	  await i.update({ components: rows });
-	  return;
-	}
-
-
-  }
-
-  // Selects — persist choice
-  if (i.isStringSelectMenu() && i.customId?.startsWith("profile:pick:")) {
-    const [, , kind, siStr, pidStr, pageStr] = i.customId.split(":");
-    const si = Number(siStr), pid = Number(pidStr);
-    const page = Number(pageStr || 0);
-    const picked = Number(i.values[0]); // absolute index from array
-
-    try {
-      if (kind === "bg") {
-	    await runQueryOn(si, queries.setPlayerCardBackground, [pid, picked]);
-	  } else if (kind === "em") {
-	    await runQueryOn(si, queries.setPlayerCardEmblem, [pid, picked]);
-	  } else if (kind === "cs") {
-	    await runQueryOn(si, queries.setPlayerCardCallsign, [pid, picked]);
-	  }
-      // Rebuild DM with new banner + reset to main buttons row
-      const payload = await buildProfileDmPayload(si, pid, i.user.id);
-      await i.update(payload);
-    } catch (e) {
-      console.error("[profile] save failed:", e);
-      await i.reply({ content: "Saving failed. Try again.", flags: 64 });
-    }
-    return;
-  }
-
-  // Modal — save preferred name
-  if (i.isModalSubmit() && i.customId?.startsWith("profile:name:")) {
-    const [, , siStr, pidStr] = i.customId.split(":");
-    const si = Number(siStr), pid = Number(pidStr);
-    const name = i.fields.getTextInputValue("preferred_name")?.trim()?.slice(0,64) || null;
-
-    try {
-      await runQueryOn(si, "UPDATE clients SET preferred_name = ? WHERE id = ?", [name, pid]);
-      const payload = await buildProfileDmPayload(si, pid, i.user.id);
-      await i.reply(payload);
-    } catch (e) {
-      console.error("[profile] name save failed:", e);
-      await i.reply({ content: "Saving failed. Try again.", flags: 64 });
-    }
-    return;
-  }
-	
-}
-
-client.on(Events.InteractionCreate, async (i) => {
-  try {
-	  
-	if (i.customId?.startsWith("profile:")) {
-		await handleProfileComponent(i);
-		return;
-	}
-	  
-    if (i.isChatInputCommand()) {
-      await handleSlashCommand(i);
-      return;
-    }
-    const serverIndex = SERVER_CONFIGS.findIndex(c => c.channelId === i.channelId);
-    if (serverIndex < 0) return;
-    await handleUiComponent(i, serverIndex);
-  } catch (e) {
-    console.error("Interaction error:", e);
-    try {
-      if (i.deferred || i.replied) {
-        await i.followUp({ content: "Something went wrong.", flags: 64 });
-      } else {
-        await i.reply({ content: "Something went wrong.", flags: 64 });
-      }
-    } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
-  }
-});
-
-// -------------------------------------------------------------------------------------
-// Slash command routing
-// -------------------------------------------------------------------------------------
-function resolveServerIndexFromInteraction(interaction) {
-  const arg = interaction.options?.getString("server")?.trim();
-  if (!arg) return 0; // default
-  const asNum = Number(arg);
-  if (Number.isFinite(asNum) && asNum >= 1 && asNum <= SERVER_CONFIGS.length) return asNum - 1;
-  const found = byNameLower.get(arg.toLowerCase());
-  if (found) return found.i;
-  return 0;
-}
-
-client.once(Events.ClientReady, async () => {
-  console.log(`Logged in as ${client.user.tag}`);
-  
-  //init emoji resolver
-	try {
-	  if (!GUILD_ID) {
-		console.warn("[emoji] No GUILD_ID set in .env, skipping emoji resolver");
-	  } else {
-		const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
-		if (!guild) {
-		  console.warn(`[emoji] Could not fetch guild ${GUILD_ID}`);
-		} else {
-		  const emojis = await guild.emojis.fetch();
-		  const emojiIndex = new Map();
-
-		  emojis.forEach(e => {
-			const key = (e.name || "").toLowerCase();
-			const mention = `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`;
-			emojiIndex.set(key, mention);
-		  });
-
-		  setEmojiResolver((label) => {
-			if (!label) return null;
-			const k = String(label).replace(/:/g, "").toLowerCase().trim();
-			return emojiIndex.get(k) ?? null;
-		  });
-
-		  console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
-		}
-	  }
-	} catch (e) {
-	  console.warn("[emoji] init failed:", e);
-	}
-  
-  for (let i = 0; i < SERVER_CONFIGS.length; i++) {
-	
-    try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
-	try { 
-		const cfg = byIndex.get(i);
-		const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
-		if (channel && channel.type === ChannelType.GuildText) {
-			const collector = channel.createMessageComponentCollector();
-			perChannelState.set(cfg.channelId, { i, collectors: collector });
-			startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
-		}
-	} catch (e) {
-	  console.warn("[ui] could not start inactivity session:", e);
-	}
-  }
-});
+// ----------------------------------------------------------------------------------------------------
+// Per Channel State Maps, register loads and activity
+// ----------------------------------------------------------------------------------------------------
+const perChannelState = new Map();
+const perChannelLoadGate = new Map();
+/* ************************************************************************
+END CONSTANTS
+***************************************************************************
+START APP OPERATION FLOW
+************************************************************************* */
+
+//DEFINE CLIENT
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers] });
+
+/* ***************************************************************
+process start with --register switch
+---
+if register argument is included then the bot will load new slash commands
+otherwise it will login and start running with the currently loaded slash commands
+**************************************************************** */
 
 if (process.argv.includes("--register")) {
   register().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 } else {
   client.login(DISCORD_TOKEN);
+}
+
+/* ***************************************************************
+client once ready, runs after successful login
+---
+if register argument is included then the bot will load new slash commands
+otherwise it will login and start running with the currently loaded slash commands
+**************************************************************** */
+
+client.once(Events.ClientReady, async () => {
+	console.log(`Logged in as ${client.user.tag}`);
+  
+	try {
+		//if bot is connected to a discord server, load their custom emojis up for use with the bot
+		if (!GUILD_ID) {
+			//if not connected to discord server
+			console.warn("[emoji] No GUILD_ID set in .env, skipping emoji resolver");
+		} else {
+			//is connected to a discord
+			const guild = await client.guilds.fetch(GUILD_ID).catch(() => null); //load the discord
+			if (!guild) {
+				//discord couldn't load
+				console.warn(`[emoji] Could not fetch guild ${GUILD_ID}`);
+			} else {
+				//succesful discord load - load the emojis
+				const emojis = await guild.emojis.fetch();
+				//create array for emoji storage
+				const emojiIndex = new Map();
+
+				//foreach emoji
+				emojis.forEach(e => {
+					//cast name to lowercase for key, fall back to "default" if name is somehow not defined.
+					const key = (e.name || "default").toLowerCase(); 
+					//set the mention format, ie. a: for animated and with trailing id. eg a:pegasus_knight:12345
+					const mention = `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`;
+					//add emjoi to array
+					emojiIndex.set(key, mention);
+				});
+
+				/* TODO: does this do anything, remove if this doesn't break
+				setEmojiResolver((label) => {
+					if (!label) return null;
+					const k = String(label).replace(/:/g, "").toLowerCase().trim();
+					return emojiIndex.get(k) ?? null;
+				}); */
+			
+				console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
+			}
+		}
+	} catch (e) {
+		//if discord or emojis fail to load.
+		console.warn("[emoji] init failed:", e);
+	}
+	//for each server in the config
+	for (let i = 0; i < SERVER_CONFIGS.length; i++) {
+		//try catch on initializing UI for UO Server
+		try { await ensureUIForServer(i); } catch (e) { console.error("ensureUIForServer", i, e); }
+		//try catch on creating inactivity monitor per UI
+		try {
+			//set cfg to the current config
+			const cfg = byIndex.get(i);
+			//fetch the channel from discord.js return null if failed
+			const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+			//if channel exists and channel is a text chat channel
+			if (channel && channel.type === ChannelType.GuildText) {
+				//create a collector
+				const collector = channel.createMessageComponentCollector();
+				//update perChannelState Array for channel Id - index, add collector.
+				perChannelState.set(cfg.channelId, { i, collectors: collector });
+				//start the collector for channel and index
+				startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
+			}
+		} catch (e) {
+			console.warn("[ui] could not start inactivity session:", e);
+		}
+	}
+});
+
+/* ***************************************************************
+client on interaction, runs after a component click or slash command
+---
+if register argument is included then the bot will load new slash commands
+otherwise it will login and start running with the currently loaded slash commands
+**************************************************************** */
+
+client.on(Events.InteractionCreate, async (i) => {
+	//try catch on interaction
+	try {
+		//profile component handlers 
+		if (i.customId?.startsWith("profile:")) {
+			await handleProfileComponent(i);
+			return;
+		}
+		//slash command handlers
+		if (i.isChatInputCommand()) {
+			await handleSlashCommand(i);
+			return;
+		}
+		//get serverIndex from ui click
+		const serverIndex = SERVER_CONFIGS.findIndex(c => c.ui.channelId === i.channelId);
+		//abort if invalid config
+		if (serverIndex < 0) return;
+		//ui component handler
+		await handleUiComponent(i, serverIndex);
+	} catch (e) {
+		//log on error
+		console.error("Interaction error:", e);
+		//try catch for sending error message
+		try {
+			if (i.deferred || i.replied) {
+				await sendWhisper(i,"Something went wrong.");
+			} else {
+				await sendWhisper(i, "Something went wrong.");
+			} //just throw an error if message can't be posted
+		} catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+	}
+});
+
+/* ***********************************************************
+END APP OPERATION FLOW
+**************************************************************
+START CONFIG/SQL HELPER FUNCTIONS
+************************************************************ */
+
+/* ***************************************************************
+collectServerConfigs( env: type-file [required])
+return uniq: type-array
+
+creates an array of server configurations from an env file
+---
+searches the env file for numerical suffixes eg MYSQL_DB_HOST_2
+and groups the ones with the same suffixs together and then returns
+unique configurations
+**************************************************************** */
+function collectServerConfigs(env) {
+	//save configs to an array
+	const configs = [];
+	//look for base .env vars first (no numerical suffix)
+	const first = readEnvSet(env, 1);
+	//if any base .env vars exist add them to the first index
+	if (first.hasAny) configs.push(first);
+
+	// find all numeric suffixes present - Create new set of suffixes
+	const suffixes = new Set(
+		//breakout the keys from the env file
+		Object.keys(env)
+			//create an array of keys from numerical indexes
+			.map(k => (k.match(/_(\d+)$/)?.[1]))
+			//filter out failed matches
+			.filter(Boolean)
+			//create array out of numbers that survived the filter
+			.map(s => Number(s))
+			//filter out invalid numbers, start suffixes at 2
+			.filter(n => Number.isFinite(n) && n >= 2)
+	);
+	
+	//recreate suffixes array, sort it ascending order, step through each suffix
+	[...suffixes].sort((a,b)=>a-b).forEach(n => {
+		//look for env vars for numerical suffix n
+		const cfg = readEnvSet(env, n);
+		//if any env vars exist for n, add them to the latest index of configs
+		if (cfg.hasAny) configs.push(cfg);
+  });
+
+	// fill missing fields from base
+	const base = configs[0] || readEnvSet(env, 1);
+	for (const c of configs) {
+		c.db.host ||= base.db.host || "db";
+		c.db.name ||= base.db.name;
+		c.db.user ||= base.db.user;
+		c.db.pass ||= base.db.pass;
+		c.rcon.ip ||= base.rcon.ip;
+		c.rcon.port ||= base.rcon.port;
+	}
+
+	// derive default name
+	for (const c of configs) {
+		if (!c.rcon.name) c.rcon.name = `Server ${c.n}`;
+	}
+
+	// filter out duplicates - create set of seen configs
+	const seen = new Set();
+	//create a new array of unique configs only
+	const uniq = [];
+	//loop through all the configs
+	for (const c of configs) {
+		//save the config vars to a string
+		const key = `${c.ui.channelId ?? "nochan"}|${c.db.host}|${c.db.name}|${c.rcon.ip}:${c.rcon.port}|${c.rcon.name}`;
+		//if config vars haven't been seen yet, mark them as seen and add them to unique array
+		if (!seen.has(key)) { seen.add(key); uniq.push(c); }
+	}
+	//return unique configs
+	return uniq;
+}
+
+/* ***************************************************************
+readEnvSet( env: type-file [required],
+			n: type-int [optional, 1])
+return {}: type-object
+reads the env for the server configurations, starting with the
+specified numeric suffix
+---
+returns an object of the index, db env vars, rcon env vars, discord env vars, hasAny flag
+DB ENV VARS:	MYSQL_B3_HOST,
+				MYSQL_B3_DB,
+				MYSQL_B3_USER,
+				MYSQL_B3_PASSWORD,
+RCON ENV VARS:	B3_RCON_IP,
+				B3_RCON_PORT,
+				XLR_SERVER_NAME,
+DISC ENV VARS:	CHANNEL_ID,
+				UI_NAV_MESSAGE_ID,
+				UI_CONTENT_MESSAGE_ID
+			
+**************************************************************** */
+function readEnvSet(env, n = 1) {
+	//set the suffix to the digit if its not the first set
+	const suf = n === 1 ? "" : `_${n}`;
+	//trim the output of the getter, set value to string
+	const get = (k) => env[`${k}${suf}`]?.toString().trim();
+
+	//store database related vars to db object
+	const db = {
+		host: get("MYSQL_B3_HOST") || "db",
+		name: get("MYSQL_B3_DB"),
+		user: get("MYSQL_B3_USER"),
+		pass: get("MYSQL_B3_PASSWORD"),
+	};
+	//store coduo server related vars to rcon object
+	const rcon = {
+		ip: get("B3_RCON_IP"),
+		port: get("B3_RCON_PORT"),
+		name: get("XLR_SERVER_NAME") || null,
+	};
+	//store discord server related vars to ui object
+	const ui = {
+		channelID: get("CHANNEL_ID") || null,
+		navId: get("UI_NAV_MESSAGE_ID") || null,
+		contentId: get("UI_CONTENT_MESSAGE_ID") || null,
+	};
+	//set flag if any of these vars are set.
+	const hasAny = db.name || db.user || db.pass || db.host || rcon.ip || rcon.port || ui.channelId || rcon.name;
+	return { n, db, rcon, ui, hasAny };
+}
+
+/* ***************************************************************
+upsertEnv( 	key: type-string [required],
+			value: type-string [required]
+			)
+return void
+
+inserts new value into env file
+---
+matches a key value pair and replaces it in env file
+**************************************************************** */
+function upsertEnv(key, value) {
+	//load env file
+	const ENV_PATH = path.resolve(process.cwd(), ".env");
+	//match new lines
+	const lines = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf8").split(/\r?\n/) : [];
+	//get index of line that starts with the key
+	const idx = lines.findIndex(l => l.startsWith(`${key}=`));
+	//if index is found, update value
+	if (idx >= 0) lines[idx] = `${key}=${value}`;
+	//otherwise create new line
+	else lines.push(`${key}=${value}`);
+	//save file
+	fs.writeFileSync(ENV_PATH, lines.join("\n"), "utf8");
+	//update env variable
+	process.env[key] = value;
+}
+
+/* ***************************************************************
+getPoolByIndex( idx: type-int [required])
+return pool: type-db handle
+
+retrieves a db handle from the specified index
+---
+returns a db handle for performing sql operations
+**************************************************************** */
+function getPoolByIndex(idx) {
+  const pool = pools[idx];
+  if (!pool) throw new Error(`No DB pool for server index ${idx}`);
+  return pool;
+}
+
+/* ***************************************************************
+runQueryOn( idx: type-int [required],
+			sql: type-string [required],
+			params: type-array[optional, []])
+return rows: type-array of row objects
+
+runs specified query on specifeid server index.
+---
+returns the results of the query as an array of objects where the column name are properties on the row object.
+**************************************************************** */
+async function runQueryOn(idx, sql, params = []) {
+  const [rows] = await getPoolByIndex(idx).query(sql, params);
+  return rows;
+}
+
+/* ***************************************************************
+insertPlayerCardDetails( rows: type-array [required])
+return array: type-array
+
+adds playerCard details onto SQL query results
+---
+returns edited SQL query results
+**************************************************************** */
+async function insertPlayerCardDetails(rows, serverIndex) {
+	return await Promise.all(
+		rows.map(async (r) => {
+			const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [r.clientId]);
+			const bg = Number(pc?.background ?? 0) || 0;
+			const em = Number(pc?.emblem ?? 0) || 0;
+			const cs = Number(pc?.callsign ?? 0) || 0;
+			return { ...r, name: (await displayName(r, r.name, true)) || r.name, em: em, cs: cs  };
+		})
+	);
+}
+
+/* ***********************************************************
+END CONFIG/SQL HELPER FUNCTIONS
+**************************************************************
+START -- LOAD -- TIMEOUT -- ACTIVITY -- HELPER FUNCTIONS
+************************************************************ */
+
+/* ***************************************************************
+sendMessage( 	i: type-discord interaction [required],
+					cfg: type-obj [required],
+					navComponents: type-discord component [required],
+					contentEmbeds: type-discord embed [required],
+					footerText: type- string [optional, ""],
+					contentComponents: type- discord component [optional, []],
+					files: type- discord attachment [optional, []]
+					)
+return void
+
+updates the UI for the CODUO Server at given index
+---
+uses discord.js package to update messages for bot UO
+**************************************************************** */
+async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [] ) {
+	//create Load Gate
+	const gate = beginChannelLoad(cfg.ui.channelId);
+	//get UI Activity Collector
+	const uiCollector = state?.collectors || null;
+	
+	//get channel id from interaction or config
+	const channel =
+	  (i?.channel && i.channel.isTextBased?.() ? i.channel : null) ??
+	  (i?.isTextBased?.() ? i : null) ??
+	  (await i.client.channels.fetch(i?.channelId ?? cfg.ui.channelId));
+
+	//UPDATE NAV
+	const navMsg = await channel.messages.fetch(cfg.ui.navId);
+	//abort message edit if load has been interupted by new click
+	if (isStale(cfg.ui.channelId, gate.token)) return;
+	await navMsg.edit({embeds: [], components: navComponents });
+	
+	//EDIT FOOTER
+	const ZERO_WIDTH = "⠀";
+	const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
+	const blankText = ZERO_WIDTH.repeat(padLen);
+	for(const e of contentEmbeds){
+		e.setFooter({ text: blankText });
+	}
+	contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+	//UPDATE CONTENT
+	//get the content message id from config
+	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+	//abort message edit if load has been interupted by new click
+	if (isStale(cfg.channelId, gate.token)) return;
+	//edit contentMsg with payload
+	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
+  	
+    if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+		return;
+    
+}
+
+/* ***************************************************************
+sendWhisper( 	i: type-discord interaction [required],
+					content: type-string  )
+return void
+
+sends an ephemeral private message to whoever started the interaction
+---
+uses discord.js package to send whispers for bot UO
+**************************************************************** */
+async function sendWhisper(i, content) {
+	await i.reply({ content: content, , flags: MessageFlags.Ephemeral });
+}
+
+/* ***************************************************************
+sendDM( 	i: type-discord interaction [required],
+					contentEmbeds: type-discord embed [required],
+					contentComponents: type- discord component [optional, []],
+					footerText: type- string [optional, ""],
+					files: type- discord attachment [optional, []]
+					)
+return uniq: type-array
+
+updates the UI for the CODUO Server at given index
+---
+uses discord.js package to update messages for bot UO
+**************************************************************** */
+async function sendDM(i, contentEmbeds = [],  contentComponents = [], footerText = "", files = [] ) {
+	let contentFlag = false;
+	let componentFlag = false;
+	let filesFlag = false;
+	
+	//if embed included in message
+	if(contentEmbeds.length > 0){
+		//set footer text
+		contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+		//set content Flag
+		contentFlag = true;
+	}
+	//if navs are included in message
+	if(contentComponents.length > 0)
+		componentFlag = true;
+	
+	//if files need updated
+	if(files.length > 0)
+		filesFlag = true;
+	
+	let message = {};
+	
+	if(contentFlag)
+		message.embeds = contentEmbeds;
+	if(componentFlag)
+		message.components = contentComponents;
+	if(filesFlag)
+		message.files = files;
+	
+	await i.update(message);
+}
+
+/* ***************************************************************
+ensureUIForServer( serverIndex: type-int [required])
+return uniq: type-array
+
+initializes the UI for the CODUO Server at given index
+---
+creates nav and content components, inserts the IDs into the env 
+if not present at starts a loadGate for UI clicks
+**************************************************************** */
+async function ensureUIForServer(serverIndex) {
+	//get config for server
+	const cfg = byIndex.get(serverIndex);
+	//if there is no specified channel for server then no need for a UI. (can still use commands)
+	if (!cfg?.ui.channelId) return;
+
+	//get the channel
+	const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+	//if the channel doesn't exist or its not a text based channel then we can't build a UI
+	if (!channel || channel.type !== ChannelType.GuildText) return;
+
+	// initialize HOME view
+	// Create a load gate
+	const gate = beginChannelLoad(cfg.channelId);
+	//
+	const initial = await buildView(serverIndex, {
+		view: VIEWS.HOME,
+		signal: gate.signal,
+		token: gate.token,
+		channelId: cfg.ui.channelId
+	});
+	if (initial?.stale) return; // superseded before finishing
+
+
+	// Load Nav Message
+	let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
+	if (!navMsg) {
+		//If Nav Message couldn't load, it must not exist, recreate it and update env
+		upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
+		cfg.ui.navId = navMsg.id;
+	}
+
+	//Load Content Message
+	let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
+	if (!contentMsg) {
+		//If content Message couldn't load, it must not exist, recreate it and update env
+		upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
+		cfg.ui.contentId = contentMsg.id;
+	}
+    //Send message
+	sendMessage(channel, cfg, initial.navComponents, intial.contentEmbeds, initial.footerText)
+}
+
+/* ***************************************************************
+startUiInactivitySession( 	uiCollector: type-string [required],
+							serverIndex: type-int [required],
+							cfg: type-obj [required],
+							channel: type-string [required])
+return void
+
+starts the idle activity timer and refreshes UI on set interval
+
+**************************************************************** */
+async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
+	// Stop an old one if it exists
+	if (uiCollector) {
+		//try catch on uiCollector termination
+		try { uiCollector.stop('restart'); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+		//null out collector regardless
+		uiCollector = null;
+	}
+
+	// Only collect our UI buttons in the target channel + for our 2 UI messages
+	uiCollector = channel.createMessageComponentCollector({
+		//set idle time
+		idle: INACTIVITY_MS,
+		//filter interactions to just ui components:
+		filter: (i) =>
+			i.customId?.startsWith('ui:') &&
+			(i.message?.id === cfg.ui.contentId || i.message?.id === cfg.ui.navId)
+	});
+
+	//on timer end
+	uiCollector.on('end', async (_collected, reason) => {
+		//if ended because of timer
+		if (reason === 'idle') {
+			//try catch on Home refresh
+			try {
+				// Auto-refresh Home on idle, even if already on Home - build load gate
+				const gate = beginChannelLoad(cfg.channelId);
+				const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
+				if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
+
+				if (payload?.hadError) {
+					console.warn("[ui] idle refresh: aborting edit due to upstream error");
+				} else {
+					if (isStale(cfg.ui.channelId, gate.token)) return;
+					// Send Message
+					await sendMessage(channel, cfg, payload.navComponents, payload.contentEmbeds, payload.footerText);
+
+				}
+			} catch (e) {
+				console.error("[ui] idle refresh failed:", e);
+			} finally {
+				// Restart the idle watcher
+				startUiInactivitySession(uiCollector, serverIndex, cfg, channel);
+			}
+		}
+	});
+}
+
+/* ***************************************************************
+beginChannelLoad( channelId: type-string [required])
+return {}: type-obj
+
+creates a load gate for the specified channel, aborts the previous load in progress if necessary
+---
+returns obj with load gate signal and token
+**************************************************************** */
+function beginChannelLoad(channelId) {
+	//get previous load
+	const prev = perChannelLoadGate.get(channelId);
+	//if a previous load existed
+	if (prev?.controller) {
+		//try to abort it.
+		try { prev.controller.abort(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+	}
+	//create a new abort controller
+	const controller = new AbortController();
+	//timestamp the token
+	const token = Symbol(`load:${channelId}:${Date.now()}`);
+	//save the latest load to the load gate
+	perChannelLoadGate.set(channelId, { controller, token });
+	
+	return { signal: controller.signal, token };
+}
+
+/* ***************************************************************
+isStale( channelId: type-string [required],
+		 token: type-string [required])
+return boolean.
+
+returns true if token has changed (and therefore the click has been overwritten
+returns false if token is the same (no new clicks to overwrite current op
+**************************************************************** */
+function isStale(channelId, token) {
+  return perChannelLoadGate.get(channelId)?.token !== token;
+}
+/* ***********************************************************
+END -- LOAD -- TIMEOUT -- ACTIVITY -- HELPER FUNCTIONS
+**************************************************************
+START VIEW BUILDER HELPER FUNCTIONS
+************************************************************ */
+/* ***************************************************************
+buildView( 	serverIndex: type-int [required],
+			{ view: type-string [required],
+			  signal: type-string [required],
+			  token: type-string [required],
+			  channelId: type-string [required],
+			  embedPage type-int [optional, 0],
+			  param: type-object [optional, null,
+			  stringSelectPage: type-int [optional, 0]
+			})
+return {}: type-obj
+
+sorts the view and params and sends it to the appropriate view builder
+---
+returns discord js message obj
+**************************************************************** */
+async function buildView(serverIndex, { view, signal, token, channelId, embedPage = 0, param = {}, stringSelectPage = 0 }) {
+  
+  if (view === VIEWS.HOME) {
+    return await buildHome(serverIndex,  signal, token, channelId);
+  }
+  if (view === VIEWS.LADDER) {
+    return await buildLadder(serverIndex,  signal, token, channelId, embedPage);
+  }
+  if (view === VIEWS.WEAPONS) {
+    return await buildWeapons(serverIndex,  signal, token, channelId, embedPage);
+  }
+  if (view === VIEWS.WEAPON_PLAYERS) {
+    return await buildWeaponPlayers(serverIndex,  signal, token, channelId, param.label, embedPage, stringSelectPage ?? 0);
+  }
+  if (view === VIEWS.MAPS) {
+    return await buildMaps(serverIndex,  signal, token, channelId, embedPage);
+  }
+  if (view === VIEWS.MAPS_PLAYERS) {
+    return await buildMapPlayers(serverIndex, param, embedPage, stringSelectPage ?? 0,  signal, token, channelId);
+  }
+  if(view === VIEWS.AWARDS) {
+	return param ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => a.name === param) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
+  }
+}
+
+/* ***************************************************************
+buildHome( 	serverIndex: type-int [required],
+			ctx: type-obj [ 
+			  signal: type-string [required],
+			  token: type-string [required],
+			  channelId: type-string [required]
+			])
+return {}: type-obj
+
+builds the UI home page (server status page and some basic stats)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildHome(serverIndex, signal, token, channelId) {
+	//get config
+	const cfg = byIndex.get(serverIndex);
+	
+	//define vars
+	let totals, status;
+	let hadError = false;
+
+	try {
+		//try catch on getting totals from SQL
+		totals = await getHomeTotals(serverIndex);
+	} catch (e) {
+		//log error on failure and just set stats to zero
+		hadError = true;
+		console.warn("[home] totals error → falling back to zeros");
+		totals = {
+			totalPlayers: 0,
+			totalKills: 0,
+			totalRounds: 0,
+			favoriteWeapon: { label: "—", kills: 0 },
+			favoriteMap: { label: "—", rounds: 0 },
+		};
+	}
+	//try catch on fetching Server Status from cod.pm
+	try {
+		status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port, signal);
+		//server status loaded but returned error - set error flag
+		if (status && status.error) hadError = true;
+	} catch (e) {
+		// If this was canceled by a newer click, just return "stale" when we have a ctx
+		if ((e?.name === "CanceledError" || e?.code === "ERR_CANCELED")) {
+			return { stale: true };
+		}
+		// otherwise set error flag on status load failed
+		hadError = true;
+		// set status to error
+		status = { error: summarizeAxiosError(e) };
+	}
+
+	// Only do staleness checks if a ctx was provided
+	if (isStale(channelId, token)) return { stale: true };
+	
+	//format home page
+	const contentEmbeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
+	const navComponents = [navRow(VIEWS.HOME)];
+	const footerText = contentEmbeds[contentEmbeds.length - 1].data.footer.textt;
+	
+	return { contentEmbeds, navComponents, footerText, hadError };
+}
+
+/* ***************************************************************
+buildLadder( 	serverIndex: type-int [required],
+				ctx: type-obj [ 
+				signal: type-string [required],
+				token: type-string [required],
+				channelId: type-string [required]
+				],
+				page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI ladder page (sort players by skill)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
+	
+	const offset = page * 10;
+	const [rows, total] = await Promise.all([
+		getLadderSlice(serverIndex, offset, 10),
+		getLadderCount(serverIndex)
+	]);
+
+	// PRE-ENRICH: fetch Discord username for titles/labels
+	const rowsWithNames = await insertPlayerCardDetails(rows);
+	const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
+	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
+	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.LADDER, rowsWithNames, page, null)];
+
+	return { embeds, nav, pager};
+}
+
+/* ***************************************************************
+buildWeapons( 	serverIndex: type-int [required],
+				ctx: type-obj [ 
+				signal: type-string [required],
+				token: type-string [required],
+				channelId: type-string [required]
+				],
+				page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI weapon ladder page (sort weapons by kills)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildWeapons(serverIndex,  signal, token, channelId, page=0) {
+
+	const offset = page * 10;
+	const [rows, total] = await Promise.all([
+		getWeaponsSlice(serverIndex, offset, 10),
+		getWeaponsCount(serverIndex)
+	]);
+	if (channelId && token && isStale(channelId, token)) return { stale: true };
+	const embeds = renderWeaponsEmbeds({ rows, page });
+	const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + 10 < total)];
+	const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPONS, rows, page, null)];
+	return { embeds, nav, pager };
+}
+
+/* ***************************************************************
+buildWeaponsPlayers( 	serverIndex: type-int [required],
+				ctx: type-obj [ 
+				signal: type-string [required],
+				token: type-string [required],
+				channelId: type-string [required]
+				],
+				page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI weapon ladder page (sort weapons by kills)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildWeaponPlayers(serverIndex,  signal, token, channelId, weaponLabel, playerPage=0, weaponsPage=0) {
+  
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+  const [rows, total, weaponsRows] = await Promise.all([
+    getPlayerWeaponSlice(serverIndex, weaponLabel, offset, pageSize),
+    getPlayerWeaponCount(serverIndex, weaponLabel),
+    getWeaponsSlice(serverIndex, weaponsPage * pageSize, pageSize),
+  ]);
+  
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  
+  const weap = (rows && rows[0]?.matched_label) || weaponLabel;
+  const emoji = resolveEmoji(weap);
+  const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
+  const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset });
+  
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
+  const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPONS, weaponsRows, weaponsPage, weap)];
+  return { embeds: embeds, nav: nav, pager: pager };
+}
+
+/* ***************************************************************
+buildMaps( 	serverIndex: type-int [required],
+			ctx: type-obj [ 
+			signal: type-string [required],
+			token: type-string [required],
+			channelId: type-string [required]
+			],
+			page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI map ladder page (sort mpas by rounds played)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildMaps(serverIndex,  signal, token, channelId, page=0) {
+
+  const offset = page * 10;
+  const [rows, total] = await Promise.all([
+    getMapsSlice(serverIndex, offset, 10, signal),
+    getMapsCount(serverIndex)
+  ]);
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const embeds = renderMapsEmbeds({ rows, page });
+  const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + 10 < total)];
+  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS,rows, page, null)];
+  return { embeds, nav, pager};
+}
+
+/* ***************************************************************
+buildMapsPlayers( 	serverIndex: type-int [required],
+				ctx: type-obj [ 
+				signal: type-string [required],
+				token: type-string [required],
+				channelId: type-string [required]
+				],
+				page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI map ladder page (sort players by rounds played)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildMapPlayers(serverIndex,  signal, token, channelId, mapLabel, playerPage=0, mapsPage=0) {
+	
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+  const [rows, total, mapsRows] = await Promise.all([
+    getPlayerMapSlice(serverIndex, mapLabel, offset, pageSize),
+    getPlayerMapCount(serverIndex, mapLabel),
+    getMapsSlice(serverIndex, mapsPage * pageSize, pageSize, signal),
+  ]);
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
+  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+
+  const hasNext = offset + pageSize < total;
+  const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
+  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS, mapsRows, mapsPage, mapLabel)];
+  return { embeds: embeds, nav: nav, pager: pager };
+}
+
+/* ***************************************************************
+buildAwards( 	serverIndex: type-int [required],
+			ctx: type-obj [ 
+			signal: type-string [required],
+			token: type-string [required],
+			channelId: type-string [required]
+			],
+			page: type-int [optional, 0]
+			)
+return {}: type-obj
+
+builds the UI award ladder page (sort awards by index)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildAwards(serverIndex,  signal, token, channelId, page=0) {
+  const offset = page * 10;
+  const baseRows = awards.slice(offset, offset + 10);
+  const rows = await Promise.all(baseRows.map(async (aw) => {
+	  const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
+	  if (top) top.name = await displayName(top, top.name, true);
+	  return { ...aw, top };
+  }));
+	if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const total  = awards.length;
+
+  const embeds = renderAwardsEmbeds({ rows, page });
+  const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + 10 < total)];
+  const nav    = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, rows, page, null)];
+
+  return { embeds: embeds, nav, pager };
+}
+
+/* ***************************************************************
+buildAward( 	serverIndex: type-int [required],
+			ctx: type-obj [ 
+			signal: type-string [required],
+			token: type-string [required],
+			channelId: type-string [required]
+			],
+			award: type-int [required],
+			page: type-int [optional, 0],
+			playerPage: type-int [optional,0],
+			awardsPage: type-int [optional,0]
+			)
+return {}: type-obj
+
+builds the UI award ladder page (sort players by position)
+---
+returns discord js message obj
+**************************************************************** */
+async function buildAward(serverIndex,  signal, token, channelId, award, playerPage=0, awardsPage=0) {
+  const pageSize = 10;
+  const offset   = playerPage * pageSize;
+  const [rows, total] = await Promise.all([
+    (async () => {
+      const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
+      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
+      return mapped;
+    })(),
+    pageSize,
+  ]);
+  if (channelId && token && isStale(channelId, token)) return { stale: true };
+  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
+  const embeds = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
+  
+  const hasNext = rows.length === pageSize;
+  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
+  const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
+  const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
+  return { embeds: embeds, nav: nav, pager: pager, files: files };
+}
+
+/* ***************************************************************
+buildProfileDm( 	serverIndex: type-int [required],
+					clientId: type-string [required])
+return {}: type-obj
+
+builds the profile editor UI and returns it ready to send
+---
+returns discord js message obj
+**************************************************************** */
+async function buildProfileDm(serverIndex, clientId ){
+	//load card (player stats, pc (playercard elements), and preferredName 
+	const { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
+	if (!card) return { content: "No stats found for your account on this server." };
+
+	//set playercard elements variable
+	const display = preferredName || card.name;
+	const bg = Number(pc?.background ?? 0) || 0;
+	const em = Number(pc?.emblem ?? 0) || 0;
+	const cs = Number(pc?.callsign ?? 0) || 0;
+	//generate playercard banners
+	const { buffer, filename } = await generateBanner({
+		background: bg,
+		emblem: em,
+		callsign: cs,
+		playerName: display,
+		kills: card.kills || 0,
+		deaths: card.deaths || 0,
+		skill: card.skill || 0
+	});
+	const file = new AttachmentBuilder(buffer, { name: filename });
+
+	// Get a playercard embed
+	const statsEmbed = formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
+
+	// Controls
+	rowButtons = buildDmNavRow(serverIndex, clientId);
+
+	// Show the current choices summary
+	const summary = new EmbedBuilder()
+		.setColor(0x2b7cff)
+		.setTitle("Your Banner Settings")
+		.setDescription([
+		`**Preferred Name:** ${display}`,
+		`**Background:** ${bg} — ${basenameNoExt(BACKGROUNDS[bg] || "N/A")}`,
+		`**Emblem:** ${em} — ${basenameNoExt(EMBLEMS[em] || "N/A")}`,
+		`**Callsign:** ${cs} — ${CALLSIGNS[cs] ?? "N/A"}`
+		].join("\n"));
+
+	return {
+		files: [file],
+		embeds: [summary, statsEmbed],
+		components: [rowButtons]
+	};
+}
+
+/* ************************************************************************************
+END VIEW BUILDER HELPER FUNCTIONS
+***************************************************************************************
+START INTERACTION HANDLER FUNCTIONS
+************************************************************************************* */
+/* ***************************************************************
+handleProfileComponent( 	i: type-discord interaction [required] )
+return void
+
+handles profile component clicks
+
+**************************************************************** */
+async function handleProfileComponent(i) {
+	
+	//Handle Button Clicks
+	if (i.isButton() && i.customId?.startsWith("profile:")) {
+		await handleProfileButton(i);
+	}
+
+	// Handle String Select
+	if (i.isStringSelectMenu() && i.customId?.startsWith("profile:pick:")) {
+		await handleProfileStringSelect(i);
+	  }
+
+  // Handle Modal — save preferred name
+	if (i.isModalSubmit() && i.customId?.startsWith("profile:name:")) {
+		await handleProfileModal(i);
+  }
+	
+}
+
+/* ***************************************************************
+handleProfileButton( 	i: type-discord interaction [required] )
+return void
+
+handles button clicks on profile edit DMs
+
+**************************************************************** */
+async function handleProfileButton(i) {
+	//explode customId on semicolon - profile:edit:name:si:pid or profile:edit:bg:si:pid:page
+	const parts = i.customId.split(":");
+	//get variables from exploded custom id parts
+    const [, action, sub, siStr, pidStr, pageStr, dir] = parts;
+	//cast variables to number
+    const si = Number(siStr), pid = Number(pidStr);
+    const page = Number(pageStr || 0);
+	//edit preferred_name interaction
+    if (action === "edit" && sub === "name") {
+		//create name text entry modal
+		const modal = new ModalBuilder()
+			.setCustomId(PROFILE_IDS.NAME_MODAL(si, pid))
+			.setTitle("Set Preferred Name");
+		const input = new TextInputBuilder()
+			.setCustomId("preferred_name")
+			.setLabel("Preferred display name (max 64)")
+			.setStyle(TextInputStyle.Short)
+			.setMaxLength(64)
+			.setRequired(true);
+		//spawn modal
+		modal.addComponents(new ActionRowBuilder().addComponents(input));
+		await i.showModal(modal);
+		return;
+    }
+	//playercard button interaction
+    if (action === "edit" && (sub === "bg" || sub === "em" || sub === "cs")) {
+		const rows = buildDmPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, page);
+		await sendDM(i, [], rows);
+		return;
+    }
+	//next previous page interactions
+	if (action === "page") {
+
+		// Clamp target page so we never render an empty select
+		const total   = sub === "bg" ? BACKGROUNDS.length
+						: sub === "em" ? EMBLEMS.length
+									  : CALLSIGNS.length;
+		//25 items per select page
+		const per     = 25;
+		//calculate the last page
+		const maxPage = Math.max(0, Math.ceil(total / per) - 1);
+		//calculate whether there is a next or previous page or not
+		const next    = dir === "prev" ? cur - 1 : cur + 1;
+		const clamped = Math.min(maxPage, Math.max(0, next));
+
+		const rows = buildDmPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, page);
+		await sendDM(i, [], rows);
+		return;
+	}
+}
+
+/* ***************************************************************
+handleProfileStringSelect( 	i: type-discord interaction [required] )
+return void
+
+handles String Select clicks on profile edit DMs
+
+**************************************************************** */
+async function handleProfileStringSelect(i){
+	//explode customId on semicolon
+	const [, , kind, siStr, pidStr, pageStr] = i.customId.split(":");
+	const si = Number(siStr), pid = Number(pidStr);
+	const page = Number(pageStr || 0);
+	const picked = Number(i.values[0]); // absolute index from array
+
+	//try catch on setter queries
+	try {
+		//set playercard element
+		if (kind === "bg") {
+			await runQueryOn(si, queries.setPlayerCardBackground, [pid, picked]);
+		} else if (kind === "em") {
+			await runQueryOn(si, queries.setPlayerCardEmblem, [pid, picked]);
+		} else if (kind === "cs") {
+			await runQueryOn(si, queries.setPlayerCardCallsign, [pid, picked]);
+		}
+		// Rebuild DM with new banner + reset to main buttons row
+		const payload = await buildProfileDmPayload(si, pid, i.user.id);
+		await sendDM(i, payload.embeds, payload.components, "", payload.files);
+	} catch (e) {
+		//log on error.
+		console.error("[profile] save failed:", e);
+		//notify user
+		await sendWhisper(i, "Saving failed. Try again.");
+	}
+	return;
+}
+
+/* ***************************************************************
+handleProfileModal( 	i: type-discord interaction [required] )
+return void
+
+handles modal submits on profile edit DMs
+
+**************************************************************** */
+async function handleProfileModal(i){
+	//explode custom id on semicolon
+	const [, , siStr, pidStr] = i.customId.split(":");
+	//server index - player id
+    const si = Number(siStr), pid = Number(pidStr);
+	//get preferred name from modal input
+    const name = i.fields.getTextInputValue("preferred_name")?.trim()?.slice(0,64) || null;
+
+	//try catch on setter query
+    try {
+		await runQueryOn(si, "UPDATE clients SET preferred_name = ? WHERE id = ?", [name, pid]);
+		//rebuild UI on submit
+		const payload = await buildProfileDmPayload(si, pid, i.user.id);
+		await sendDM(i, payload.embeds, payload.components, "", payload.files);
+    } catch (e) {
+		//log on failure
+		console.error("[profile] name save failed:", e);
+		//notify user
+		await sendWhisper(i , "Saving failed. Try again.");
+    }
+    return;
+}
+
+/* ***************************************************************
+handleSlashCommand( 	i: type-discord interaction [required] )
+return void
+
+handles slash command routing
+
+**************************************************************** */
+async function handleSlashCommand(i) {
+	//log command execution
+	console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
+
+	//try catch on command execution
+	try {
+		
+		const serverIndex = resolveServerIndexFromInteraction(i);
+		const cfg = byIndex.get(serverIndex);
+		//defer reply for long executing
+		await i.deferReply();
+		switch(i.commandName){
+			case "xlr-servers":
+				//get the server 
+				const lines = SERVER_CONFIGS.map((c, idx) => {
+					const chan = c.channelId ? `#${c.ui.channelId}` : "(no channel)";
+					return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
+				});
+				await sendWhisper( i , lines.join("\n") || "No servers configured." );
+				return;
+			case "xlr-top":
+				//get the top list of players based on specified filters
+				const count  = i.options.getInteger("count") ?? 0;
+				const weapon = i.options.getString("weapon");
+				const map    = i.options.getString("map");
+				const sort   = i.options.getString("sort") || "skill";
+				const limit = count && count > 0 ? Math.min(count, 10) : 10;
+				let rows, emoji, title, thumbUrl;
+				if(weapon) {
+					rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
+					const weap = (rows && rows[0]?.matched_label) || weapon;
+					emoji = resolveEmoji(weap);
+					title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
+				} else if(map) {
+					const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
+					rows = await runQueryOn(serverIndex, sql, params);
+					thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
+					title = `Top Players by Map: ${map}`;
+				} else {
+					const { sql, params } = queries.topDynamic({ limit, sort });
+					rows = await runQueryOn(serverIndex, sql, params);
+					title = `Top by ${sort}`;
+				}
+				//insert playerCardDetails
+				rows = await insertPlayerCardDetails(rows);
+				//format data
+				const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
+				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
+				await sendMessage(i, cfg, [], embedArr);
+				return;
+			case "xlr-player":
+				//get options
+				const name = i.options.getString("name", true);
+				const weaponOpt = i.options.getString("weapon");
+				const mapOpt = i.options.getString("map");
+				const vsName = i.options.getString("vs");
+				const awardOpt = i.options.getString("award");
+				//init award var
+				let aw;
+				//lookup player
+			    const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
+			    if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
+			    const clientId = matches[0].client_id;
+				//load stats
+				let details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+				if (!details.length) {
+					await sendWhisper(i,`No stats on this server for **${matches[0].name}**.`);
+					return;
+				}
+				//add playercard details to query results
+				details = await insertPlayerCardDetails(details);
+				//generate embed
+				const embed = formatPlayerEmbed(details[0]);
+				
+				//further enrich embed with award options
+				if (awardOpt) {
+					const aw = awardOpt === "-1" ? false : awards[parseInt(awardOpt)];
+					//if a single award was specified
+					if(aw) {
+						// Player rank + metric(s)
+						const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
+						const [rankRow] = await runQueryOn(serverIndex, sql, params);
+						const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, true)) || (rankRow?.name ?? name);
+
+						const emote = resolveEmoji(aw.emoji) ?? "";
+						/* TODO insert into existing player page
+						const head = new EmbedBuilder()
+							.setColor(0x32d296)
+							.setTitle(`${emote} ${aw.name} — ${playerName}`)
+							.setDescription(rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "_No placement yet_")
+							.setFooter({ text: "XLRStats • B3" });
+						
+						if (rankRow) {
+							for (const p of (aw.properties || [])) {
+								if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
+									head.addFields({ name: p.name, value: String(rankRow[p.prop]), inline: true });
+								}
+							}
+						} */
+					} else {
+						//get top 10 placements instead.
+						// Compute ranks across all awards, pick best 10
+						const ranks = await Promise.all(awards.map(async (aw,i) => {
+							const { sql, params } = queries.awardRank(i, clientId);
+							const [row] = await runQueryOn(serverIndex, sql, params);
+							return row ? { key: aw.key, name: aw.name, emoji: aw.emoji, properties: aw.properties, rank: row.rank } : null;
+						}));
+						const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
+						
+						/* TODO add fields to main embed
+						if (!top10.length) {
+							emb.setDescription("_No placements yet_");
+						} else {
+							const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
+							emb.setDescription(lines.join("\n"));
+						}
+						*/
+					}
+				} //if weapon option specified
+				else if (weaponOpt) {
+					const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
+					const { sql, params } = queries.playerWeaponCard;
+					const rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
+					if (!rows.length){
+						await sendWhisper(i,`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
+						return;
+					}
+					/* TODO add fields to main embed */
+					
+				} //if map option selected
+				else if (mapOpt) {
+					const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
+					const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
+					if (!rows.length){
+						await sendWhisper( i,`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
+						return;
+					}
+				} //if vs option specified
+				else if (vsName) {
+					const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
+					if (!opp.length){
+						await sendWhisper(i,`No opponent found matching **${vsName}**.`);
+						return;
+					}
+					const opponentId = opp[0].client_id;
+					if (opponentId === clientId){
+						await sendWhisper( i,`Pick a different opponent than the player.`);
+						return;
+					}
+					const rows = await runQueryOn(serverIndex, queries.playerVsCard, [
+						opponentId,
+						clientId, opponentId,
+						opponentId, clientId,
+						clientId
+					]);
+					if (!rows.length){
+						await sendWhisper(i,`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
+						return;
+					}
+					const rows2 = await Promise.all(
+					  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
+					);
+					/* TODO add fields to main embed */
+				}
+				await sendMessage(i,cfg,[],[embed]);
+				return;
+				
+			case "xlr-lastseen":
+				const count = i.options.getInteger("count") ?? 10;
+				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+				rows = await insertPlayerCardDetails(rows);
+				//format embed
+				const embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+				await sendMessage(i,cfg,[],[embed]);
+				return;
+			
+			case "xlr-register":
+				//get guid from options
+				const guid = i.options.getString("guid", true).trim();
+				//try catch on player lookup
+				try {
+					// Look up client by GUID first,error if not found
+					const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
+					if (!rows.length) {
+						await sendWhisper(i,`No client found with GUID **${guid}** on server ${serverIndex + 1}.` );
+						return;
+					}
+					const clientId = rows[0].id;
+					await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
+					await sendWhisper(i,`Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` );
+				} catch (e) { //log on error and notify user
+					console.error("xlr-register failed:", e);
+					await sendWhisper(i,"Sorry, linking failed. Try again later or contact an admin." );
+				}
+				return;
+			case "xlr-profile":
+				// Look up the invoking user's linked client
+				const uid = i.user.id;
+				// Prefer most-recently seen client if multiple
+				const rows = await runQueryOn(
+					serverIndex,
+					`SELECT c.id AS client_id
+					FROM clients c
+					LEFT JOIN aliases a ON a.client_id = c.id
+					WHERE c.discord_id = ?
+					GROUP BY c.id
+					ORDER BY MAX(c.time_edit) DESC, MAX(a.time_edit) DESC
+					LIMIT 5`,
+					[uid]
+				);
+				//let user know if they aren't registered
+				if (!rows.length) {
+					await sendWhisper( i, "You haven’t linked your Discord to a B3 user on this server yet. Use `/xlr-register` to link your GUID.");
+					return;
+				}
+
+				const clientId = rows[0].client_id;
+
+				// try catch on DM the profile
+				try {
+					const dm = await i.user.createDM();
+
+					// Clean up old UI first
+					await deleteOldProfileDMs(dm, client);
+
+					const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
+					await dm.send(payload);
+					await sendWhisper(i,"I sent your playercard to your DMs. 📬" );
+				//log on error
+				} catch (e) {
+					console.error("[xlr-profile] DM failed:", e);
+					//notify the user
+					await sendWhisper(i,"I couldn't DM you (are DMs disabled?). Enable DMs and try again." );
+				}
+				return;
+		}
+	//log on error
+	} catch (err) {
+		console.error("[slash] error:", err);
+		//notify user
+		await sendWhisper(i, "Error Processing your command");
+	}
+}
+
+/* ***************************************************************
+handleUiComponent( 	i: type-discord interaction [required],
+					serverIndex: type-int [required])
+return void
+
+handles ui component click
+
+**************************************************************** */
+async function handleUiComponent(i, serverIndex) {
+	const cfg = byIndex.get(serverIndex);
+	const state = perChannelState.get(cfg.channelId);
+	const uiCollector = state?.collectors || null;
+
+	
+	console.log(`${i.customId} in #${i.channel?.id || '?'} msg=${i.message?.id || '?'} user=${i.user?.id || '?'}`);
+	const parsed = parseCustomId(i.customId);
+	if (!parsed) return; // ignore non-UI buttons
+
+	try {
+	  if (!i.deferred && !i.replied) {
+		await i.deferUpdate(); // acknowledges the interaction
+	  }
+	} catch (e) {
+	  // If already acknowledged somewhere else, ignore
+	}
+
+	const gate = beginChannelLoad(cfg.ui.channelId);
+
+	const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
+	if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
+	const files = [];
+	
+	const channel = i.channel ?? await i.client.channels.fetch(cfg.ui.channelId);
+	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
+	const navMsg = await channel.messages.fetch(cfg.ui.navId);
+	if (isStale(cfg.ui.channelId, gate.token)) return;
+	const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	await sendMessage(i, cfg, payload.nav, payload.embeds, footerText, payload.pager, payload.files ?? []);
+
+	if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
+	return;
+	
+
+}
+
+/* ***************************************************************
+buildDmNavRow( 	kind: type-string [required],
+				serverIndex: type-int [required],
+				clientId: type-int [required])
+return array
+
+handles building buttons at the top of profile edit DMs
+
+**************************************************************** */
+function buildDmNavRow(serverIndex, clientId, page) {
+	const rowButtons = new ActionRowBuilder().addComponents(
+		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_NAME_BTN(serverIndex, clientId)).setLabel("Edit Preferred Name").setStyle(ButtonStyle.Primary),
+		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_BG_BTN(serverIndex, clientId, 0)).setLabel("Edit Background").setStyle(ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_EMBLEM_BTN(serverIndex, clientId, 0)).setLabel("Edit Emblem").setStyle(ButtonStyle.Secondary),
+		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_CS_BTN(serverIndex, clientId, 0)).setLabel("Edit Callsign").setStyle(ButtonStyle.Secondary)
+	);
+	return rowButtons;
+}
+
+/* ***************************************************************
+buildDmPickerRow( kind: type-string [required],
+				serverIndex: type-int [required],
+				playerId: type-int [required]
+				page: type-int [required])
+return array
+
+handles building string selects at the bottom of profile edit DMs
+
+**************************************************************** */
+function buildDmPickerRow(kind, serverIndex, playerId, page) {
+	//create an array of choices for selected playercard elements
+	const arr = kind==="bg" ? BACKGROUNDS : kind==="em" ? EMBLEMS : CALLSIGNS.map(c => c);
+	//create the label for the choices
+	const labels = kind==="cs" ? CALLSIGNS.slice() : arr.map(basenameNoExt);
+	//chunk the current options into the current page
+	const chunk = chunkOptions(labels, 0, page, 25);
+
+	//create string select
+	const select = new StringSelectMenuBuilder()
+		.setCustomId(kind==="bg" ? PROFILE_IDS.PICK_BG(serverIndex, playerId, page)
+					: kind==="em" ? PROFILE_IDS.PICK_EM(serverIndex, playerId, page)
+                              : PROFILE_IDS.PICK_CS(serverIndex, playerId, page))
+		.setPlaceholder(kind==="bg" ? "Pick a background…" : kind==="em" ? "Pick an emblem…" : "Pick a callsign…")
+		.addOptions(chunk.options);
+	
+	//add string select to first row of components
+	const row1 = new ActionRowBuilder().addComponents(select);
+	//create pager buttons
+	const row2 = new ActionRowBuilder().addComponents(
+		//create previous button
+		new ButtonBuilder()
+			.setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "prev", page) :
+						kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "prev", page) :
+									PROFILE_IDS.PAGE_CS(serverIndex, playerId, "prev", page))
+			.setLabel("Previous")
+			.setStyle(ButtonStyle.Secondary)
+			.setDisabled(!chunk.hasPrev),
+		//create next button
+		new ButtonBuilder()
+			.setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "next", page) :
+						kind==="em" ? PROFILE_IDS.PAGE_EM(serverIndex, playerId, "next", page) :
+									PROFILE_IDS.PAGE_CS(serverIndex, playerId, "next", page))
+			.setLabel("Next")
+			.setStyle(ButtonStyle.Secondary)
+			.setDisabled(!chunk.hasNext)
+	);
+	//return nav component rows
+	return [row1, row2];
+}
+/* *************************************************************************************
+END INTERACTION HANDLER FUNCTIONS
+****************************************************************************************
+START SQL DATA FUNCTIONS
+************************************************************************************* */
+
+/* ***************************************************************
+loadProfileData( 	serverIndex: type-int [required],
+					clientId: type-int [required])
+return {}: type-obj
+
+gets SQL related stats for the UI player profile page (playercard stats and playercard elements as well as preferredName)
+---
+returns object of card (stats), pc (playercard elements), preferredName
+**************************************************************** */
+async function loadProfileData(serverIndex, clientId) {
+  const [card] = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+  const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [clientId]);
+  const prefNameRow = await runQueryOn(serverIndex,
+    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [clientId]);
+  const preferredName = prefNameRow?.[0]?.preferred_name || null;
+  return { card, pc, preferredName };
+}
+
+/* ***************************************************************
+getHomeTotals( 	serverIndex: type-int [required] )
+return {}: type-obj
+
+gets SQL related stats for the UI home page (server status page and some basic stats)
+---
+returns object of totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap
+**************************************************************** */
+async function getHomeTotals(serverIndex) {
+	
+	//load totals
+	const [[{totalPlayers=0 }],[{ totalKills=0 }={}],[{ totalRounds=0 }={}],[favW={}],[favM={}]] = await Promise.all([
+		runQueryOn(serverIndex, queries.ui_totalPlayers),
+		runQueryOn(serverIndex, queries.ui_totalKills),
+		runQueryOn(serverIndex, queries.ui_totalRounds),
+		runQueryOn(serverIndex, queries.ui_favoriteWeapon),
+		runQueryOn(serverIndex, queries.ui_favoriteMap),
+	]);
+	return {
+		totalPlayers: +totalPlayers || 0,
+		totalKills: +totalKills || 0,
+		totalRounds: +totalRounds || 0,
+		favoriteWeapon: { label: favW?.label ?? "—", kills: +(favW?.kills ?? 0) },
+		favoriteMap: { label: favM?.label ?? "—", rounds: +(favM?.rounds ?? 0) },
+	};
+}
+
+/* ***************************************************************
+getLadderSlice( 	serverIndex: type-int [required],
+				offset: type-int [optional, 0],
+				limit: type-int [optional, 10])
+return {}: type-obj
+
+gets SQL related stats for the ladder page 
+---
+returns object of sql results
+*/
+async function getLadderSlice(serverIndex, offset = 0, limit = 10) {
+  const { sql, params } = queries.ui_ladderSlice(limit, offset);
+  const rows = await runQueryOn(serverIndex, sql, params);
+  
+  return rows;
+}
+
+/* ***************************************************************
+getLadderCount( serverIndex: type-int [required])
+return {}: type-int
+
+gets number of players on the ladder
+---
+returns count of sql results
+*/
+async function getLadderCount(serverIndex) {
+  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_ladderCount, []);
+  return +cnt || 0;
+}
+
+/* ***************************************************************
+getWeaponsSlice( 	serverIndex: type-int [required],
+					offset: type-int [optional, 0],
+					limit: type-int [optional, 10])
+return {}: type-obj
+
+gets SQL related stats for the weapons page 
+---
+returns object of sql results
+*/
+async function getWeaponsSlice(serverIndex, offset=0, limit=10) {
+  const { sql, params } = queries.ui_weaponsSlice(limit, offset);
+  const rows = await runQueryOn(serverIndex, sql, params);
+  return rows.map((r, i) => ({ ...r, rank: offset + i + 1 }));
+}
+
+/* ***************************************************************
+getWeaponsCount( serverIndex: type-int [required])
+return {}: type-int
+
+gets number of weapons on the ladder
+---
+returns count of sql results
+*/
+async function getWeaponsCount(serverIndex) {
+  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_weaponsCount, []);
+  return +cnt || 0;
+}
+
+/* ***************************************************************
+getMapsSlice( 	serverIndex: type-int [required],
+				signal: type-int [required],
+				offset: type-int [optional, 0],
+				limit: type-int [optional, 10])
+return {}: type-obj
+
+gets SQL related stats for the maps page 
+---
+returns object of sql results
+*/
+async function getMapsSlice(serverIndex, offset=0, limit=10, signal) {
+  const { sql, params } = queries.ui_mapsSlice(limit, offset);
+  const rows = await runQueryOn(serverIndex, sql, params);
+  //attach map thumbnail
+  const slice = await Promise.all(rows.map(async (r, i) => {
+    let url;
+    try { url = await getMapImageUrl(r.label, signal); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } url = DEFAULT_THUMB; }
+    return { ...r, rank: offset + i + 1, thumbnail: url || DEFAULT_THUMB };
+  }));
+  return slice;
+}
+
+/* ***************************************************************
+getWeaponsCount( serverIndex: type-int [required])
+return {}: type-int
+
+gets number of weapons on the ladder
+---
+returns count of sql results
+*/
+async function getMapsCount(serverIndex) {
+  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_mapsCount, []);
+  return +cnt || 0;
+}
+
+/* ***************************************************************
+getPlayerWeaponSlice( 	serverIndex: type-int [required],
+					offset: type-int [optional, 0],
+					limit: type-int [optional, 10])
+return {}: type-obj
+
+gets SQL related player specific stats for the weapon's page 
+---
+returns object of sql results
+*/
+async function getPlayerWeaponSlice(serverIndex, weapon, offset = 0, limit = 10) {
+  const { sql, params } = queries.ui_playerWeaponSlice(weapon, limit, offset);
+  const rows = await runQueryOn(serverIndex, sql, params);
+  
+  return rows;
+}
+
+/* ***************************************************************
+getPlayerMapSlice( 	serverIndex: type-int [required],
+					offset: type-int [optional, 0],
+					limit: type-int [optional, 10])
+return {}: type-obj
+
+gets SQL related player specific stats for the map's page 
+---
+returns object of sql results
+*/
+async function getPlayerMapSlice(serverIndex, mapLabel, offset = 0, limit = 10) {
+  const { sql, params } = queries.ui_playerMapsSlice(mapLabel, limit, offset);
+  const rows = await runQueryOn(serverIndex, sql, params);
+  
+  return rows;
+}
+
+/* ***************************************************************
+getPlayerWeaponCount( serverIndex: type-int [required])
+return {}: type-int
+
+gets number of players of a weapon on the ladder
+---
+returns count of sql results
+*/
+async function getPlayerWeaponCount(serverIndex, weapon) {
+  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerWeaponCount, [ `%${weapon}%`, /^\d+$/.test(weapon) ? Number(weapon) : -1 ]);
+  return +cnt || 0;
+}
+
+/* ***************************************************************
+getPlayerMapCount( serverIndex: type-int [required])
+return {}: type-int
+
+gets number of players of a map on the ladder
+---
+returns count of sql results
+*/
+async function getPlayerMapCount(serverIndex, map) {
+  const [{ cnt=0 }={}] = await runQueryOn(serverIndex, queries.ui_playerMapsCount, [ `%${map}%`, /^\d+$/.test(map) ? Number(map) : -1 ]);
+  return +cnt || 0;
+}
+
+/* ************************************************************************************
+END SQL DATA FUNCTIONS
+***************************************************************************************
+START HTTP HELPER FUNCTIONS
+************************************************************************************* */
+
+/* ***************************************************************
+summarizeAxiosError( 	err: type-object [required] )
+return error code: type-string
+
+summarizes an Axios Error object when url load fails
+---
+returns string of summarized error
+**************************************************************** */
+function summarizeAxiosError(err) {
+	//check error object for response property
+	if (err?.response) {
+		//if response exists get status
+		const s = err.response.status;
+		//trim whitespace off status text
+		const t = (err.response.statusText || "").trim();
+		//return error code + text
+		return t ? `${s} ${t}` : `${s}`;
+	}
+	//its a request object but no response, return NETWORK ERROR
+	if (err?.request) return "NETWORK ERROR";
+	//if there is a code somehow return it, otherwise return "ERROR"
+	return (err?.code || "ERROR");
+}
+
+/* ***************************************************************
+fetchServerStatus( 	ip: type-string [required],
+						port: type-string [required],
+						signal: type-string [required])
+return {}: type-obj
+
+fetches json from cod.pm api
+---
+returns obj of either valid JSON or error message
+**************************************************************** */
+async function fetchServerStatus(ip, port, signal) {
+	//format URL
+	const url = `https://api.cod.pm/getstatus/${ip}/${port}`;
+	//try catch on page load
+	try {
+		//load page and send interupt signal
+		const res = await axios.get(url, { timeout: 5000 , signal });
+		//valid load, return JSON
+		return res.data;
+	//if the catch handle fires, sumarrize error code instead
+	} catch (err) {
+		//summarize error
+		const summary = summarizeAxiosError(err);
+		//log error
+		console.warn(`[http] status api error ${ip}:${port} → ${summary}`);
+		return error summary
+		return { error: summary };
+	}
+}
+
+/* ***************************************************************
+checkUrlFor404( 	url: type-string [required],
+					signal: type-string [required])
+return boolean
+
+attempts to load URL 
+---
+returns true if URL 404s otherwise returns false
+**************************************************************** */
+async function checkUrlFor404(url, signal) {
+	//run try catch on page load
+	try {
+		//load page header
+		const res = await axios.head(url, { timeout: 4000, validateStatus: () => true, signal });
+		//return true if the status is 404, false on anything else
+		return res.status === 404;
+	//if there is an error, its the same outcome as a 404 but still log it
+	} catch (err) {
+		//summarize error
+		const summary = summarizeAxiosError(err);
+		//log error
+		console.warn(`[http] head error ${url} → ${summary}`);
+		//return true for failed page load
+		return false;
+	}
+}
+
+/* ***************************************************************
+getMapImageUrl( 	label: type-string [required],
+					signal: type-string [required])
+return url: type-string
+
+given a map label, attempts to load the map image from cod.pm's api
+---
+returns URL if map image is valid or null if not
+**************************************************************** */
+async function getMapImageUrl(label, signal) {
+	//try catch on 404 checks
+	try {
+		//if stock map thumbs don't exist
+		if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`, signal)) {
+			//check for custom thumbs
+			if (await checkUrlFor404(`https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`, signal)) {
+				//both failed so return null
+				return null;
+			} else {
+				//custom map thumbnails got a hit, return it
+				return `https://cod.pm/mp_maps/cod1+coduo/custom/${label}.png`;
+			}
+		//stock map thumbs have a hit
+		} else {
+			//return thumbnail from stock pile
+			return `https://cod.pm/mp_maps/cod1+coduo/stock/${label}.png`;
+		}
+		//not being able to load due to error, same effect as not being able to find at all
+	} catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }
+		//return null on error
+		return null;
+	}
+}
+/* ***************************************************************
+END HTTP HELPER FUNCTIONS
+******************************************************************
+START MISC HELPER FUNCTIONS
+*************************************************************** */
+
+/* ***************************************************************
+basenameNoExt( 	p: type-object [required] )
+
+return label: type-string
+
+returns a string of the file name for file p with the extension stripped
+---
+returns string of the file with the extension stripped
+**************************************************************** */
+function basenameNoExt(p) {
+	try {
+		const b = path.basename(p);
+		return b.replace(/\.(png|jpg|jpeg|gif|webp)$/i, "");
+	} catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; } return String(p); }
+}
+
+/* ***************************************************************
+chunkOptions( 	labels: type-array [required],
+				page: type-int [optional, 0],
+				perPage: type-int [optional, 0])
+
+return label: type-string
+
+chunks an array into the a page of perPage items, starting at a given page
+---
+returns object of the current page sliced out of all options
+**************************************************************** */
+function chunkOptions(labels, page = 0, perPage = 25) {
+	//get starting pos
+	const offset  = page * perPage;
+	//get the size of the slice
+	const slice   = labels.slice(offset, offset + perPage);
+	//set available options (if none give default "No item")
+	const options = slice.length
+		? slice.map((label, i) => ({
+			label: `${offset + i}. ${label}`,
+			value: String(offset + i)
+		}))
+		: [{ label: "No items", value: "noop" }]; // never 0 options
+
+	//return new object of the sliced objects
+	return {
+		page,
+		total: labels.length,
+		hasPrev: page > 0,
+		hasNext: offset + perPage < labels.length,
+		options
+	};
+}
+
+/* ***************************************************************
+resolveServerIndexFromInteraction( 	interaction: type-object [required] )
+
+return index: type-int
+
+returns the index of the server from the slash commands
+
+**************************************************************** */
+function resolveServerIndexFromInteraction(interaction) {
+	//get the server index from slash command
+	const arg = interaction.options?.getString("server")?.trim();
+	//if an argument wasn't specified use the first server by defualt
+	if (!arg) return 0; // default
+
+	//if the argument can be cast to a valid number, use that index
+	const asNum = Number(arg);
+	if (Number.isFinite(asNum) && asNum >= 1 && asNum <= SERVER_CONFIGS.length) return asNum - 1;
+  
+	//if it isn't a number, instead see if its the server name
+	const found = byNameLower.get(arg.toLowerCase());
+	if (found) return found.i;
+  
+	//if its not the server name and not a number, fallback to the first server by default
+	return 0;
+}
+
+/* ***************************************************************
+parseCustomId( 	id: type-string [required] )
+
+return index: type-obj
+
+returns processed custom id exploded on semicolon.
+
+view, embedPage, param, stringSelectPage
+**************************************************************** */
+function parseCustomId(id) {
+  const p = id.split(":");
+  if (p[0] !== "ui") return null;
+  if (p.length === 2) return { view: p[1], embedPage: 0 };
+  if (p.length === 4) {
+    const cur = Math.max(0, parseInt(p[3], 10) || 0);
+    return { view: p[1], embedPage: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1) };
+  }
+  if (p.length === 6) {
+    const cur = Math.max(0, parseInt(p[3], 10) || 0);
+    const param = decodeURIComponent(p[4]);
+    const stringSelectPage = Math.max(0, parseInt(p[5], 10) || 0);
+    return { view: p[1], embedPage: p[2] === "next" ? cur + 1 : Math.max(0, cur - 1), param, stringSelectPage };
+  }
+  return null;
 }
