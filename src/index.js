@@ -2179,6 +2179,41 @@ async function getPlayerMapCount(serverIndex, map) {
   return +cnt || 0;
 }
 
+async function displayName(row, rowname, isTitle = false, isOpponent = false) {
+  const raw = rowname ?? row?.name ?? "";
+  const base = typeof raw === "string" ? raw : String(raw ?? "");
+  const sanitized = base
+    .replace(/\^\d/g, "")
+    .replace(/\|/g, "")
+    .replace(/`/g, "'");
+
+  const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
+  if (!id) return sanitized;
+
+  if (GUILD_ID) {
+    const cacheKey = `${GUILD_ID}:${id}`;
+    if (__memberNameCache.has(cacheKey)) {
+      const dn = __memberNameCache.get(cacheKey);
+      return isTitle ? (dn || sanitized) : `<@${id}>`;
+    }
+    try {
+      const guild = await client.guilds.fetch(GUILD_ID);
+      const member = await guild.members.fetch(id).catch(() => null);
+      const dn = member?.displayName || null;
+      __memberNameCache.set(cacheKey, dn);
+      if (dn) return isTitle ? dn : `<@${id}>`;
+    } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+  }
+
+  try {
+    const user = await client.users.fetch(id);
+    const uName = user?.globalName ?? user?.username ?? null;
+    if (uName) return isTitle ? uName : `<@${id}>`;
+  } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+
+  return sanitized;
+}
+
 /* ************************************************************************************
 END SQL DATA FUNCTIONS
 ***************************************************************************************
