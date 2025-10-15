@@ -65,6 +65,8 @@ const {
 const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png"; //init default thumbnail
 
 const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
+
+console.log(SERVER_CONFIGS); return;
 const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c])); //create map for servers by index (for use with slash commands)
 const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c?.name.toLowerCase() ?? `Server${i}`, { i, c }])); //create map for servers by server name cast to lower case (for use with slash commands)
 const __memberNameCache = new Map(); //cache everyones discord names
