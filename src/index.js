@@ -1920,7 +1920,7 @@ async function handleUiComponent(i, serverIndex) {
 
 	const gate = beginChannelLoad(cfg.ui.channelId);
 
-	const payload = await buildView(serverIndex, { ...parsed, label: i?.values[0] ?? null, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
+	const payload = await buildView(serverIndex, { ...parsed, label: i?.values ? i.values[0] : null, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
 	if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
 	const files = [];
 	
