@@ -506,15 +506,15 @@ client.once(Events.ClientReady, async () => {
 			//set cfg to the current config
 			const cfg = byIndex.get(i);
 			//fetch the channel from discord.js return null if failed
-			const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+			const channel = await client.channels.fetch(cfg.ui.channelId).catch(() => null);
 			//if channel exists and channel is a text chat channel
 			if (channel && channel.type === ChannelType.GuildText) {
 				//create a collector
 				const collector = channel.createMessageComponentCollector();
 				//update perChannelState Array for channel Id - index, add collector.
-				perChannelState.set(cfg.channelId, { i, collectors: collector });
+				perChannelState.set(cfg.ui.channelId, { i, collectors: collector });
 				//start the collector for channel and index
-				startUiInactivitySession(perChannelState.get(cfg.channelId).collectors, i, cfg, channel);
+				startUiInactivitySession(perChannelState.get(cfg.ui.channelId).collectors, i, cfg, channel);
 			}
 		} catch (e) {
 			console.warn("[ui] could not start inactivity session:", e);
@@ -809,7 +809,7 @@ uses discord.js package to update messages for bot UO
 async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [] ) {
 	//create Load Gate
 	const gate = beginChannelLoad(cfg.ui.channelId);
-	const state = perChannelState.get(cfg.channelId);
+	const state = perChannelState.get(cfg.ui.channelId);
 	//get UI Activity Collector
 	const uiCollector = state?.collectors || null;
 	
@@ -837,7 +837,7 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	//get the content message id from config
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	//abort message edit if load has been interupted by new click
-	if (isStale(cfg.channelId, gate.token)) return;
+	if (isStale(cfg.ui.channelId, gate.token)) return;
 	//edit contentMsg with payload
 	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
   	
@@ -920,13 +920,13 @@ async function ensureUIForServer(serverIndex) {
 	if (!cfg?.ui.channelId) return;
 
 	//get the channel
-	const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
+	const channel = await client.channels.fetch(cfg.ui.channelId).catch(() => null);
 	//if the channel doesn't exist or its not a text based channel then we can't build a UI
 	if (!channel || channel.type !== ChannelType.GuildText) return;
 
 	// initialize HOME view
 	// Create a load gate
-	const gate = beginChannelLoad(cfg.channelId);
+	const gate = beginChannelLoad(cfg.ui.channelId);
 	//
 	const initial = await buildView(serverIndex, {
 		view: VIEWS.HOME,
@@ -992,7 +992,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 			//try catch on Home refresh
 			try {
 				// Auto-refresh Home on idle, even if already on Home - build load gate
-				const gate = beginChannelLoad(cfg.channelId);
+				const gate = beginChannelLoad(cfg.ui.channelId);
 				const payload = await buildView(serverIndex, { view: VIEWS.HOME, page: 0, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
 				if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
 
@@ -1870,7 +1870,7 @@ handles ui component click
 **************************************************************** */
 async function handleUiComponent(i, serverIndex) {
 	const cfg = byIndex.get(serverIndex);
-	const state = perChannelState.get(cfg.channelId);
+	const state = perChannelState.get(cfg.ui.channelId);
 	const uiCollector = state?.collectors || null;
 
 	
