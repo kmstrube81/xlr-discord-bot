@@ -825,6 +825,7 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	if (isStale(cfg.ui.channelId, gate.token)) return;
 	await navMsg.edit({embeds: [], components: navComponents });
 	
+	const footerText = contentEmbeds[contentEmbeds.length - 1].data.footer.text;
 	//EDIT FOOTER
 	const ZERO_WIDTH = "⠀";
 	const padLen = Math.min(Math.floor(footerText.length * 0.65), 2048);
