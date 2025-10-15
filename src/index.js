@@ -1790,7 +1790,7 @@ async function handleSlashCommand(i) {
 				// Look up the invoking user's linked client
 				const uid = i.user.id;
 				// Prefer most-recently seen client if multiple
-				const rows = await runQueryOn(
+				rows = await runQueryOn(
 					serverIndex,
 					`SELECT c.id AS client_id
 					FROM clients c
