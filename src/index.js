@@ -275,7 +275,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 	let placeholder, options, menu;
 	const medals = ["🥇", "🥈", "🥉"];
 	switch(view){
-		case "weapons":
+		case "weaponPlayers":
 			placeholder = "Select Weapon to View More Stats...";
 			menu = new StringSelectMenuBuilder()
 				.setCustomId(`ui:${view}:select:${embedPage}`)
@@ -289,7 +289,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				);
 			return new ActionRowBuilder().addComponents(menu);
 
-		case "maps":
+		case "mapsPlayers":
 			placeholder = "Select Map to View More Stats...";
 			menu = new StringSelectMenuBuilder()
 				.setCustomId(`ui:${view}:select:${embedPage}`)
@@ -303,7 +303,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				);
 			return new ActionRowBuilder().addComponents(menu);
 
-		case "ladder":
+		case "player":
 			placeholder = "Select a Player to View More Stats..."
 			options = rows.map((r, i) => {
 				const absoluteRank = typeof r.rank === "number" ? r.rank : embedPage * 10 + i + 1;
