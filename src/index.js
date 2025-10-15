@@ -1219,7 +1219,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	// PRE-ENRICH: fetch Discord username for titles/labels
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
-	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER rowsWithNames, page, null)];
+	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 	
 	return { embeds, nav, pager};
 }
