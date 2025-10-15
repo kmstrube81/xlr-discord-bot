@@ -66,7 +66,7 @@ const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png";
 
 const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
 const byIndex = new Map(SERVER_CONFIGS.map((c, i) => [i, c])); //create map for servers by index (for use with slash commands)
-const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase(), { i, c }])); //create map for servers by server name cast to lower case (for use with slash commands)
+const byNameLower = new Map(SERVER_CONFIGS.map((c, i) => [c.name.toLowerCase() ?? `Server${i}`, { i, c }])); //create map for servers by server name cast to lower case (for use with slash commands)
 const __memberNameCache = new Map(); //cache everyones discord names
 
 const INACTIVITY_MS = 2 * 60 * 1000; // Inactivity timer 2 minutes 
