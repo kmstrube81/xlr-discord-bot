@@ -831,7 +831,7 @@ sends an ephemeral private message to whoever started the interaction
 uses discord.js package to send whispers for bot UO
 **************************************************************** */
 async function sendWhisper(i, content) {
-	await i.reply({ content: content, , flags: MessageFlags.Ephemeral });
+	await i.reply({ content: content, flags: MessageFlags.Ephemeral });
 }
 
 /* ***************************************************************
