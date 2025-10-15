@@ -267,12 +267,12 @@ function pagerRowWithParams(view, page, hasPrev, hasNext, embedLabel, embedPage)
 }
 
 function stringSelectRowForPage(view, rows, embedPage, selected = null) {
-	let placeholder;
+	let placeholder, options, menu;
 	const medals = ["🥇", "🥈", "🥉"];
 	switch(view){
 		case "weapons":
 			placeholder = "Select Weapon to View More Stats...";
-			const menu = new StringSelectMenuBuilder()
+			menu = new StringSelectMenuBuilder()
 				.setCustomId(`ui:${view}:select:${page}`)
 				.setPlaceholder(placeholder)
 				.addOptions(
@@ -286,7 +286,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 
 		case "maps":
 			placeholder = "Select Map to View More Stats...";
-			const menu = new StringSelectMenuBuilder()
+			menu = new StringSelectMenuBuilder()
 				.setCustomId(`ui:${view}:select:${page}`)
 				.setPlaceholder(placeholder)
 				.addOptions(
@@ -300,7 +300,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 
 		case "ladder":
 			placeholder = "Select a Player to View More Stats..."
-			const options = rows.map((r, i) => {
+			options = rows.map((r, i) => {
 				const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
 				const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
 				const maxName = Math.max(0, 100 - (prefix.length + 1));
@@ -312,7 +312,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				  default: selected != null && String(r.client_id) === String(selected),
 				};
 			});
-			const menu = new StringSelectMenuBuilder()
+			menu = new StringSelectMenuBuilder()
 				.setCustomId(`ui:ladder:select:${page}`)
 				.setPlaceholder(placeholder)
 				.setMinValues(1)
@@ -322,22 +322,22 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 		
 		case "awards":
 			placeholder = "Select an Award to View the Winner...";
-			const options = rows.map((r, i) => {
+			options = rows.map((r, i) => {
     
-			const label = `${String(r.name).slice(0, 100)}`.trim();
-			return {
-			  label,
-			  value: String(i),
-			  default: selected != null && String(i) === String(selected),
-			};
-		  });
-		  const menu = new StringSelectMenuBuilder()
-			.setCustomId(`ui:awards:select:${page}`)
-			.setPlaceholder(placeholder)
-			.setMinValues(1)
-			.setMaxValues(1)
-			.addOptions(options);
-		  return new ActionRowBuilder().addComponents(menu);
+				const label = `${String(r.name).slice(0, 100)}`.trim();
+				return {
+					label,
+					value: String(i),
+					default: selected != null && String(i) === String(selected),
+				};
+			});
+			menu = new StringSelectMenuBuilder()
+				.setCustomId(`ui:awards:select:${page}`)
+				.setPlaceholder(placeholder)
+				.setMinValues(1)
+				.setMaxValues(1)
+				.addOptions(options);
+			return new ActionRowBuilder().addComponents(menu);
 	}
 }
 
