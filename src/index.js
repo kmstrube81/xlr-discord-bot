@@ -490,7 +490,7 @@ client.once(Events.ClientReady, async () => {
 					return emojiIndex.get(k) ?? null;
 				}); */
 			
-				console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
+				if(XLR_DEBUG) console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
 			}
 		}
 	} catch (e) {
@@ -567,6 +567,22 @@ END APP OPERATION FLOW
 **************************************************************
 START CONFIG/SQL HELPER FUNCTIONS
 ************************************************************ */
+/* ***********************************************************
+register()
+return void
+
+registers slash commands with discord guild
+************************************************************ */
+async function register() {
+  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
+  if (GUILD_ID) {
+    await rest.put(Routes.applicationGuildCommands(APPLICATION_ID, GUILD_ID), { body: commands });
+    if(XLR_DEBUG) console.log("Registered guild commands");
+  } else {
+    await rest.put(Routes.applicationCommands(APPLICATION_ID), { body: commands });
+	if(XLR_DEBUG) console.log("Registered global commands");
+  }
+}
 
 /* ***************************************************************
 collectServerConfigs( env: type-file [required])
@@ -1594,7 +1610,7 @@ handles slash command routing
 **************************************************************** */
 async function handleSlashCommand(i) {
 	//log command execution
-	console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
+	if(XLR_DEBUG) console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
 
 	//try catch on command execution
 	try {
@@ -1853,7 +1869,7 @@ async function handleUiComponent(i, serverIndex) {
 	const uiCollector = state?.collectors || null;
 
 	
-	console.log(`${i.customId} in #${i.channel?.id || '?'} msg=${i.message?.id || '?'} user=${i.user?.id || '?'}`);
+	if(XLR_DEBUG) console.log(`${i.customId} in #${i.channel?.id || '?'} msg=${i.message?.id || '?'} user=${i.user?.id || '?'}`);
 	const parsed = parseCustomId(i.customId);
 	if (!parsed) return; // ignore non-UI buttons
 
