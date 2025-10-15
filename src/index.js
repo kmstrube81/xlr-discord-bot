@@ -1192,7 +1192,7 @@ async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
-	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER rowsWithNames, page, null)];
+	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 
 	return { embeds, nav, pager};
 }
