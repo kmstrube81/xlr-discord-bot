@@ -235,6 +235,7 @@ const VIEWS = Object.freeze({
   MAPS: "maps", //the most popular maps, a string select for showing top players by map
   WEAPON_PLAYERS: "weaponPlayers", // the players with the most kills for the selected weapon
   MAPS_PLAYERS: "mapsPlayers", // the players with the most rounds played for the selected map
+  PLAYER: "player", // the player stats
   AWARDS: "awards", // the list of awards with the top player for each category listed.
 });
 
@@ -265,8 +266,8 @@ function pagerRowWithParams(view, page, hasPrev, hasNext, embedLabel, embedPage)
   const encLabel = encodeURIComponent(embedLabel);
   const encPage = String(embedPage);
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}:${encWeap}:${encPage}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
-    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}:${encWeap}:${encPage}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
+    new ButtonBuilder().setCustomId(`ui:${view}:prev:${page}:${encLabel}:${encPage}`).setLabel("Previous").setStyle(ButtonStyle.Secondary).setDisabled(!hasPrev),
+    new ButtonBuilder().setCustomId(`ui:${view}:next:${page}:${encLabel}:${encPage}`).setLabel("Next").setStyle(ButtonStyle.Secondary).setDisabled(!hasNext),
   );
 }
 
@@ -1073,10 +1074,13 @@ sorts the view and params and sends it to the appropriate view builder
 ---
 returns discord js message obj
 **************************************************************** */
-async function buildView(serverIndex, { view, signal, token, channelId, embedPage = 0, param = {}, stringSelectPage = 0 }) {
+async function buildView(serverIndex, { view, signal, token, channelId, embedPage = 0, label = null, param = {}, stringSelectPage = 0 }) {
   
   if (view === VIEWS.HOME) {
     return await buildHome(serverIndex,  signal, token, channelId);
+  }
+  if (view === VIEWS.PLAYER) {
+    return await buildPlayer(serverIndex,  signal, token, channelId, label, embedPage);
   }
   if (view === VIEWS.LADDER) {
     return await buildLadder(serverIndex,  signal, token, channelId, embedPage);
@@ -1085,13 +1089,13 @@ async function buildView(serverIndex, { view, signal, token, channelId, embedPag
     return await buildWeapons(serverIndex,  signal, token, channelId, embedPage);
   }
   if (view === VIEWS.WEAPON_PLAYERS) {
-    return await buildWeaponPlayers(serverIndex,  signal, token, channelId, param.label, embedPage, stringSelectPage ?? 0);
+    return await buildWeaponPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
   if (view === VIEWS.MAPS) {
     return await buildMaps(serverIndex,  signal, token, channelId, embedPage);
   }
   if (view === VIEWS.MAPS_PLAYERS) {
-    return await buildMapPlayers(serverIndex, param, embedPage, stringSelectPage ?? 0,  signal, token, channelId);
+    return await buildMapPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
   if(view === VIEWS.AWARDS) {
 	return param ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => a.name === param) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
@@ -1188,8 +1192,35 @@ async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
-	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.LADDER, rowsWithNames, page, null)];
+	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER rowsWithNames, page, null)];
 
+	return { embeds, nav, pager};
+}
+
+async function buildPlayer(serverIndex, signal, token, channelId, label, page = 0){
+	const clientId = label;
+	//load stats
+	let details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
+	if (!details.length) {
+		await sendWhisper(i,`No stats on this server for **${matches[0].name}**.`);
+		return;
+	}
+	//add playercard details to query results
+	details = await insertPlayerCardDetails(details);
+	//generate embed
+	const embed = formatPlayerEmbed(details[0]);
+	
+	const offset = page * 10;
+	const [rows, total] = await Promise.all([
+		getLadderSlice(serverIndex, offset, 10),
+		getLadderCount(serverIndex)
+	]);
+
+	// PRE-ENRICH: fetch Discord username for titles/labels
+	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
+	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
+	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER rowsWithNames, page, null)];
+	
 	return { embeds, nav, pager};
 }
 
@@ -1218,7 +1249,7 @@ async function buildWeapons(serverIndex,  signal, token, channelId, page=0) {
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
 	const embeds = renderWeaponsEmbeds({ rows, page });
 	const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + 10 < total)];
-	const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPONS, rows, page, null)];
+	const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPON_PLAYERS, rows, page, null)];
 	return { embeds, nav, pager };
 }
 
@@ -1256,7 +1287,7 @@ async function buildWeaponPlayers(serverIndex,  signal, token, channelId, weapon
   
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
-  const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPONS, weaponsRows, weaponsPage, weap)];
+  const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPON_PLAYERS, weaponsRows, weaponsPage, weap)];
   return { embeds: embeds, nav: nav, pager: pager };
 }
 
@@ -1285,7 +1316,7 @@ async function buildMaps(serverIndex,  signal, token, channelId, page=0) {
   if (channelId && token && isStale(channelId, token)) return { stale: true };
   const embeds = renderMapsEmbeds({ rows, page });
   const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + 10 < total)];
-  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS,rows, page, null)];
+  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS,rows, page, null)];
   return { embeds, nav, pager};
 }
 
@@ -1319,7 +1350,7 @@ async function buildMapPlayers(serverIndex,  signal, token, channelId, mapLabel,
 
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
-  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS, mapsRows, mapsPage, mapLabel)];
+  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS, mapsRows, mapsPage, mapLabel)];
   return { embeds: embeds, nav: nav, pager: pager };
 }
 
@@ -1889,7 +1920,7 @@ async function handleUiComponent(i, serverIndex) {
 
 	const gate = beginChannelLoad(cfg.ui.channelId);
 
-	const payload = await buildView(serverIndex, { ...parsed, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
+	const payload = await buildView(serverIndex, { ...parsed, label: i?.values[0] ?? null, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
 	if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
 	const files = [];
 	
