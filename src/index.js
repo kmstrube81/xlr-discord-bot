@@ -277,7 +277,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 		case "weapons":
 			placeholder = "Select Weapon to View More Stats...";
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:${view}:select:${page}`)
+				.setCustomId(`ui:${view}:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.addOptions(
 				  ...rows.map((w) => ({
@@ -291,7 +291,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 		case "maps":
 			placeholder = "Select Map to View More Stats...";
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:${view}:select:${page}`)
+				.setCustomId(`ui:${view}:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.addOptions(
 				  ...rows.map((w) => ({
@@ -317,7 +317,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				};
 			});
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:ladder:select:${page}`)
+				.setCustomId(`ui:ladder:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.setMinValues(1)
 				.setMaxValues(1)
@@ -336,7 +336,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				};
 			});
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:awards:select:${page}`)
+				.setCustomId(`ui:awards:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.setMinValues(1)
 				.setMaxValues(1)
