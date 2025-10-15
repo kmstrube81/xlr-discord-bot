@@ -1600,7 +1600,7 @@ async function handleSlashCommand(i) {
 		//defer reply for long executing
 		await i.deferReply();
 		
-		let count, rows, embed;
+		let count, rows, clientId, embed;
 		
 		switch(i.commandName){
 			case "xlr-servers":
@@ -1653,7 +1653,7 @@ async function handleSlashCommand(i) {
 				//lookup player
 			    const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
 			    if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
-			    const clientId = matches[0].client_id;
+			    clientId = matches[0].client_id;
 				//load stats
 				let details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
 				if (!details.length) {
@@ -1778,7 +1778,7 @@ async function handleSlashCommand(i) {
 						await sendWhisper(i,`No client found with GUID **${guid}** on server ${serverIndex + 1}.` );
 						return;
 					}
-					const clientId = rows[0].id;
+					clientId = rows[0].id;
 					await runQueryOn(serverIndex, "UPDATE clients SET discord_id = ? WHERE guid = ?", [i.user.id, guid]);
 					await sendWhisper(i,`Linked <@${i.user.id}> to GUID **${guid}** (client #${clientId}) on server ${serverIndex + 1}.` );
 				} catch (e) { //log on error and notify user
@@ -1807,7 +1807,7 @@ async function handleSlashCommand(i) {
 					return;
 				}
 
-				const clientId = rows[0].client_id;
+				clientId = rows[0].client_id;
 
 				// try catch on DM the profile
 				try {
