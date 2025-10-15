@@ -809,6 +809,7 @@ uses discord.js package to update messages for bot UO
 async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [] ) {
 	//create Load Gate
 	const gate = beginChannelLoad(cfg.ui.channelId);
+	const state = perChannelState.get(cfg.channelId);
 	//get UI Activity Collector
 	const uiCollector = state?.collectors || null;
 	
