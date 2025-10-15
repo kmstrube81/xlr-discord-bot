@@ -1600,7 +1600,7 @@ async function handleSlashCommand(i) {
 		//defer reply for long executing
 		await i.deferReply();
 		
-		let count, rows;
+		let count, rows, embed;
 		
 		switch(i.commandName){
 			case "xlr-servers":
@@ -1763,7 +1763,7 @@ async function handleSlashCommand(i) {
 				rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows);
 				//format embed
-				let embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
+				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
 				await sendMessage(i,cfg,[],[embed]);
 				return;
 			
