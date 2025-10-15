@@ -545,7 +545,11 @@ client.on(Events.InteractionCreate, async (i) => {
 		//get serverIndex from ui click
 		const serverIndex = SERVER_CONFIGS.findIndex(c => c.ui.channelId === i.channelId);
 		//abort if invalid config
-		if (serverIndex < 0) return;
+		if (serverIndex < 0){
+			console.warn("ERR: Invalid Server Config!");
+			console.log(i);
+			return;
+		}
 		//ui component handler
 		await handleUiComponent(i, serverIndex);
 	} catch (e) {
