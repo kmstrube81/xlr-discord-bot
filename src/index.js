@@ -305,7 +305,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 		case "ladder":
 			placeholder = "Select a Player to View More Stats..."
 			options = rows.map((r, i) => {
-				const absoluteRank = typeof r.rank === "number" ? r.rank : page * PAGE_SIZE + i + 1;
+				const absoluteRank = typeof r.rank === "number" ? r.rank : embedPage * 10 + i + 1;
 				const prefix = absoluteRank <= 3 ? medals[absoluteRank - 1] : `#${absoluteRank}`;
 				const maxName = Math.max(0, 100 - (prefix.length + 1));
 				const name = (r?.name ?? r?.player_name ?? "");
