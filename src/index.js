@@ -1239,7 +1239,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	//add playercard details to query results
 	details = await insertPlayerCardDetails(details, serverIndex);
 	//generate embed
-	const embed = await formatPlayerEmbed(details[0]);
+	const [embed, files] = await formatPlayerEmbed(details[0]);
 	
 	const offset = page * 10;
 	const [rows, total] = await Promise.all([
@@ -1252,7 +1252,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
 	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 	
-	return { embeds: [embed], nav, pager};
+	return { embeds: [embed], nav, pager, files};
 }
 
 /* ***************************************************************
@@ -1472,25 +1472,8 @@ async function buildProfileDm(serverIndex, clientId ){
 	const { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
 	if (!card) return { content: "No stats found for your account on this server." };
 
-	//set playercard elements variable
-	const display = preferredName || card.name;
-	const bg = Number(pc?.background ?? 0) || 0;
-	const em = Number(pc?.emblem ?? 0) || 0;
-	const cs = Number(pc?.callsign ?? 0) || 0;
-	//generate playercard banners
-	const { buffer, filename } = await generateBanner({
-		background: bg,
-		emblem: em,
-		callsign: cs,
-		playerName: display,
-		kills: card.kills || 0,
-		deaths: card.deaths || 0,
-		skill: card.skill || 0
-	});
-	const file = new AttachmentBuilder(buffer, { name: filename });
-
 	// Get a playercard embed
-	const statsEmbed = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
+	const [statsEmbed, files] = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
 
 	// Controls
 	rowButtons = buildDmNavRow(serverIndex, clientId);
@@ -1507,7 +1490,7 @@ async function buildProfileDm(serverIndex, clientId ){
 		].join("\n"));
 
 	return {
-		files: [file],
+		files: files,
 		embeds: [summary, statsEmbed],
 		components: [rowButtons]
 	};
@@ -1751,7 +1734,7 @@ async function handleSlashCommand(i) {
 				//add playercard details to query results
 				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
-				const embed = await formatPlayerEmbed(details[0]);
+				const [embed, files] = await formatPlayerEmbed(details[0]);
 				
 				//further enrich embed with award options
 				if (awardOpt) {
@@ -1843,7 +1826,7 @@ async function handleSlashCommand(i) {
 					);
 					/* TODO add fields to main embed */
 				}
-				await sendMessage(i,cfg, null, [],[embed]);
+				await sendMessage(i,cfg, null, [],[embed], "", [], files);
 				return;
 				
 			case "xlr-lastseen":
