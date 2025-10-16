@@ -859,7 +859,8 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 		if (isStale(cfg.ui.channelId, gate.token)) return;
 		await navMsg.edit({embeds: [], components: navComponents });
 	}
-	
+	if(fromLoad)
+		console.log("load1");
 	footerText = footerText ? footerText : contentEmbeds[contentEmbeds.length - 1].data.footer.text;
 	//EDIT FOOTER
 	const ZERO_WIDTH = "⠀";
@@ -875,6 +876,8 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	//abort message edit if load has been interupted by new click
 	if (isStale(cfg.ui.channelId, gate.token) && !fromLoad) return;
 	//sanity check for loading
+	if(fromLoad)
+		console.log("load2");
 	//edit contentMsg with payload
 	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
   	
