@@ -37,8 +37,6 @@ function sanitize(name) {
 export async function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
   
-  console.log(p);
-  
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";
   const favWeapEmoji = resolveEmoji(p.fav);
