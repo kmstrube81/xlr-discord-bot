@@ -820,7 +820,7 @@ async function loadMessage(i, cfg) {
 	if(XLR_DEBUG) console.log(JSON.stringify(embed));
 	if(XLR_DEBUG) console.log(JSON.stringify(files));
 	
-	await sendMessage(i, cfg, [], [embed], "", [], files);
+	await sendMessage(i, cfg, [], [embed], "", [], files, true);
 	
 	return;
 }
@@ -839,7 +839,7 @@ updates the UI for the CODUO Server at given index
 ---
 uses discord.js package to update messages for bot UO
 **************************************************************** */
-async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [] ) {
+async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [], fromLoad = false ) {
 	//create Load Gate
 	const gate = beginChannelLoad(cfg.ui.channelId);
 	const state = perChannelState.get(cfg.ui.channelId);
@@ -873,9 +873,8 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	//get the content message id from config
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	//abort message edit if load has been interupted by new click
-	if (isStale(cfg.ui.channelId, gate.token)) return;
+	if (isStale(cfg.ui.channelId, gate.token) && !fromLoad) return;
 	//sanity check for loading
-	console.log("load");
 	//edit contentMsg with payload
 	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
   	
