@@ -2,12 +2,12 @@ import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
 import {
   generateBanner,
+  DEFAULT_THUMB,
   BACKGROUNDS,
   EMBLEMS,
   CALLSIGNS
 } from "./banner.js";
 import { DateTime } from "luxon";
-import {DEFAULT_THUMB} from "./index.js"
 
 // Shared emoji resolver (injected by index.js at runtime)
 let _emojiResolver = () => null;

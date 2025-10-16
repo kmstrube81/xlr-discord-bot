@@ -42,6 +42,7 @@ import {
 } from "./format.js";
 import {
   generateBanner,
+  DEFAULT_THUMB,
   BACKGROUNDS,
   EMBLEMS,
   CALLSIGNS
@@ -63,8 +64,6 @@ const {
   TZ, //Time Zone
   XLR_DEFAULT_IMAGE //link to a default image to use when thumbnails fail to load
 } = process.env;
-
-const DEFAULT_THUMB = XLR_DEFAULT_IMAGE || "https://cod.pm/mp_maps/unknown.png"; //init default thumbnail
 
 const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
 

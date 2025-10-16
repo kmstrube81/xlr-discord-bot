@@ -96,6 +96,8 @@ export const CALLSIGNS = [
 	"Mrs. Bert 55"
 ];
 
+export const DEFAULT_THUMB = "https://cod.pm/mp_maps/unknown.png";
+
 const FONT_STACK_MONO = [
   "Courier New",       // Windows/macOS (if present)
   "Courier",
