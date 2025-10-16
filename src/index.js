@@ -777,7 +777,7 @@ returns edited SQL query results
 async function insertPlayerCardDetails(rows, serverIndex) {
 	return await Promise.all(
 		rows.map(async (r) => {
-			const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [r.clientId]);
+			const [pc]   = await runQueryOn(serverIndex, queries.getPlayerCardRow, [r.client_id]);
 			const bg = Number(pc?.background ?? 0) || 0;
 			const em = Number(pc?.emblem ?? 0) || 0;
 			const cs = Number(pc?.callsign ?? 0) || 0;
