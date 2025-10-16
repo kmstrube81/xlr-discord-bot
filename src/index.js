@@ -1523,7 +1523,7 @@ async function buildProfileDm(serverIndex, clientId ){
 	const [statsEmbed, files] = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
 
 	// Controls
-	rowButtons = buildDmNavRow(serverIndex, clientId);
+	const rowButtons = buildDmNavRow(serverIndex, clientId);
 
 	// Show the current choices summary
 	const summary = new EmbedBuilder()
