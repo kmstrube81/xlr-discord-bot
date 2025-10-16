@@ -621,3 +621,11 @@ export function renderMapsEmbeds({ rows, page }) {
   return embeds;
 }
 
+export function formatLoadEmbed() {
+	const embed = new EmbedBuilder()
+      .setColor(0x2b7cff)
+      .setTitle("Please Wait...")
+      .setDescription("Loading...");
+	  
+	 return embed;
+}

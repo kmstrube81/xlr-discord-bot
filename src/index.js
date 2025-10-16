@@ -36,6 +36,7 @@ import {
   renderWeaponsEmbeds,
   renderMapsEmbeds,
   renderAwardsEmbeds,
+  formatLoadEmbed,
   setEmojiResolver,
   resolveEmoji
 } from "./format.js";
@@ -792,6 +793,32 @@ END CONFIG/SQL HELPER FUNCTIONS
 START -- LOAD -- TIMEOUT -- ACTIVITY -- HELPER FUNCTIONS
 ************************************************************ */
 
+/* **************************************************************
+loadMessage( 	i: type-discord interaction [required],
+					cfg: type-obj [required],
+					
+					)
+return void
+
+updates the UI for the CODUO Server at given index
+---
+uses discord.js package to update messages for bot UO
+*************************************************************** */
+async function loadMessage(i, cfg) {
+	const embed = formatLoadEmbed();
+	
+	const LOADING_GIF_PATH = path.resolve(process.cwd(), "assets", "load.gif");
+	const filename = 'load.gif';
+	const file = new AttachmentBuilder(LOADING_GIF, { name: filename });
+
+	embed.setImage(`attachment://${filename}`);
+
+	const files = [file];
+	
+	await sendMessage(i, cfg, [], [embed], "", [], files);
+	
+	return;
+}
 /* ***************************************************************
 sendMessage( 	i: type-discord interaction [required],
 					cfg: type-obj [required],
@@ -820,11 +847,13 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	  (i?.isTextBased?.() ? i : null) ??
 	  (await i.client.channels.fetch(i?.channelId ?? cfg.ui.channelId));
 
-	//UPDATE NAV
-	const navMsg = await channel.messages.fetch(cfg.ui.navId);
-	//abort message edit if load has been interupted by new click
-	if (isStale(cfg.ui.channelId, gate.token)) return;
-	await navMsg.edit({embeds: [], components: navComponents });
+	if (navComponents && navComponents.length > 0) {
+		//UPDATE NAV
+		const navMsg = await channel.messages.fetch(cfg.ui.navId);
+		//abort message edit if load has been interupted by new click
+		if (isStale(cfg.ui.channelId, gate.token)) return;
+		await navMsg.edit({embeds: [], components: navComponents });
+	}
 	
 	footerText = footerText ? footerText : contentEmbeds[contentEmbeds.length - 1].data.footer.text;
 	//EDIT FOOTER
@@ -1202,7 +1231,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	//load stats
 	let details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);
 	if (!details.length) {
-		await sendWhisper(i,`No stats on this server for **${matches[0].name}**.`);
+		await sendWhisper(i,`No stats on this server for **${details[0].name}**.`);
 		return;
 	}
 	//add playercard details to query results
@@ -1221,7 +1250,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
 	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 	
-	return { embeds, nav, pager};
+	return { embeds: [embed], nav, pager};
 }
 
 /* ***************************************************************
@@ -1424,7 +1453,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
   const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
   const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
   const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
-  return { embeds: embeds, nav: nav, pager: pager, files: files };
+  return { embeds: embeds, nav: nav, pager: pager};
 }
 
 /* ***************************************************************
@@ -1912,7 +1941,10 @@ async function handleUiComponent(i, serverIndex) {
 
 	try {
 	  if (!i.deferred && !i.replied) {
+		  //update loading screen
+		  await loadMessage(i, cfg);
 		await i.deferUpdate(); // acknowledges the interaction
+		
 	  }
 	} catch (e) {
 	  // If already acknowledged somewhere else, ignore
