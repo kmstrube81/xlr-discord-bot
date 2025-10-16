@@ -1106,7 +1106,7 @@ sorts the view and params and sends it to the appropriate view builder
 ---
 returns discord js message obj
 **************************************************************** */
-async function buildView(serverIndex, { view, signal, token, channelId, embedPage = 0, label = null, param = {}, stringSelectPage = 0 }) {
+async function buildView(serverIndex, { view, signal, token, channelId, embedPage = 0, label = null, stringSelectPage = 0 }) {
   
   if (view === VIEWS.HOME) {
     return await buildHome(serverIndex,  signal, token, channelId);
@@ -1130,7 +1130,7 @@ async function buildView(serverIndex, { view, signal, token, channelId, embedPag
     return await buildMapPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
   if(view === VIEWS.AWARDS) {
-	return param ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => a.name === param) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
+	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => a.name === label) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
   }
 }
 
