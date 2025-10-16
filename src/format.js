@@ -59,7 +59,7 @@ export async function formatPlayerEmbed(p, opts = {}) {
 	background: bg,
 	emblem: em,
 	callsign: cs,
-	playerName: pc.name,              
+	playerName: p.name,              
 	kills: Number(p.kills) || 0,
 	deaths: Number(p.deaths) || 0,
 	skill: Number(p.skill) || 0
