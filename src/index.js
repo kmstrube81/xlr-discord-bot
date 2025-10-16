@@ -2320,7 +2320,7 @@ async function displayName(row, rowname, serverIndex = 0, isTitle = false, isOpp
     .replace(/`/g, "'");
 
   const prefNameRow = await runQueryOn(serverIndex,
-    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [clientId]);
+    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [row.client_id]);
   const preferredName = prefNameRow?.[0]?.preferred_name || null;
   
   if(preferredName) return preferredName;
