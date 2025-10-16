@@ -1786,7 +1786,7 @@ async function handleSlashCommand(i) {
 				//add playercard details to query results
 				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
-				const [embed, files] = await formatPlayerEmbed(details[0]);
+				const [playerEmbed, files] = await formatPlayerEmbed(details[0]);
 				
 				//further enrich embed with award options
 				if (awardOpt) {
@@ -1878,7 +1878,7 @@ async function handleSlashCommand(i) {
 					);
 					/* TODO add fields to main embed */
 				}
-				await sendReply(i,[embed], [], "", files);
+				await sendReply(i,[playerEmbed], [], "", files);
 				return;
 				
 			case "xlr-lastseen":
@@ -2073,6 +2073,30 @@ function buildDmPickerRow(kind, serverIndex, playerId, page) {
 	);
 	//return nav component rows
 	return [row1, row2];
+}
+
+async function deleteOldProfileDMs(dmChannel, client) {
+  try {
+    const msgs = await dmChannel.messages.fetch({ limit: 50 });
+    const mine = msgs.filter(m =>
+      m.author?.id === client.user.id &&
+      (
+        // our profile UI has this embed title
+        (Array.isArray(m.embeds) && m.embeds.some(e => e?.title === "Your Banner Settings")) ||
+        // or any row with a customId that starts with "profile:"
+        (Array.isArray(m.components) && m.components.some(row =>
+          row?.components?.some(c => typeof c.customId === "string" && c.customId.startsWith("profile:"))
+        ))
+      )
+    );
+
+    // Delete sequentially (DMs don't support bulkDelete)
+    for (const m of mine.values()) {
+      try { await m.delete(); } catch (err) { if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") { throw err; }}
+    }
+  } catch (e) {
+    console.warn("[profile] deleteOldProfileDMs failed:", e.message || e);
+  }
 }
 /* *************************************************************************************
 END INTERACTION HANDLER FUNCTIONS
