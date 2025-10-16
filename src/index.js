@@ -1519,6 +1519,8 @@ async function buildProfileDm(serverIndex, clientId ){
 	let { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
 	if (!card) return { content: "No stats found for your account on this server." };
 
+	console.log(card);
+
 	card = insertPlayerCardDetails(card, serverIndex);
 
 	// Get a playercard embed
