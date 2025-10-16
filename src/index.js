@@ -893,6 +893,51 @@ async function sendWhisper(i, content) {
 }
 
 /* ***************************************************************
+sendReply( 	i: type-discord interaction [required],
+					contentEmbeds: type-discord embed [required],
+					contentComponents: type- discord component [optional, []],
+					footerText: type- string [optional, ""],
+					files: type- discord attachment [optional, []]
+					)
+return uniq: type-array
+
+updates the UI for the CODUO Server at given index
+---
+uses discord.js package to update messages for bot UO
+**************************************************************** */
+async function sendReply(i, contentEmbeds = [],  contentComponents = [], footerText = "", files = [] ) {
+	let contentFlag = false;
+	let componentFlag = false;
+	let filesFlag = false;
+	
+	//if embed included in message
+	if(contentEmbeds.length > 0){
+		//set footer text
+		contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+		//set content Flag
+		contentFlag = true;
+	}
+	//if navs are included in message
+	if(contentComponents.length > 0)
+		componentFlag = true;
+	
+	//if files need updated
+	if(files.length > 0)
+		filesFlag = true;
+	
+	let message = {};
+	
+	if(contentFlag)
+		message.embeds = contentEmbeds;
+	if(componentFlag)
+		message.components = contentComponents;
+	if(filesFlag)
+		message.files = files;
+	
+	await i.reply(message);
+}
+
+/* ***************************************************************
 sendDM( 	i: type-discord interaction [required],
 					contentEmbeds: type-discord embed [required],
 					contentComponents: type- discord component [optional, []],
@@ -1685,7 +1730,7 @@ async function handleSlashCommand(i) {
 				//get the server 
 				const lines = SERVER_CONFIGS.map((c, idx) => {
 					const chan = c.channelId ? `#${c.ui.channelId}` : "(no channel)";
-					return `**${idx + 1}. ${c.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
+					return `**${idx + 1}. ${c.rcon.name}** — /connect ${c.rcon.ip}:${c.rcon.port}`;
 				});
 				await sendWhisper( i , lines.join("\n") || "No servers configured." );
 				return;
