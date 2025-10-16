@@ -319,7 +319,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				};
 			});
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:ladder:select:${embedPage}`)
+				.setCustomId(`ui:${view}:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.setMinValues(1)
 				.setMaxValues(1)
@@ -338,7 +338,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 				};
 			});
 			menu = new StringSelectMenuBuilder()
-				.setCustomId(`ui:awards:select:${embedPage}`)
+				.setCustomId(`ui:${view}:select:${embedPage}`)
 				.setPlaceholder(placeholder)
 				.setMinValues(1)
 				.setMaxValues(1)
@@ -989,7 +989,7 @@ async function ensureUIForServer(serverIndex) {
 		cfg.ui.contentId = contentMsg.id;
 	}
     //Send message
-	sendMessage(channel, cfg, initial.navComponents, initial.embeds, initial.footerText)
+	sendMessage(channel, cfg, initial.nav, initial.embeds, initial.footerText)
 }
 
 /* ***************************************************************
@@ -1037,7 +1037,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 				} else {
 					if (isStale(cfg.ui.channelId, gate.token)) return;
 					// Send Message
-					await sendMessage(channel, cfg, payload.navComponents, payload.embeds, payload.footerText);
+					await sendMessage(channel, cfg, payload.nav, payload.embeds, payload.footerText);
 
 				}
 			} catch (e) {
@@ -1194,7 +1194,7 @@ async function buildHome(serverIndex, signal, token, channelId) {
 	//format home page
 	const contentEmbeds = renderHomeEmbed({ totals }, status, TZ, cfg.rcon.ip, cfg.rcon.port);
 	const navComponents = [navRow(VIEWS.HOME)];
-	const footerText = contentEmbeds[contentEmbeds.length - 1].data.footer.textt;
+	const footerText = contentEmbeds[contentEmbeds.length - 1].data.footer.text;
 	
 	return { embeds: contentEmbeds, nav: navComponents, footerText, hadError };
 }
@@ -1947,9 +1947,9 @@ async function handleUiComponent(i, serverIndex) {
 	try {
 	  if (!i.deferred && !i.replied) {
 		  //update loading screen
-		  if(XLR_DEBUG) console.log("loading..");
-		  await loadMessage(i, cfg);
 		  await i.deferUpdate(); // acknowledges the interaction
+		  await loadMessage(i, cfg);
+		  
 	  }
 	} catch (e) {
 	  // If already acknowledged somewhere else, ignore
