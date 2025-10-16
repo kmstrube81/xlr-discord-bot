@@ -1530,10 +1530,10 @@ async function buildProfileDm(serverIndex, clientId ){
 		.setColor(0x2b7cff)
 		.setTitle("Your Banner Settings")
 		.setDescription([
-		`**Preferred Name:** ${display}`,
-		`**Background:** ${bg} — ${basenameNoExt(BACKGROUNDS[bg] || "N/A")}`,
-		`**Emblem:** ${em} — ${basenameNoExt(EMBLEMS[em] || "N/A")}`,
-		`**Callsign:** ${cs} — ${CALLSIGNS[cs] ?? "N/A"}`
+		`**Preferred Name:** ${pc.name}`,
+		`**Background:** ${pc.bg} — ${basenameNoExt(BACKGROUNDS[pc.bg] || "N/A")}`,
+		`**Emblem:** ${pc.em} — ${basenameNoExt(EMBLEMS[pc.em] || "N/A")}`,
+		`**Callsign:** ${pc.cs} — ${CALLSIGNS[pc.cs] ?? "N/A"}`
 		].join("\n"));
 
 	return {
