@@ -913,7 +913,7 @@ async function sendReply(i, contentEmbeds = [],  contentComponents = [], footerT
 	//if embed included in message
 	if(contentEmbeds.length > 0){
 		//set footer text
-		contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+		contentEmbeds[contentEmbeds.length - 1].data?.footer.text = footerText;
 		//set content Flag
 		contentFlag = true;
 	}
@@ -1939,7 +1939,7 @@ async function handleSlashCommand(i) {
 					// Clean up old UI first
 					await deleteOldProfileDMs(dm, client);
 
-					const payload = await buildProfileDmPayload(serverIndex, clientId, uid);
+					const payload = await buildProfileDm(serverIndex, clientId, uid);
 					await dm.send(payload);
 					await sendWhisper(i,"I sent your playercard to your DMs. 📬" );
 				//log on error
