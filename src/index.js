@@ -1191,7 +1191,7 @@ async function buildHome(serverIndex, signal, token, channelId) {
 	const navComponents = [navRow(VIEWS.HOME)];
 	const footerText = contentEmbeds[contentEmbeds.length - 1].data.footer.textt;
 	
-	return { contentEmbeds, navComponents, footerText, hadError };
+	return { embeds: contentEmbeds, nav: navComponents, footerText, hadError };
 }
 
 /* ***************************************************************
