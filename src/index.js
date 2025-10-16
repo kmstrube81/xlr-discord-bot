@@ -1741,7 +1741,7 @@ async function handleSlashCommand(i) {
 				const map    = i.options.getString("map");
 				const sort   = i.options.getString("sort") || "skill";
 				const limit = count && count > 0 ? Math.min(count, 10) : 10;
-				let rows, emoji, title, thumbUrl;
+				let emoji, title, thumbUrl;
 				if(weapon) {
 					rows = await getPlayerWeaponSlice(serverIndex, weapon, 0, limit);
 					const weap = (rows && rows[0]?.matched_label) || weapon;
@@ -1846,7 +1846,7 @@ async function handleSlashCommand(i) {
 				} //if map option selected
 				else if (mapOpt) {
 					const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
-					const rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
+					rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
 					if (!rows.length){
 						await sendWhisper( i,`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
 						return;
@@ -1883,7 +1883,7 @@ async function handleSlashCommand(i) {
 				
 			case "xlr-lastseen":
 				count = i.options.getInteger("count") ?? 10;
-				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+				rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format embed
 				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
@@ -1896,7 +1896,7 @@ async function handleSlashCommand(i) {
 				//try catch on player lookup
 				try {
 					// Look up client by GUID first,error if not found
-					const rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
+					rows = await runQueryOn(serverIndex, "SELECT id FROM clients WHERE guid = ? LIMIT 1", [guid]);
 					if (!rows.length) {
 						await sendWhisper(i,`No client found with GUID **${guid}** on server ${serverIndex + 1}.` );
 						return;
@@ -1913,7 +1913,7 @@ async function handleSlashCommand(i) {
 				// Look up the invoking user's linked client
 				const uid = i.user.id;
 				// Prefer most-recently seen client if multiple
-				const rows = await runQueryOn(
+				rows = await runQueryOn(
 					serverIndex,
 					`SELECT c.id AS client_id
 					FROM clients c
