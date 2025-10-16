@@ -50,9 +50,9 @@ export async function formatPlayerEmbed(p, opts = {}) {
   const wagames    = wawaWins + wawaLosses;
   const wawinPct   = wagames ? (wawaWins / wagames).toFixed(31) : ".000";
   
-  const bg = Number(p?.background ?? 0) || 0;
-  const em = Number(p?.emblem ?? 0) || 0;
-  const cs = Number(p?.callsign ?? 0) || 0;
+  const bg = Number(p?.bg ?? 0) || 0;
+  const em = Number(p?.em ?? 0) || 0;
+  const cs = Number(p?.cs ?? 0) || 0;
 
   const files = [];
   // Generate the banner
