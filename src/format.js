@@ -34,7 +34,7 @@ function sanitize(name) {
     .replace(/`/g, "'");  // replace backticks with apostrophes
 }
 
-export function formatPlayerEmbed(p, opts = {}) {
+export async function formatPlayerEmbed(p, opts = {}) {
   const { thumbnail } = opts;
   const kd = p.deaths === 0 ? p.kills : (p.kills / p.deaths).toFixed(2);
   const lastSeen = p.time_edit ? dayjs.unix(p.time_edit).fromNow?.() || dayjs.unix(p.time_edit).format("YYYY-MM-DD HH:mm") : "—";

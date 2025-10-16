@@ -1240,7 +1240,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 	//add playercard details to query results
 	details = await insertPlayerCardDetails(details, serverIndex);
 	//generate embed
-	const embed = formatPlayerEmbed(details[0]);
+	const embed = await formatPlayerEmbed(details[0]);
 	
 	const offset = page * 10;
 	const [rows, total] = await Promise.all([
@@ -1491,7 +1491,7 @@ async function buildProfileDm(serverIndex, clientId ){
 	const file = new AttachmentBuilder(buffer, { name: filename });
 
 	// Get a playercard embed
-	const statsEmbed = formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
+	const statsEmbed = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
 
 	// Controls
 	rowButtons = buildDmNavRow(serverIndex, clientId);
@@ -1752,7 +1752,7 @@ async function handleSlashCommand(i) {
 				//add playercard details to query results
 				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
-				const embed = formatPlayerEmbed(details[0]);
+				const embed = await formatPlayerEmbed(details[0]);
 				
 				//further enrich embed with award options
 				if (awardOpt) {
