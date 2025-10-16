@@ -874,6 +874,8 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	//get the content message id from config
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	//abort message edit if load has been interupted by new click
+	if(fromLoad)
+		console.log(!fromLoad);
 	if (isStale(cfg.ui.channelId, gate.token) && !fromLoad) return;
 	//sanity check for loading
 	if(fromLoad)
