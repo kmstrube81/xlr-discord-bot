@@ -805,7 +805,7 @@ updates the UI for the CODUO Server at given index
 uses discord.js package to update messages for bot UO
 *************************************************************** */
 async function loadMessage(i, cfg) {
-	if(XLR_DEBUG) console.log("I am here");
+	
 	const embed = formatLoadEmbed();
 	
 	const LOADING_GIF_PATH = path.resolve(process.cwd(), "assets", "load.gif");
@@ -816,8 +816,9 @@ async function loadMessage(i, cfg) {
 
 	const files = [file];
 	
-	if(XLR_DEBUG) console.log(embed);
-	if(XLR_DEBUG) console.log(files);
+	if(XLR_DEBUG) console.log("LOADING EMBED");
+	if(XLR_DEBUG) console.log(JSON.stringify(embed));
+	if(XLR_DEBUG) console.log(JSON.stringify(files));
 	
 	await sendMessage(i, cfg, [], [embed], "", [], files);
 	
