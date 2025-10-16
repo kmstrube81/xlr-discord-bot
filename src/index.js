@@ -1516,8 +1516,10 @@ returns discord js message obj
 **************************************************************** */
 async function buildProfileDm(serverIndex, clientId ){
 	//load card (player stats, pc (playercard elements), and preferredName 
-	const { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
+	let { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
 	if (!card) return { content: "No stats found for your account on this server." };
+
+	card = insertPlayerCardDetails(card, serverIndex);
 
 	// Get a playercard embed
 	const [statsEmbed, files] = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
@@ -2316,6 +2318,12 @@ async function displayName(row, rowname, isTitle = false, isOpponent = false) {
     .replace(/\^\d/g, "")
     .replace(/\|/g, "")
     .replace(/`/g, "'");
+
+  const prefNameRow = await runQueryOn(serverIndex,
+    "SELECT COALESCE(preferred_name, NULL) AS preferred_name FROM clients WHERE id = ? LIMIT 1", [clientId]);
+  const preferredName = prefNameRow?.[0]?.preferred_name || null;
+  
+  if(preferredName) return preferredName;
 
   const id = isOpponent ? row?.opponent_discord_id : row?.discord_id;
   if (!id) return sanitized;
