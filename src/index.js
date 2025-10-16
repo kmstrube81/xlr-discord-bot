@@ -1663,13 +1663,20 @@ async function handleSlashCommand(i) {
 	//log command execution
 	if(XLR_DEBUG) console.log(`[slash] ${i.commandName} in #${i.channel?.id || "?"}`);
 
+	try {
+	  if (!i.deferred && !i.replied) {
+		  //update loading screen
+		  await i.deferUpdate(); // acknowledges the interaction
+	  }
+	} catch (e) {
+	  // If already acknowledged somewhere else, ignore
+	}
+
 	//try catch on command execution
 	try {
 		
 		const serverIndex = resolveServerIndexFromInteraction(i);
 		const cfg = byIndex.get(serverIndex);
-		//defer reply for long executing
-		await i.deferReply();
 		
 		let count, rows, clientId, embed;
 		
