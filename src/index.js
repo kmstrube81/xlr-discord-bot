@@ -1519,19 +1519,21 @@ async function buildProfileDm(serverIndex, clientId ){
 	let { card, pc, preferredName } = await loadProfileData(serverIndex, clientId);
 	if (!card) return { content: "No stats found for your account on this server." };
 
-	console.log(card);
-
-	card = insertPlayerCardDetails(card, serverIndex);
+	const display = preferredName || card.name;
+	const bg = Number(pc?.background ?? 0) || 0;
+	const em = Number(pc?.emblem ?? 0) || 0;
+	const cs = Number(pc?.callsign ?? 0) || 0;
+	
+	card.cs = cs;
+	card.bg = bg;
+	card.em = em;
 
 	// Get a playercard embed
 	const [statsEmbed, files] = await formatPlayerEmbed(card, { thumbnail: DEFAULT_THUMB });
 
 	// Controls
 	const rowButtons = buildDmNavRow(serverIndex, clientId);
-	const display = preferredName || card.name;
-	const bg = Number(pc?.background ?? 0) || 0;
-	const em = Number(pc?.emblem ?? 0) || 0;
-	const cs = Number(pc?.callsign ?? 0) || 0;
+	
 	// Show the current choices summary
 	const summary = new EmbedBuilder()
 		.setColor(0x2b7cff)
