@@ -54,6 +54,7 @@ export async function formatPlayerEmbed(p, opts = {}) {
   const em = Number(p?.emblem ?? 0) || 0;
   const cs = Number(p?.callsign ?? 0) || 0;
 
+  const files = [];
   // Generate the banner
   const { buffer, filename } = await generateBanner({
 	background: bg,
