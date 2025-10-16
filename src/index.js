@@ -781,7 +781,7 @@ async function insertPlayerCardDetails(rows, serverIndex) {
 			const bg = Number(pc?.background ?? 0) || 0;
 			const em = Number(pc?.emblem ?? 0) || 0;
 			const cs = Number(pc?.callsign ?? 0) || 0;
-			return { ...r, name: (await displayName(r, r.name, true)) || r.name, em: em, cs: cs, bg: bg  };
+			return { ...r, name: (await displayName(r, r.name, serverIndex, true)) || r.name, em: em, cs: cs, bg: bg  };
 		})
 	);
 }
@@ -1452,7 +1452,7 @@ async function buildAwards(serverIndex,  signal, token, channelId, page=0) {
   const baseRows = awards.slice(offset, offset + 10);
   const rows = await Promise.all(baseRows.map(async (aw) => {
 	  const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
-	  if (top) top.name = await displayName(top, top.name, true);
+	  if (top) top.name = await displayName(top, top.name, serverIndex, true);
 	  return { ...aw, top };
   }));
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
@@ -1489,7 +1489,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
   const [rows, total] = await Promise.all([
     (async () => {
       const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
-      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, true)) || r.name })));
+      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, serverIndex, true)) || r.name })));
       return mapped;
     })(),
     pageSize,
@@ -1803,7 +1803,7 @@ async function handleSlashCommand(i) {
 						// Player rank + metric(s)
 						const { sql, params } = queries.awardRank(parseInt(awardOpt), clientId);
 						const [rankRow] = await runQueryOn(serverIndex, sql, params);
-						const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, true)) || (rankRow?.name ?? name);
+						const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, serverIndex, true)) || (rankRow?.name ?? name);
 
 						const emote = resolveEmoji(aw.emoji) ?? "";
 						/* TODO insert into existing player page
@@ -1881,7 +1881,7 @@ async function handleSlashCommand(i) {
 						return;
 					}
 					rows = await Promise.all(
-					  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, true)) || r.name }))
+					  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, serverIndex, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, serverIndex, true)) || r.name }))
 					);
 					/* TODO add fields to main embed */
 				}
@@ -2311,7 +2311,7 @@ async function getPlayerMapCount(serverIndex, map) {
   return +cnt || 0;
 }
 
-async function displayName(row, rowname, isTitle = false, isOpponent = false) {
+async function displayName(row, rowname, serverIndex = 0, isTitle = false, isOpponent = false) {
   const raw = rowname ?? row?.name ?? "";
   const base = typeof raw === "string" ? raw : String(raw ?? "");
   const sanitized = base
