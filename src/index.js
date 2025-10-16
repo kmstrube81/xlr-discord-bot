@@ -1750,7 +1750,7 @@ async function handleSlashCommand(i) {
 				} else if(map) {
 					const { sql, params } = queries.ui_playerMapsSlice(map, limit, 0);
 					rows = await runQueryOn(serverIndex, sql, params);
-					thumbUrl = (await getMapImageUrl((rows2 && rows2[0]?.matched_label) || map)) || DEFAULT_THUMB;
+					thumbUrl = (await getMapImageUrl((rows && rows[0]?.matched_label) || map)) || DEFAULT_THUMB;
 					title = `Top Players by Map: ${map}`;
 				} else {
 					const { sql, params } = queries.topDynamic({ limit, sort });
@@ -1883,7 +1883,7 @@ async function handleSlashCommand(i) {
 				
 			case "xlr-lastseen":
 				count = i.options.getInteger("count") ?? 10;
-				rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
+				let rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format embed
 				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
@@ -1913,7 +1913,7 @@ async function handleSlashCommand(i) {
 				// Look up the invoking user's linked client
 				const uid = i.user.id;
 				// Prefer most-recently seen client if multiple
-				rows = await runQueryOn(
+				const rows = await runQueryOn(
 					serverIndex,
 					`SELECT c.id AS client_id
 					FROM clients c
