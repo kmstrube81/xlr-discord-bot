@@ -877,7 +877,7 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 		console.log("loadz");
 	if(fromLoad)
 		console.log("load2");
-	if (isStale(cfg.ui.channelId, gate.token) && !fromLoad) return;
+	if (isStale(cfg.ui.channelId, gate.token) && fromLoad === false) return;
 	//sanity check for loading
 	if(fromLoad)
 		console.log("load3");
