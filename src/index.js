@@ -913,7 +913,8 @@ async function sendReply(i, contentEmbeds = [],  contentComponents = [], footerT
 	//if embed included in message
 	if(contentEmbeds.length > 0){
 		//set footer text
-		contentEmbeds[contentEmbeds.length - 1].data?.footer.text = footerText;
+		if(footerText)
+			contentEmbeds[contentEmbeds.length - 1].setFooter({ text: footerText });
 		//set content Flag
 		contentFlag = true;
 	}
@@ -958,7 +959,8 @@ async function sendDM(i, contentEmbeds = [],  contentComponents = [], footerText
 	//if embed included in message
 	if(contentEmbeds.length > 0){
 		//set footer text
-		contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+		if(footerText)
+			contentEmbeds[contentEmbeds.length - 1].setFooter({ text: footerText });
 		//set content Flag
 		contentFlag = true;
 	}
