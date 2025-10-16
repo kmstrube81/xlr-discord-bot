@@ -1762,7 +1762,7 @@ async function handleSlashCommand(i) {
 				//format data
 				const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-				await sendMessage(i, cfg, null, [], embedArr);
+				await sendReply(i, embedArr);
 				return;
 			case "xlr-player":
 				//get options
@@ -1878,7 +1878,7 @@ async function handleSlashCommand(i) {
 					);
 					/* TODO add fields to main embed */
 				}
-				await sendMessage(i,cfg, null, [],[embed], "", [], files);
+				await sendReply(i,[embed], [], "", files);
 				return;
 				
 			case "xlr-lastseen":
@@ -1887,7 +1887,7 @@ async function handleSlashCommand(i) {
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format embed
 				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
-				await sendMessage(i,cfg, null, [],[embed]);
+				await sendReply(i,[embed]);
 				return;
 			
 			case "xlr-register":
