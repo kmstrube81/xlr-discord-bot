@@ -1942,6 +1942,7 @@ async function handleUiComponent(i, serverIndex) {
 	try {
 	  if (!i.deferred && !i.replied) {
 		  //update loading screen
+		  console.log("loading..");
 		  await loadMessage(i, cfg);
 		await i.deferUpdate(); // acknowledges the interaction
 		
