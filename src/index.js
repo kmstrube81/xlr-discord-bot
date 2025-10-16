@@ -874,6 +874,8 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	//abort message edit if load has been interupted by new click
 	if (isStale(cfg.ui.channelId, gate.token)) return;
+	//sanity check for loading
+	console.log("load");
 	//edit contentMsg with payload
 	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
   	
