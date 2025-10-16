@@ -1566,6 +1566,8 @@ handles profile component clicks
 **************************************************************** */
 async function handleProfileComponent(i) {
 	
+	if(XLR_DEBUG) console.log(`[profile] ${i.customId} in user=${i.user?.id || '?'}`);
+	
 	//Handle Button Clicks
 	if (i.isButton() && i.customId?.startsWith("profile:")) {
 		await handleProfileButton(i);
@@ -1594,7 +1596,7 @@ async function handleProfileButton(i) {
 	//explode customId on semicolon - profile:edit:name:si:pid or profile:edit:bg:si:pid:page
 	const parts = i.customId.split(":");
 	//get variables from exploded custom id parts
-    const [, action, sub, siStr, pidStr, pageStr, dir] = parts;
+    const [, action, sub, siStr, pidStr, pageStr, dir, cur] = parts;
 	//cast variables to number
     const si = Number(siStr), pid = Number(pidStr);
     const page = Number(pageStr || 0);
