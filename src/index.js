@@ -782,7 +782,7 @@ async function insertPlayerCardDetails(rows, serverIndex) {
 			const bg = Number(pc?.background ?? 0) || 0;
 			const em = Number(pc?.emblem ?? 0) || 0;
 			const cs = Number(pc?.callsign ?? 0) || 0;
-			return { ...r, name: (await displayName(r, r.name, true)) || r.name, em: em, cs: cs  };
+			return { ...r, name: (await displayName(r, r.name, true)) || r.name, em: em, cs: cs, bg: bg  };
 		})
 	);
 }

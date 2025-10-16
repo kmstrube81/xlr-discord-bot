@@ -1,6 +1,13 @@
 import dayjs from "dayjs";
 import { EmbedBuilder } from "discord.js";
+import {
+  generateBanner,
+  BACKGROUNDS,
+  EMBLEMS,
+  CALLSIGNS
+} from "./banner.js";
 import { DateTime } from "luxon";
+import {DEFAULT_THUMB} from "./index.js"
 
 // Shared emoji resolver (injected by index.js at runtime)
 let _emojiResolver = () => null;
@@ -43,7 +50,28 @@ export function formatPlayerEmbed(p, opts = {}) {
   const wagames    = wawaWins + wawaLosses;
   const wawinPct   = wagames ? (wawaWins / wagames).toFixed(31) : ".000";
   
-  return new EmbedBuilder().
+  const bg = Number(p?.background ?? 0) || 0;
+  const em = Number(p?.emblem ?? 0) || 0;
+  const cs = Number(p?.callsign ?? 0) || 0;
+
+  // Generate the banner
+  const { buffer, filename } = await generateBanner({
+	background: bg,
+	emblem: em,
+	callsign: cs,
+	playerName: pc.name,              
+	kills: Number(p.kills) || 0,
+	deaths: Number(p.deaths) || 0,
+	skill: Number(p.skill) || 0
+  });
+  
+  const file = new AttachmentBuilder(buffer, { name: filename });
+
+  e.setImage(`attachment://${filename}`);
+
+  files.push(file);
+  
+  return [ new EmbedBuilder().
 	setColor(0x2b7cff).
     setTitle(`**${p.name}**`).
     addFields(
@@ -62,7 +90,8 @@ export function formatPlayerEmbed(p, opts = {}) {
       { name: "Connections", value: String(p.connections ?? 0), inline: true },
       { name: "Last Seen", value: lastSeen, inline: true }
     ).
-    setFooter({ text: "XLRStats • B3" });
+    setFooter({ text: "XLRStats • B3" }),
+	files ];
 }
 
 export function formatPlayerWeaponEmbed(row, opts = {}) {
