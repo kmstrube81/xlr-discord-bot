@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import {
   generateBanner,
   DEFAULT_THUMB,
