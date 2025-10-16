@@ -67,8 +67,6 @@ export async function formatPlayerEmbed(p, opts = {}) {
   
   const file = new AttachmentBuilder(buffer, { name: filename });
 
-  e.setImage(`attachment://${filename}`);
-
   files.push(file);
   
   return [ new EmbedBuilder().
@@ -90,6 +88,7 @@ export async function formatPlayerEmbed(p, opts = {}) {
       { name: "Connections", value: String(p.connections ?? 0), inline: true },
       { name: "Last Seen", value: lastSeen, inline: true }
     ).
+	setImage(`attachment://${filename}`).
     setFooter({ text: "XLRStats • B3" }),
 	files ];
 }
