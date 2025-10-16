@@ -1240,7 +1240,7 @@ async function buildPlayer(serverIndex, signal, token, channelId, label, page = 
 		return;
 	}
 	//add playercard details to query results
-	details = await insertPlayerCardDetails(details);
+	details = await insertPlayerCardDetails(details, serverIndex);
 	//generate embed
 	const embed = formatPlayerEmbed(details[0]);
 	
@@ -1726,7 +1726,7 @@ async function handleSlashCommand(i) {
 					title = `Top by ${sort}`;
 				}
 				//insert playerCardDetails
-				rows = await insertPlayerCardDetails(rows);
+				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format data
 				const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
@@ -1752,7 +1752,7 @@ async function handleSlashCommand(i) {
 					return;
 				}
 				//add playercard details to query results
-				details = await insertPlayerCardDetails(details);
+				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
 				const embed = formatPlayerEmbed(details[0]);
 				
@@ -1852,7 +1852,7 @@ async function handleSlashCommand(i) {
 			case "xlr-lastseen":
 				count = i.options.getInteger("count") ?? 10;
 				rows = await runQueryOn(serverIndex, queries.lastSeen, [count]);
-				rows = await insertPlayerCardDetails(rows);
+				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format embed
 				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
 				await sendMessage(i,cfg,[],[embed]);
