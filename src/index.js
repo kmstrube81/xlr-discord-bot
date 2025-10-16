@@ -816,7 +816,7 @@ async function loadMessage(i, cfg, gate) {
 
 	const files = [file];
 	
-	await sendMessage(i, cfg, gate, [], [embed], "", [], files);
+	await sendMessage(i, cfg, gate, [], [embed], "Loading...", [], files);
 	
 	return;
 }
