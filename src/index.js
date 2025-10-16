@@ -815,6 +815,9 @@ async function loadMessage(i, cfg) {
 
 	const files = [file];
 	
+	if(XLR_DEBUG) console.log(embed);
+	if(XLR_DEBUG) console.log(files);
+	
 	await sendMessage(i, cfg, [], [embed], "", [], files);
 	
 	return;
@@ -1942,10 +1945,9 @@ async function handleUiComponent(i, serverIndex) {
 	try {
 	  if (!i.deferred && !i.replied) {
 		  //update loading screen
-		  console.log("loading..");
+		  if(XLR_DEBUG) console.log("loading..");
 		  await loadMessage(i, cfg);
-		await i.deferUpdate(); // acknowledges the interaction
-		
+		  await i.deferUpdate(); // acknowledges the interaction
 	  }
 	} catch (e) {
 	  // If already acknowledged somewhere else, ignore
