@@ -816,10 +816,6 @@ async function loadMessage(i, cfg) {
 
 	const files = [file];
 	
-	if(XLR_DEBUG) console.log("LOADING EMBED");
-	if(XLR_DEBUG) console.log(JSON.stringify(embed));
-	if(XLR_DEBUG) console.log(JSON.stringify(files));
-	
 	await sendMessage(i, cfg, [], [embed], "", [], files, true);
 	
 	return;
@@ -1945,7 +1941,7 @@ async function handleUiComponent(i, serverIndex) {
 	const cfg = byIndex.get(serverIndex);
 	const state = perChannelState.get(cfg.ui.channelId);
 	const uiCollector = state?.collectors || null;
-
+	const gate = beginChannelLoad(cfg.ui.channelId);
 	
 	if(XLR_DEBUG) console.log(`${i.customId} in #${i.channel?.id || '?'} msg=${i.message?.id || '?'} user=${i.user?.id || '?'}`);
 	const parsed = parseCustomId(i.customId);
@@ -1956,13 +1952,12 @@ async function handleUiComponent(i, serverIndex) {
 		  //update loading screen
 		  await i.deferUpdate(); // acknowledges the interaction
 		  await loadMessage(i, cfg);
-		  
 	  }
 	} catch (e) {
 	  // If already acknowledged somewhere else, ignore
 	}
 
-	const gate = beginChannelLoad(cfg.ui.channelId);
+	
 
 	const payload = await buildView(serverIndex, { ...parsed, label: i?.values ? i.values[0] : null, signal: gate.signal, token: gate.token, channelId: cfg.ui.channelId });
 	if (payload?.stale || isStale(cfg.ui.channelId, gate.token)) return;
