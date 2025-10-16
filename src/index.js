@@ -363,6 +363,8 @@ const PROFILE_IDS = Object.freeze({
   NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
 });
 
+
+
 // --------------------------------------------------------------------------------------
 // Slash Command Definitions
 // --------------------------------------------------------------------------------------
@@ -2512,6 +2514,10 @@ chunks an array into the a page of perPage items, starting at a given page
 returns object of the current page sliced out of all options
 **************************************************************** */
 function chunkOptions(labels, page = 0, perPage = 25) {
+	
+	if(XLR_DEBUG) console.log("labels");
+	if(XLR_DEBUG) console.log(labels);
+	
 	//get starting pos
 	const offset  = page * perPage;
 	//get the size of the slice
