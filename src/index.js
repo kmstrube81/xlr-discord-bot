@@ -1946,7 +1946,7 @@ async function handleUiComponent(i, serverIndex) {
 	  if (!i.deferred && !i.replied) {
 		  //update loading screen
 		  await i.deferUpdate(); // acknowledges the interaction
-		  await loadMessage(i, cfg);
+		  await loadMessage(i, cfg, gate);
 	  }
 	} catch (e) {
 	  // If already acknowledged somewhere else, ignore
