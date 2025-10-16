@@ -804,7 +804,7 @@ updates the UI for the CODUO Server at given index
 ---
 uses discord.js package to update messages for bot UO
 *************************************************************** */
-async function loadMessage(i, cfg) {
+async function loadMessage(i, cfg, gate) {
 	
 	const embed = formatLoadEmbed();
 	
@@ -816,7 +816,7 @@ async function loadMessage(i, cfg) {
 
 	const files = [file];
 	
-	await sendMessage(i, cfg, [], [embed], "", [], files, true);
+	await sendMessage(i, cfg, gate, [], [embed], "", [], files);
 	
 	return;
 }
@@ -835,9 +835,9 @@ updates the UI for the CODUO Server at given index
 ---
 uses discord.js package to update messages for bot UO
 **************************************************************** */
-async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = [], fromLoad = false ) {
-	//create Load Gate
-	const gate = beginChannelLoad(cfg.ui.channelId);
+async function sendMessage(i, cfg, gate, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = []) {
+
+	gate = gate ? gate : beginChannelLoad(cfg.ui.channelId);
 	const state = perChannelState.get(cfg.ui.channelId);
 	//get UI Activity Collector
 	const uiCollector = state?.collectors || null;
@@ -855,7 +855,7 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 		if (isStale(cfg.ui.channelId, gate.token)) return;
 		await navMsg.edit({embeds: [], components: navComponents });
 	}
-	console.log("load1");
+	
 	footerText = footerText ? footerText : contentEmbeds[contentEmbeds.length - 1].data.footer.text;
 	//EDIT FOOTER
 	const ZERO_WIDTH = "⠀";
@@ -869,14 +869,9 @@ async function sendMessage(i, cfg, navComponents, contentEmbeds, footerText = ""
 	//get the content message id from config
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	//abort message edit if load has been interupted by new click
-	if(!fromLoad)
-		console.log("loadz");
-	if(fromLoad)
-		console.log("load2");
-	if (isStale(cfg.ui.channelId, gate.token) && fromLoad === false) return;
-	//sanity check for loading
-	if(fromLoad)
-		console.log("load3");
+	
+	if (isStale(cfg.ui.channelId, gate.token)) return;
+	
 	//edit contentMsg with payload
 	await contentMsg.edit({ embeds: contentEmbeds, components: contentComponents, files: files ?? [] });
   	
@@ -992,7 +987,7 @@ async function ensureUIForServer(serverIndex) {
 		cfg.ui.contentId = contentMsg.id;
 	}
     //Send message
-	sendMessage(channel, cfg, initial.nav, initial.embeds, initial.footerText)
+	sendMessage(channel, cfg, gate, initial.nav, initial.embeds, initial.footerText)
 }
 
 /* ***************************************************************
@@ -1040,7 +1035,7 @@ async function startUiInactivitySession(uiCollector,serverIndex,cfg, channel) {
 				} else {
 					if (isStale(cfg.ui.channelId, gate.token)) return;
 					// Send Message
-					await sendMessage(channel, cfg, payload.nav, payload.embeds, payload.footerText);
+					await sendMessage(channel, cfg, gate, payload.nav, payload.embeds, payload.footerText);
 
 				}
 			} catch (e) {
@@ -1733,7 +1728,7 @@ async function handleSlashCommand(i) {
 				//format data
 				const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-				await sendMessage(i, cfg, [], embedArr);
+				await sendMessage(i, cfg, null, [], embedArr);
 				return;
 			case "xlr-player":
 				//get options
@@ -1849,7 +1844,7 @@ async function handleSlashCommand(i) {
 					);
 					/* TODO add fields to main embed */
 				}
-				await sendMessage(i,cfg,[],[embed]);
+				await sendMessage(i,cfg, null, [],[embed]);
 				return;
 				
 			case "xlr-lastseen":
@@ -1858,7 +1853,7 @@ async function handleSlashCommand(i) {
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format embed
 				embed = formatLastSeenEmbed(rows, { thumbnail: DEFAULT_THUMB });
-				await sendMessage(i,cfg,[],[embed]);
+				await sendMessage(i,cfg, null, [],[embed]);
 				return;
 			
 			case "xlr-register":
@@ -1968,7 +1963,7 @@ async function handleUiComponent(i, serverIndex) {
 	const navMsg = await channel.messages.fetch(cfg.ui.navId);
 	if (isStale(cfg.ui.channelId, gate.token)) return;
 	const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
-	await sendMessage(i, cfg, payload.nav, payload.embeds, footerText, payload.pager, payload.files ?? []);
+	await sendMessage(i, cfg, gate, payload.nav, payload.embeds, footerText, payload.pager, payload.files ?? []);
 
 	if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
 	return;
