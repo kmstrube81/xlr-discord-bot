@@ -66,7 +66,7 @@ function buildEmbed(template = {})
 		embed.setDescription(description);
 	//set thumbnail
 	if(thumbnail)
-		embed.setThumbnail(thumbnail);
+		embed.setThumbnail(thumbnail.uri);
 	//set fields
 	if(fields)
 		fields.map((f, i) => {
@@ -114,7 +114,7 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	}
 	//set thumbnail
 	if(thumbnail)
-		embed.setThumbnail(thumbnail);
+		embed.setThumbnail(thumbnail.uri);
 	//set fields
 	if(fields){
 		if(mode !== "append"){
