@@ -83,7 +83,7 @@ function buildEmbed(template = {})
 		});
 	//set footer text
 	if(footerText)
-		embed.setFooter(text: footerText);
+		embed.setFooter({text: footerText});
 	
 	return embed;
 }
@@ -138,10 +138,10 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	//set footer text
 	if(footerText){
 		if(mode === "append"){
-			embed.setFooter(text: [embed.data?.footer.text, footerText].join("\n"));
+			embed.setFooter({text: [embed.data?.footer.text, footerText].join("\n")});
 		}
 		else 
-			embed.setFooter(text: footerText);
+			embed.setFooter({text: footerText});
 	}
 	return embed;
 }
