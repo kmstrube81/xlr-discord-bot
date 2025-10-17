@@ -345,7 +345,7 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 			const thumbpath = EMBLEMS[r.em];
 			const thumbname = path.basename(thumbpath);
 			template.thumbnail = {filename: thumbname, uri: `attachments://${thumbname}`};
-			const file = new AttachmentBuilder(thumbpath, { name: filename });
+			const file = new AttachmentBuilder(thumbpath, { name: thumbname });
 			files.push(file);
 		}
 		embeds.push(buildEmbed(template));
