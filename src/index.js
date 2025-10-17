@@ -2055,7 +2055,7 @@ function buildDmPickerRow(kind, serverIndex, playerId, page) {
 	//create the label for the choices
 	const labels = kind==="cs" ? CALLSIGNS.slice() : arr.map(basenameNoExt);
 	//chunk the current options into the current page
-	const chunk = chunkOptions(labels, 0, page, 25);
+	const chunk = chunkOptions(labels, page, 25);
 
 	//create string select
 	const select = new StringSelectMenuBuilder()
@@ -2514,10 +2514,7 @@ chunks an array into the a page of perPage items, starting at a given page
 returns object of the current page sliced out of all options
 **************************************************************** */
 function chunkOptions(labels, page = 0, perPage = 25) {
-	
-	if(XLR_DEBUG) console.log("labels");
-	if(XLR_DEBUG) console.log(labels);
-	
+		
 	//get starting pos
 	const offset  = page * perPage;
 	//get the size of the slice
