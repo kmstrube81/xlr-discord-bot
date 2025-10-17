@@ -1738,7 +1738,7 @@ async function handleSlashCommand(i) {
 		const serverIndex = resolveServerIndexFromInteraction(i);
 		const cfg = byIndex.get(serverIndex);
 		
-		let count, rows, clientId, embed;
+		let count, rows, clientId, embed, embeds, playerEmbed, files;
 		
 		switch(i.commandName){
 			case "xlr-servers":
@@ -1775,7 +1775,7 @@ async function handleSlashCommand(i) {
 				//insert playerCardDetails
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format data
-				const [embeds, files] = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
+				[embeds, files] = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 				await sendReply(i, embedArr,[],"",files);
 				return;
@@ -1801,7 +1801,7 @@ async function handleSlashCommand(i) {
 				//add playercard details to query results
 				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
-				const [playerEmbed, files] = await formatPlayerEmbed(details[0]);
+				[playerEmbed, files] = await formatPlayerEmbed(details[0]);
 				
 				//further enrich embed with award options
 				if (awardOpt) {
