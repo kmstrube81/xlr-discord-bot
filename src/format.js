@@ -67,7 +67,7 @@ function buildEmbed(template = {})
 	//set thumbnail
 	if(thumbnail){
 		console.log(thumbnail.uri);
-		embed.setThumbnail(thumbnail.uri);
+		embed.setImage(thumbnail.uri);
 	}
 	//set fields
 	if(fields)
