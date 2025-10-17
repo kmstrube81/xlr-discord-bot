@@ -65,8 +65,10 @@ function buildEmbed(template = {})
 	if(description)
 		embed.setDescription(description);
 	//set thumbnail
-	if(thumbnail)
+	if(thumbnail){
+		console.log(thumbnail.uri);
 		embed.setThumbnail(thumbnail.uri);
+	}
 	//set fields
 	if(fields)
 		fields.map((f, i) => {
