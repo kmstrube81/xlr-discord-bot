@@ -200,7 +200,7 @@ export async function formatPlayerEmbed(p, opts = {}) {
 				  { name: "Connections", value: String(p.connections ?? 0), inline: true },
 				  { name: "Last Seen", value: lastSeen, inline: true }
 				 ];
-  const images = [ { filename: ${filename}, uri: `attachment://${filename}` }];
+  const images = [ { filename: filename, uri: `attachment://${filename}` }];
   const footerText = "XLRStats • B3";
   return [ buildEmbed({color,title,fields,images,footerText,thumbnail}),
 	files ];
