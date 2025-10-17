@@ -1671,7 +1671,7 @@ async function handleProfileStringSelect(i){
 			await runQueryOn(si, queries.setPlayerCardCallsign, [pid, picked]);
 		}
 		// Rebuild DM with new banner + reset to main buttons row
-		const payload = await buildProfileDmPayload(si, pid, i.user.id);
+		const payload = await buildProfileDm(si, pid, i.user.id);
 		await sendDM(i, payload.embeds, payload.components, "", payload.files);
 	} catch (e) {
 		//log on error.
@@ -1701,7 +1701,7 @@ async function handleProfileModal(i){
     try {
 		await runQueryOn(si, "UPDATE clients SET preferred_name = ? WHERE id = ?", [name, pid]);
 		//rebuild UI on submit
-		const payload = await buildProfileDmPayload(si, pid, i.user.id);
+		const payload = await buildProfileDm(si, pid, i.user.id);
 		await sendDM(i, payload.embeds, payload.components, "", payload.files);
     } catch (e) {
 		//log on failure
