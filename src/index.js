@@ -1270,11 +1270,11 @@ async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
 
 	// PRE-ENRICH: fetch Discord username for titles/labels
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
-	const embeds = renderLadderEmbeds({ rows: rowsWithNames, page });
+	const [embeds, files] = renderLadderEmbeds({ rows: rowsWithNames, page });
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
 	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 
-	return { embeds, nav, pager};
+	return { embeds, nav, pager, files};
 }
 
 async function buildPlayer(serverIndex, signal, token, channelId, label, page = 0){
@@ -1775,9 +1775,9 @@ async function handleSlashCommand(i) {
 				//insert playerCardDetails
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format data
-				const embeds = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
+				const [embeds, files] = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
-				await sendReply(i, embedArr);
+				await sendReply(i, embedArr,[],"",files);
 				return;
 			case "xlr-player":
 				//get options

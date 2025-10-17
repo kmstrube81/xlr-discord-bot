@@ -8,6 +8,7 @@ import {
   CALLSIGNS
 } from "./banner.js";
 import { DateTime } from "luxon";
+import path from "node:path";
 
 // Shared emoji resolver (injected by index.js at runtime)
 let _emojiResolver = () => null;
@@ -32,6 +33,117 @@ function sanitize(name) {
     .replace(/\^\d/g, "") // remove color codes like ^1, ^7, etc.
     .replace(/\|/g, "")   // remove pipes
     .replace(/`/g, "'");  // replace backticks with apostrophes
+}
+/* ***************************************************************
+buildEmbed( 	template: type-object [required],
+				data: type-array [required]
+				)
+return a discord js embed
+
+---
+A standardized way of building discord.js embeds using a passed in template.
+Template is a object with these properties
+.color - the color for the discord embed
+.title - the title of the embed
+.description - the description for the embed
+.thumbnail - the  thumbnail
+.fields - an array of field names and the property from the data
+.image - the image to attach to the embed
+**************************************************************** */
+function buildEmbed(template = {})
+{
+	const { color, title, description, thumbnail,
+	  fields, images, footerText } = template;
+	const embed = new EmbedBuilder();
+	//set color
+	if(color)
+		embed.setColor(color);
+	//Set title
+	if(title)
+		embed.setTitle(title);
+	//set description
+	if(description)
+		embed.setDescription(description);
+	//set thumbnail
+	if(thumbnail)
+		embed.setThumbnail(thumbnail);
+	//set fields
+	if(fields)
+		fields.map((f, i) => {
+			embed.addFields({
+				name: f.name,
+				value: f.value,
+				inline: f.inline
+			});
+		});
+	//set image
+	if(images)
+		images.map((m,i) => {
+			embed.setImage(m.uri);
+		});
+	//set footer text
+	if(footerText)
+		embed.setFooter(text: footerText);
+	
+	return embed;
+}
+
+export function editEmbed(embed, template = {}, mode = "edit")
+{
+	const { color, title, description, thumbnail,
+	  fields, images, footerText } = template;
+	  
+	//set color
+	if(color)
+		embed.setColor(color);
+	//Set title
+	if(title && embed.data?.title){
+		if(mode === "append"){
+			embed.setTitle([embed.data.title, title].join("\n"));
+		}
+		else
+			embed.setTitle(title);
+	}
+	//set description
+	if(description && embed.data?.description){
+		if(mode === "append"){
+			embed.setDescription([embed.data?.description, description].join("\n"));
+		}
+		else
+			embed.setDescription(description);
+	}
+	//set thumbnail
+	if(thumbnail)
+		embed.setThumbnail(thumbnail);
+	//set fields
+	if(fields){
+		if(mode !== "append"){
+			embed.data.fields = [];
+		}
+		fields.map((f, i) => {
+			embed.addFields({
+				name: f.name,
+				value: f.value,
+				inline: f.inline
+			});
+		});
+	}
+	//set image
+	if(images){
+		
+		images.map((m,i) => {
+			embed.setImage(m.uri);
+		});
+	}
+	//set footer text
+	if(footerText){
+		if(mode === "append"){
+			embed.setFooter(text: [embed.data?.footer.text, footerText].join("\n"));
+		}
+		else 
+			embed.setFooter(text: footerText);
+	}
+	return embed;
 }
 
 export async function formatPlayerEmbed(p, opts = {}) {
@@ -68,30 +180,29 @@ export async function formatPlayerEmbed(p, opts = {}) {
   });
   
   const file = new AttachmentBuilder(buffer, { name: filename });
-
+  
   files.push(file);
   
-  return [ new EmbedBuilder().
-	setColor(0x2b7cff).
-    setTitle(`**${p.name}**`).
-    addFields(
-      { name: "Skill", value: String(p.skill ?? "—"), inline: true },
-	  { name: "Fav Weapon", value: String( favWeap ?? "—"), inline: true },
-	  { name: "Nemesis", value: p.nemesis ? `${p.nemesis}${typeof p.nemesis_kills === "number" ? ` (${p.nemesis_kills})` : ""}` : "—", inline: true },
-      { name: "Kills", value: `${p.kills ?? 0}`, inline: true },
-	  { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
-      { name: "KDR", value: String(kd), inline: true },
-	  { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
-	  { name: "Assists", value: String(p.assists ?? 0), inline: true },
-	  { name: "Deaths", value: String(p.deaths ?? 0), inline: true },
-      { name: "Rounds Played", value: `${p.rounds ?? 0}`, inline: true },
-	  { name: "W-L (Win%)", value: `${wins}-${losses} (${winPct}%)`, inline: true },
-	  { name: "wawa W-L (Win%)", value: `${wawaWins}-${wawaLosses} (${wawinPct})`, inline: true },
-      { name: "Connections", value: String(p.connections ?? 0), inline: true },
-      { name: "Last Seen", value: lastSeen, inline: true }
-    ).
-	setImage(`attachment://${filename}`).
-    setFooter({ text: "XLRStats • B3" }),
+  const color = 0x2b7cff;
+  const title = `**${p.name}**`;
+  const fields = [{ name: "Skill", value: String(p.skill ?? "—"), inline: true },
+				  { name: "Fav Weapon", value: String( favWeap ?? "—"), inline: true },
+				  { name: "Nemesis", value: p.nemesis ? `${p.nemesis}${typeof p.nemesis_kills === "number" ? ` (${p.nemesis_kills})` : ""}` : "—", inline: true },
+				  { name: "Kills", value: `${p.kills ?? 0}`, inline: true },
+				  { name: "Best Killstreak", value: `${p.winstreak ?? 0}`, inline: true },
+				  { name: "KDR", value: String(kd), inline: true },
+				  { name: "Headshots", value: String(p.headshots ?? 0), inline: true },
+				  { name: "Assists", value: String(p.assists ?? 0), inline: true },
+				  { name: "Deaths", value: String(p.deaths ?? 0), inline: true },
+				  { name: "Rounds Played", value: `${p.rounds ?? 0}`, inline: true },
+				  { name: "W-L (Win%)", value: `${wins}-${losses} (${winPct}%)`, inline: true },
+				  { name: "wawa W-L (Win%)", value: `${wawaWins}-${wawaLosses} (${wawinPct})`, inline: true },
+				  { name: "Connections", value: String(p.connections ?? 0), inline: true },
+				  { name: "Last Seen", value: lastSeen, inline: true }
+				 ];
+  const images = [ { filename: ${filename}, uri: `attachment://${filename}` }];
+  const footerText = "XLRStats • B3";
+  return [ buildEmbed({color,title,fields,images,footerText,thumbnail}),
 	files ];
 }
 
@@ -161,94 +272,89 @@ export function formatPlayerMapEmbed(row, title = null, opts = {}) {
     .setFooter({ text: "XLRStats • B3 • " + (lastSeen === "—" ? "last seen unknown" : `last seen ${lastSeen}`) });
 }
 
-export function formatTopEmbed(rows, title = "Top by Skill", opts = {}) {
-  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
+export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
+	const { thumbnail, offset = 0, footerText } = opts;
 
-  const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(title)
-  ];
-
-  rows.map((r, i) => {
-	  
-    let embed;
+	const embeds = [];
+	const files = [];
+	const last = rows.length - 1;
 	
-	if(i === 0) {
+	rows.map((r, i) => {
 		
-		embed = embeds[0];
+		const template = {};
+		template.color = 0x32d296;
 		
-	} else {
+		if(i === 0)
+			template.title = titleText;
 		
-		embed = new EmbedBuilder()
-			.setColor(0x32d296);
-		embeds.push(embed);
-		
-	}
-	
-    const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
-    const medals = ["🥇", "🥈", "🥉"];
+		const medals = ["🥇", "🥈", "🥉"];
 
-    const absoluteIndex = offset + i;               // <— absolute rank
-    let rankDisplay;
-    if (absoluteIndex < 3) {                        // medals only for 1–3 overall
-      rankDisplay = medals[absoluteIndex];
-    } else {
-      rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
-    }
-
-    embed.setDescription(`**${rankDisplay} ${r.name}**`);
-  embed.addFields(
-		{
-			name : `Skill`,
-			value : String(r.skill),
-			inline : true
-		},
-		{
-			name : `Kill-Death Ratio`,
-			value : String(kd),
-			inline : true
-		},
-		{
-			name : `Kills`,
-			value : String(r.kills),
-			inline : true
-		},
-		{
-			name : `Deaths`,
-			value : String(r.deaths),
-			inline : true
+		const absoluteIndex = offset + i;               // <— absolute rank
+		let rankDisplay;
+		if (absoluteIndex < 3) {                        // medals only for 1–3 overall
+			rankDisplay = medals[absoluteIndex];
+		} else {
+			rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
 		}
-	);
-        // append extra stats when present
-    if (r.suicides) embed.addFields({ name: "Suicides", value : String(r.suicides), inline : true });
-    if (r.assists)  embed.addFields({ name: "Assists", value : String(r.assists), inline : true });
+		template.description = [`**${rankDisplay} ${r.name}**`, sanitize(CALLSIGNS[r.cs])].join("\n");
+		
+		const kd = r.deaths === 0 ? r.kills : (r.kills / r.deaths).toFixed(2);
+		
+		template.fields = [{
+							name : `Skill`,
+							value : String(r.skill),
+							inline : true
+						},
+						{
+							name : `Kill-Death Ratio`,
+							value : String(kd),
+							inline : true
+						},
+						{
+							name : `Kills`,
+							value : String(r.kills),
+							inline : true
+						},
+						{
+							name : `Deaths`,
+							value : String(r.deaths),
+							inline : true
+						}];
+		if (r.suicides) template.fields.push({ name: "Suicides", value : String(r.suicides), inline : true });
+		if (r.assists)  template.fields.push({ name: "Assists", value : String(r.assists), inline : true });
+    
+		if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
+			const w = Number(r.wins || 0), l = Number(r.losses || 0);
+			const gp = w + l;
+			const pct = gp ? ((w / gp)).toFixed(3) : ".000";
+			template.fields.push({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
+		}
+		if (typeof r.wawa_wins !== "undefined" && typeof r.wawa_losses !== "undefined") {
+			const w = Number(r.wawa_wins || 0), l = Number(r.wawa_losses || 0);
+			const gp = w + l;
+			const pct = gp ? ((w / gp)).toFixed(3) : ".000";
+			template.fields.push({ name: "wawa W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
+		}
 	
-	if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
-      const w = Number(r.wins || 0), l = Number(r.losses || 0);
-      const gp = w + l;
-      const pct = gp ? ((w / gp)).toFixed(3) : ".000";
-      embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
-    }
-    if (typeof r.wawa_wins !== "undefined" && typeof r.wawa_losses !== "undefined") {
-      const w = Number(r.wawa_wins || 0), l = Number(r.wawa_losses || 0);
-      const gp = w + l;
-      const pct = gp ? ((w / gp)).toFixed(3) : ".000";
-      embed.addFields({ name: "wawa W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
-    }
-	
-    if (r.rounds)   embed.addFields({ name: "Rounds Played", value : String(r.rounds), inline : true });
+		if (r.rounds)   template.fields.push({ name: "Rounds Played", value : String(r.rounds), inline : true });
 
+		if(i === last)
+			template.footerText = footerText;
+		
+		if(!thumbnail || thumbnail === DEFAULT_THUMB){
+			const thumbpath = EMBLEMS[r.em];
+			const thumbname = path.basename(thumbpath);
+			template.thumbnail = {filename: thumbname, uri: `attachments://${thumbname}`};
+			const file = new AttachmentBuilder(thumbpath, { name: filename });
+			files.push(file);
+		}
+		embeds.push(buildEmbed(template));
   });
-
-  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
-  if (thumbnail) {
-    embeds[0].setThumbnail(thumbnail);
-  }
   
   if(!rows.length) {
-	embeds[0].setDescription("_No players found_");
+	embeds.push(buildEmbed({description:"_No players found_"}));
   }
-  return embeds;
+  return [embeds,files];
 }
 
 export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
@@ -491,9 +597,6 @@ export function formatLastSeenEmbed(rows, opts = {}) {
     setDescription(lines.join("\n") || "_No recent players_");
 }
 
-// === App UI renderers ===
-// Keep components (buttons) outside; these return only embeds so index.js can add rows.
-
 export function renderHomeEmbed({ totals }, data, tz, ip, port) {
   const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
   const { totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
@@ -588,14 +691,9 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
   
   const offset = page * 10;
   
-  const embeds = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset });
-  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
-  if (embeds.length) {
-    const last = embeds[embeds.length - 1];
-    const footer = last.data.footer?.text || "XLRStats • B3";
-    last.setFooter({ text: `${footer} • Ladder page ${page + 1}` });
-  }
-  return embeds;
+  const [embeds, files] = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
+  
+  return [embeds, files];
 }
 
 export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
