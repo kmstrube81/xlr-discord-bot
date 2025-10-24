@@ -1401,10 +1401,10 @@ async function buildMaps(serverIndex,  signal, token, channelId, page=0) {
 		getMapsCount(serverIndex)
 	]);
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
-	const embeds = renderMapsEmbeds({ rows, page });
+	const [embeds, files] = renderMapsEmbeds({ rows, page });
 	const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + 10 < total)];
 	const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS,rows, page, null)];
-	return { embeds, nav, pager};
+	return { embeds, nav, pager, files};
 }
 
 /* ***************************************************************
