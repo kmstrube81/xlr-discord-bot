@@ -1434,7 +1434,7 @@ async function buildMapPlayers(serverIndex,  signal, token, channelId, mapLabel,
   if (channelId && token && isStale(channelId, token)) return { stale: true };
   const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
   const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
-  const [embeds, files] = formatTopEmbed(rowsWithNames, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+  const [embeds, files] = formatTopEmbed(rowsWithNames, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset, footerText: `XLRStats • B3 • ${mapLabel} players page ${playerPage + 1}` });
 
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
