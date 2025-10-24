@@ -49,6 +49,7 @@ Template is a object with these properties
 .thumbnail - the  thumbnail
 .fields - an array of field names and the property from the data
 .image - the image to attach to the embed
+.footerText - the text for footer embed
 **************************************************************** */
 function buildEmbed(template = {})
 {
@@ -353,12 +354,12 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 			template.thumbnail = {filename: "thumbname", uri: thumbnail};
 		}
 		embeds.push(buildEmbed(template));
-  });
+	});
   
-  if(!rows.length) {
-	embeds.push(buildEmbed({description:"_No players found_"}));
-  }
-  return [embeds,files];
+	if(!rows.length) {
+		embeds.push(buildEmbed({description:"_No players found_"}));
+	}
+	return [embeds,files];
 }
 
 export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
@@ -602,102 +603,96 @@ export function formatLastSeenEmbed(rows, opts = {}) {
 }
 
 export function renderHomeEmbed({ totals }, data, tz, ip, port) {
-  const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
-  const { totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
-  
-  const map = serverinfo?.mapname || "unknown";
-  const mode = serverinfo?.g_gametype || "N/A";
-  const hostname = serverinfo?.sv_hostname || "Unnamed Server";
-  const playerCount = playerinfo?.length || 0;
-  const maxPlayers = serverinfo?.sv_maxclients || "?";
+	const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
+	const { totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
 
-  const timezone = tz || "UTC";
-  const updatedTime = DateTime.fromSeconds(Number(time_retrieved)).setZone(timezone).toLocaleString(DateTime.DATETIME_MED_WITH_SECONDS);
+	const map = serverinfo?.mapname || "unknown";
+	const mode = serverinfo?.g_gametype || "N/A";
+	const hostname = serverinfo?.sv_hostname || "Unnamed Server";
+	const playerCount = playerinfo?.length || 0;
+	const maxPlayers = serverinfo?.sv_maxclients || "?";
 
-  const imageUrl = `https://cod.pm/mp_maps/${mapimage}`;
-  
-  
-  const embed1 = new EmbedBuilder()
-      .setColor(0x2b7cff)
-      .setTitle(sanitize(hostname))
-	  .setImage(imageUrl)
-      .addFields(
-	    { name: "Total Players Seen", value: (totalPlayers ?? 0).toLocaleString(), inline: true },
-        { name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
-        { name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
-        { name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
-        { name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
-      )
-	  .setFooter({ text: `${mode} — ${map} — ${playerCount}/${maxPlayers} players` });
-      
-	
-  const embed2 = new EmbedBuilder()
-	.setColor(0x2b7cff)
-	.setFooter({ text: ` ${updatedTime} | XLR App • Home` });
-	
+	const timezone = tz || "UTC";
+	const updatedTime = DateTime.fromSeconds(Number(time_retrieved)).setZone(timezone).toLocaleString(DateTime.DATETIME_MED_WITH_SECONDS);
+
+	const imageUrl = `https://cod.pm/mp_maps/${mapimage}`;
+
+	const embeds = [];
+	const template = {};
+	template.color = 0x2b7cff;
+	template.title = sanitize(hostname);
+	template.fields =
+		[
+			{ name: "Total Players Seen", value: (totalPlayers ?? 0).toLocaleString(), inline: true },
+			{ name: "Total Kills", value: (totalKills ?? 0).toLocaleString(), inline: true },
+			{ name: "Total Rounds", value: (totalRounds ?? 0).toLocaleString(), inline: true },
+			{ name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
+			{ name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
+		];
+	template.image = imageUrl;
+	template.footerText = `${mode} — ${map} — ${playerCount}/${maxPlayers} players`;
+
+	embeds.push(buildEmbed(template));   
+
+	template.footerText = ` ${updatedTime} | XLR App • Home`;
+	template.title = null;
+	template.image = null;
+	template.fields = null;
 	if(playerCount){
+		const namePad = 30;
+		const scorePad = 6;
+		const pingPad = 6;
 
-	  const namePad = 30;
-	  const scorePad = 6;
-	  const pingPad = 6;
-	  
-	  const footer = `[See All Players...](https://cod.pm/server/${ip}/${port})`; 
-	  
-	  let chars = namePad + scorePad + pingPad + footer.length + 18;
+		const footer = `[See All Players...](https://cod.pm/server/${ip}/${port})`; 
 
-	  const header = pad("Name", namePad) + pad("Score", scorePad) + pad("Ping", pingPad);
-	  
-	  playerinfo.sort((a,b) => b.score - a.score );
+		let chars = namePad + scorePad + pingPad + footer.length + 18;
+
+		const header = pad("Name", namePad) + pad("Score", scorePad) + pad("Ping", pingPad);
+
+		playerinfo.sort((a,b) => b.score - a.score );
 		  
-	  const lines = playerinfo.map(p =>
-		pad(sanitize(p.name), namePad) + pad(p.score, scorePad) + pad(p.ping, pingPad)
-	  );
-	  let flag = false;
-	  let rows = "";
-	  lines.forEach((line) => {
-		let join = line + '\n';
-		chars += 44;
-		if(chars < 1024){
-			rows += join;
-		} else {
-			flag = true;
-		}
-	  });
-	  
-	  let footerMd = flag ? footer : "";
-
-	  const table = [header, "-".repeat(header.length), rows].join("\n");
-
-	  
-		
-	  embed2.addFields({
-		  name: `/connect ${ip}:${port}`,
-		  value: `\`\`\`\n${table}\n\`\`\`\n${footerMd}`
+		const lines = playerinfo.map(p =>
+			pad(sanitize(p.name), namePad) + pad(p.score, scorePad) + pad(p.ping, pingPad)
+		);
+		let flag = false;
+		let rows = "";
+		lines.forEach((line) => {
+			let join = line + '\n';
+			chars += 44;
+			if(chars < 1024){
+				rows += join;
+			} else {
+				flag = true;
+			}
 		});
+		  
+		let footerMd = flag ? footer : "";
+		const table = [header, "-".repeat(header.length), rows].join("\n");
 		
-		
-		
-		
-		
+		template.fields =
+		[
+			name: `/connect ${ip}:${port}`,
+			value: `\`\`\`\n${table}\n\`\`\`\n${footerMd}`
+		];	
 	}
 	else {  
-	
-		embed2.addFields({
-		  name: `/connect ${ip}:${port}`,
-		  value: "Server is empty"
-		});
-	
+		template.fields =
+		[
+			name: `/connect ${ip}:${port}`,
+			value: "Server is empty"
+		];
 	}
-  return [embed1, embed2];
+	embeds.push(buildEmbed(template));
+	return embeds;
 }
 
 export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
   
-  const offset = page * 10;
-  
-  const [embeds, files] = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
-  
-  return [embeds, files];
+	const offset = page * 10;
+
+	const [embeds, files] = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
+
+	return [embeds, files];
 }
 
 export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
