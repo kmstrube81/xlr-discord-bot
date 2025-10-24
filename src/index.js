@@ -1433,12 +1433,13 @@ async function buildMapPlayers(serverIndex,  signal, token, channelId, mapLabel,
   ]);
   if (channelId && token && isStale(channelId, token)) return { stale: true };
   const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
-  const embeds = formatTopEmbed(rows, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
+  const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
+  const [embeds, files] = formatTopEmbed(rowsWithNames, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset });
 
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
   const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS, mapsRows, mapsPage, mapLabel)];
-  return { embeds: embeds, nav: nav, pager: pager };
+  return { embeds: embeds, nav: nav, pager: pager, files: files };
 }
 
 /* ***************************************************************
@@ -1457,21 +1458,22 @@ builds the UI award ladder page (sort awards by index)
 returns discord js message obj
 **************************************************************** */
 async function buildAwards(serverIndex,  signal, token, channelId, page=0) {
-  const offset = page * 10;
-  const baseRows = awards.slice(offset, offset + 10);
-  const rows = await Promise.all(baseRows.map(async (aw) => {
-	  const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
-	  if (top) top.name = await displayName(top, top.name, serverIndex, true);
-	  return { ...aw, top };
-  }));
+	const offset = page * 10;
+	const baseRows = awards.slice(offset, offset + 10);
+	const rows = await Promise.all(baseRows.map(async (aw) => {
+		const top = await runQueryOn(serverIndex, aw.query, [1, 0]).then(r => r?.[0] || null);
+		if (top) top.name = await displayName(top, top.name, serverIndex, true);
+		return { ...aw, top };
+	}));
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const total  = awards.length;
+	const total  = awards.length;
+	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
+	
+	const [ embeds, files ] = renderAwardsEmbeds({ rowsWithNames, page });
+	const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + 10 < total)];
+	const nav    = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, rows, page, null)];
 
-  const embeds = renderAwardsEmbeds({ rows, page });
-  const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + 10 < total)];
-  const nav    = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, rows, page, null)];
-
-  return { embeds: embeds, nav, pager };
+	return { embeds: embeds, nav, pager, files };
 }
 
 /* ***************************************************************
@@ -1505,13 +1507,14 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
   ]);
   if (channelId && token && isStale(channelId, token)) return { stale: true };
   const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
-  const embeds = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
+  
+  const [ embeds, files ] = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
   
   const hasNext = rows.length === pageSize;
   const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
   const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
   const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
-  return { embeds: embeds, nav: nav, pager: pager};
+  return { embeds: embeds, nav: nav, pager: pager, files: files};
 }
 
 /* ***************************************************************

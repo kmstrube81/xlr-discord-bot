@@ -479,109 +479,106 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", opts) {
 }
 
 export function formatAwardEmbed(rows, title = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
-  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
-
-  const awardEmote = resolveEmoji(emoji) ?? "";
-
-  const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(`${awardEmote} ${title}`)
-  ];
-
-  rows.map((r, i) => {
-	  
-    let embed;
 	
-	if(i === 0) {
-		
-		embed = embeds[0];
-		
-	} else {
-		
-		embed = new EmbedBuilder()
-			.setColor(0x32d296);
-		embeds.push(embed);
-		
-	}
-	
-    const medals = ["🥇", "🥈", "🥉"];
+	const { thumbnail, offset = 0, footerText } = opts;
 
-    const absoluteIndex = offset + i;               // <— absolute rank
-    let rankDisplay;
-    if (absoluteIndex < 3) {                        // medals only for 1–3 overall
-      rankDisplay = medals[absoluteIndex];
-    } else {
-      rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
-    }
-
-    embed.setDescription(`**${rankDisplay} ${r.name}**`);
-	for(let z = 0; z < props.length; z++) {
-		
-	  embed.addFields(
-			{
-				name : props[z].name,
-				value : String(r[props[z].prop]),
-				inline : true
-			}
-		);
-	}
-    
-  });
-
-  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
-  if (thumbnail) {
-    embeds[0].setThumbnail(thumbnail);
-  }
-  
-  if(!rows.length) {
-	embeds[0].setDescription("_No players found_");
-  }
-  return embeds;
-}
-
-export function formatAwardsEmbed(rows, title = "Awards") {
-
-	const embeds = [
-		new EmbedBuilder().setColor(0x32d296).setTitle(title)
-	  ];
+	const embeds = [];
+	const files = [];
+	const last = rows.length - 1;
 
 	rows.map((r,i) => {
-		let embed;
+		const template = {};
+		template.color = 0x32d296;
+		
+		if(i === 0)
+			template.title = titleText;
 	
-		if(i === 0) {
-			
-			embed = embeds[0];
-			
+		const medals = ["🥇", "🥈", "🥉"];
+
+		const absoluteIndex = offset + i;               // <— absolute rank
+		let rankDisplay;
+		if (absoluteIndex < 3) {                        // medals only for 1–3 overall
+		  rankDisplay = medals[absoluteIndex];
 		} else {
-			
-			embed = new EmbedBuilder()
-				.setColor(0x32d296);
-			embeds.push(embed);
-			
+		  rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
 		}
+
+		template.description = `**${rankDisplay} ${r.name}**`;
+		template.fields = [];
+		for(let z = 0; z < props.length; z++) {
+			template.fields =
+				[
+					{
+						name : props[z].name,
+						value : String(r[props[z].prop]),
+						inline : true
+					}
+				];
+		}
+    
+		if(i === last)
+			template.footerText = footerText;
+		
+		if(!thumbnail || thumbnail === DEFAULT_THUMB){
+			const thumbpath = EMBLEMS[r.em];
+			const abs = path.resolve(process.cwd(), thumbpath);
+			const thumbname = `emblem_${r.client_id || i}.png`;
+			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
+			const file = new AttachmentBuilder(abs, { name: thumbname });
+			files.push(file);
+		} else {
+			template.thumbnail = {filename: "thumbname", uri: thumbnail};
+		}
+		embeds.push(buildEmbed(template));
+	});
+  
+	if(!rows.length) {
+		embeds.push(buildEmbed({description:"_No players found_"}));
+	}
+	return [embeds,files];
+}
+
+export function formatAwardsEmbed(rows, titleText = "Awards", opts) {
+
+	const { thumbnail, offset = 0, footerText } = opts;
+
+	const embeds = [];
+	const files = [];
+	const last = rows.length - 1;
+
+	rows.map((r,i) => {
+		const template = {};
+		template.color = 0x32d296;
+		
+		if(i === 0)
+			template.title = titleText;
 		
 		let emote = resolveEmoji(r.emoji) ?? "";
 		
-		embed.setDescription(`${emote} **${r.name}**`);
-		embed.addFields( { name : "\u200B", value: r.description } );
+		template.description = `${emote} **${r.name}**`;
+		template.fields = [ { name : "\u200B", value: r.description } ];
 		
 		if (r.top) {
-		  const props = (r.properties || [])
+			const props = (r.properties || [])
 			.map(p => `**${p.name}:** ${String(r.top[p.prop] ?? "0")}`)
 			.join(" • ");
-		  const leaderName = r.top?.name || "—";
-		  embed.addFields({ name: "\u200B", value: `${leaderName}${props ? " — " + props : ""}` });
+			const leaderName = r.top?.name || "—";
+			template.fields.push({ name: "\u200B", value: `${leaderName}${props ? " — " + props : ""}` });
 		}
-
+		
+		if(i === last)
+			template.footerText = footerText;
+		
+		template.thumbnail = {filename: "thumbname", uri: thumbnail};
+		
+		embeds.push(buildEmbed(template));
+		
 	});
 
-	embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
 	if(!rows.length) {
-		embeds[0].setDescription("_No maps found_");
+		embeds.push(buildEmbed({description:"_No awardss found_"}));
 	}
-	
-	return embeds;
+	return [embeds,files];
 }	
 
 export function formatLastSeenEmbed(rows, opts = {}) {
@@ -688,13 +685,7 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
 }
 
 export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
-  const embeds = formatAwardsEmbed(rows, `🏆 ${title}`);
-  if (embeds.length) {
-    const last = embeds[embeds.length - 1];
-    const footer = last.data.footer?.text || "XLRStats • B3";
-    last.setFooter({ text: `${footer} • Awards page ${page + 1}` });
-  }
-  return embeds;
+  return formatAwardsEmbed(rows, `🏆 ${title}`, { thumbnail, offset: page * 10, footerText: `XLRStats • B3 • Ladder page ${page + 1}` );
 }
 
 function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
