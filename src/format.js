@@ -66,8 +66,7 @@ function buildEmbed(template = {})
 		embed.setDescription(description);
 	//set thumbnail
 	if(thumbnail){
-		console.log(thumbnail.uri);
-		embed.setImage(thumbnail.uri);
+		embed.setThumbnail(thumbnail.uri);
 	}
 	//set fields
 	if(fields)
@@ -345,10 +344,13 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 		
 		if(!thumbnail || thumbnail === DEFAULT_THUMB){
 			const thumbpath = EMBLEMS[r.em];
-			const thumbname = path.basename(thumbpath);
+			const abs = path.resolve(process.cwd(), thumbpath);
+			const thumbname = `emblem_${r.client_id || i}.png`;;
 			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
-			const file = new AttachmentBuilder(thumbpath, { name: thumbname });
+			const file = new AttachmentBuilder(abs, { name: thumbname });
 			files.push(file);
+		} else {
+			template.thumbnail = {filename: "thumbname", uri: thumbnail};
 		}
 		embeds.push(buildEmbed(template));
   });
