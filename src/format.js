@@ -670,17 +670,17 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 		const table = [header, "-".repeat(header.length), rows].join("\n");
 		
 		template.fields =
-		[
+		[{
 			name: `/connect ${ip}:${port}`,
 			value: `\`\`\`\n${table}\n\`\`\`\n${footerMd}`
-		];	
+		}];	
 	}
 	else {  
 		template.fields =
-		[
+		[{
 			name: `/connect ${ip}:${port}`,
 			value: "Server is empty"
-		];
+		}];
 	}
 	embeds.push(buildEmbed(template));
 	return embeds;
