@@ -1370,7 +1370,7 @@ async function buildWeaponPlayers(serverIndex,  signal, token, channelId, weapon
 	const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	
-	const [embeds, files] = formatTopEmbed(rowsWithNames, title, { thumbnail: DEFAULT_THUMB, offset });
+	const [embeds, files] = formatTopEmbed(rowsWithNames, title, { thumbnail: DEFAULT_THUMB, offset, footerText: `XLRStats • B3 • ${weaponLabel} players page ${playerPage + 1}` });
 
 	const hasNext = offset + pageSize < total;
 	const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];

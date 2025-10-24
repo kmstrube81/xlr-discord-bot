@@ -362,7 +362,7 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 	return [embeds,files];
 }
 
-export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
+export function formatTopWeaponEmbed(rows, titleText = "Top by Kills", opts = {}) {
 	const { thumbnail, offset = 0, footerText } = opts;
 
 	const embeds = [];
@@ -376,6 +376,9 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 	  
 		const template = {};
 		template.color = 0x32d296;
+		
+		if(i === 0)
+			template.title = titleText;
 
 		const absoluteIndex = offset + i;
 		let rankDisplay = `#${absoluteIndex + 1}.`;
@@ -419,7 +422,7 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 	return [embeds, files];
 }
 
-export function formatTopMapEmbed(rows, title = "Top by Rounds Played", opts) {
+export function formatTopMapEmbed(rows, titleText = "Top by Rounds Played", opts) {
  
 	const { thumbnail, offset = 0, footerText } = opts;
 
@@ -431,6 +434,9 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", opts) {
 	   
 		const template = {};
 		template.color = 0x32d296;
+		
+		if(i === 0)
+			template.title = titleText;
 
 		const absoluteIndex = offset + i;
 		let rankDisplay = `#${absoluteIndex + 1}.`;
@@ -478,7 +484,7 @@ export function formatTopMapEmbed(rows, title = "Top by Rounds Played", opts) {
 	return [embeds, files];
 }
 
-export function formatAwardEmbed(rows, title = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
+export function formatAwardEmbed(rows, titleText = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
 	
 	const { thumbnail, offset = 0, footerText } = opts;
 
