@@ -48,7 +48,7 @@ Template is a object with these properties
 .description - the description for the embed
 .thumbnail - the  thumbnail
 .fields - an array of field names and the property from the data
-.image - the image to attach to the embed
+.images - an array of images to attach to the embed
 .footerText - the text for footer embed
 **************************************************************** */
 function buildEmbed(template = {})
@@ -629,14 +629,14 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 			{ name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
 			{ name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
 		];
-	template.image = imageUrl;
+	template.images = [imageUrl];
 	template.footerText = `${mode} — ${map} — ${playerCount}/${maxPlayers} players`;
 
 	embeds.push(buildEmbed(template));   
 
 	template.footerText = ` ${updatedTime} | XLR App • Home`;
 	template.title = null;
-	template.image = null;
+	template.images = null;
 	template.fields = null;
 	if(playerCount){
 		const namePad = 30;
