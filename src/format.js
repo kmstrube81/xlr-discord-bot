@@ -346,7 +346,7 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 		if(!thumbnail || thumbnail === DEFAULT_THUMB){
 			const thumbpath = EMBLEMS[r.em];
 			const abs = path.resolve(process.cwd(), thumbpath);
-			const thumbname = `emblem_${r.client_id || i}.png`;;
+			const thumbname = `emblem_${r.client_id || i}.png`;
 			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
 			const file = new AttachmentBuilder(abs, { name: thumbname });
 			files.push(file);
@@ -363,60 +363,54 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 }
 
 export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
-  const { thumbnail, offset = 0 } = opts; // <— add offset with default 0
+	const { thumbnail, offset = 0, footerText } = opts;
 
-  const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(title)
-  ];
+	const embeds = [];
+	const files = [];
+	const last = rows.length - 1;
 
-  rows.map((r, i) => {
+	rows.map((r, i) => {
 	  
-	const weapEmoji = resolveEmoji(r.label);
-	const weap = weapEmoji ? `${weapEmoji} ${r.label}` : r.label;
+		const weapEmoji = resolveEmoji(r.label);
+		const weap = weapEmoji ? `${weapEmoji} ${r.label}` : r.label;
 	  
-    let embed;
-	
-	if(i === 0) {
-		
-		embed = embeds[0];
-		
-	} else {
-		
-		embed = new EmbedBuilder()
-			.setColor(0x32d296);
-		embeds.push(embed);
-		
-	}
-	
-    const absoluteIndex = offset + i;               // <— absolute rank
-    let rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
+		const template = {};
+		template.color = 0x32d296;
+
+		const absoluteIndex = offset + i;
+		let rankDisplay = `#${absoluteIndex + 1}.`;
     
 
-    embed.setDescription(`**${rankDisplay} ${weap}**`);
-  embed.addFields(
-		{
-			name : `Kills`,
-			value : String(r.kills),
-			inline : true
-		},
-		{
-			name : `Suicides`,
-			value : String(r.suicides),
-			inline : true
+		template.description = `**${rankDisplay} ${weap}**`;
+		template.fields =
+			[
+				{
+					name : `Kills`,
+					value : String(r.kills),
+					inline : true
+				},
+				{
+					name : `Suicides`,
+					value : String(r.suicides),
+					inline : true
+				}
+			];
+		//if there is no specified thumbnail and there is an emblem match
+		if((!thumbnail || thumbnail === DEFAULT_THUMB) && EMBLEMS.some(emblem => emblem.includes(r.label))){ 
+			const thumbpath = EMBLEMS.find(emblem => emblem.includes(r.label));
+			const abs = path.resolve(process.cwd(), thumbpath);
+			const thumbname = `emblem_${i}.png`;
+			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
+			const file = new AttachmentBuilder(abs, { name: thumbname });
+			files.push(file);
+		} else {
+			template.thumbnail = {uri: thumbnail};
 		}
-	);
-  });
-
-  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
-  if (thumbnail) {
-    embeds[0].setThumbnail(thumbnail);
-  }
-  
-  if(!rows.length) {
-	embeds[0].setDescription("_No weapons found_");
-  }
-  return embeds;
+	}
+	if(!rows.length) {
+		embeds.push(buildEmbed({description:"_No weapons found_"}));
+	}
+	return [embeds, files];
 }
 
 export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset = 0) {
@@ -629,7 +623,7 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 			{ name: "Favorite Weapon", value: `${favoriteWeapon?.label ?? "—"} — **${Number(favoriteWeapon?.kills ?? 0).toLocaleString()} kills**`, inline: true },
 			{ name: "Favorite Map", value: `${favoriteMap?.label ?? "—"} — **${Number(favoriteMap?.rounds ?? 0).toLocaleString()} rounds**`, inline: true },
 		];
-	template.images = [imageUrl];
+	template.images = [{uri: imageUrl}];
 	template.footerText = `${mode} — ${map} — ${playerCount}/${maxPlayers} players`;
 
 	embeds.push(buildEmbed(template));   
@@ -723,16 +717,10 @@ function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
 
 export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
 	
-  const offset = page * 10;
-  
-  const embeds = formatTopWeaponEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset });
-  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
-  if (embeds.length) {
-    const last = embeds[embeds.length - 1];
-    const footer = last.data.footer?.text || "XLRStats • B3";
-    last.setFooter({ text: `${footer} • Weapons page ${page + 1}` });
-  }
-  return embeds;
+	const offset = page * 10;
+
+	return [ embeds, files] = formatTopWeaponEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset, footerText: `XLRStats • B3 • Weapons page ${page + 1}` });
+
 }
 
 export function renderMapsEmbeds({ rows, page }) {

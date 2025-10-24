@@ -1330,10 +1330,10 @@ async function buildWeapons(serverIndex,  signal, token, channelId, page=0) {
 		getWeaponsCount(serverIndex)
 	]);
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
-	const embeds = renderWeaponsEmbeds({ rows, page });
+	const [embeds, files] = renderWeaponsEmbeds({ rows, page });
 	const pager = [pagerRow(VIEWS.WEAPONS, page, page>0, offset + 10 < total)];
 	const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPON_PLAYERS, rows, page, null)];
-	return { embeds, nav, pager };
+	return { embeds, nav, pager, files };
 }
 
 /* ***************************************************************
