@@ -722,7 +722,7 @@ export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
 	
 	const offset = page * 10;
 
-	return [ embeds, files] = formatTopWeaponEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset, footerText: `XLRStats • B3 • Weapons page ${page + 1}` });
+	return formatTopWeaponEmbed(rows, `🔫 Top Weapons by Kills`, { thumbnail, offset, footerText: `XLRStats • B3 • Weapons page ${page + 1}` });
 
 }
 
