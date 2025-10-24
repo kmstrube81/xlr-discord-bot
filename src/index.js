@@ -857,7 +857,7 @@ async function sendMessage(i, cfg, gate, navComponents, contentEmbeds, footerTex
 		await navMsg.edit({embeds: [], components: navComponents });
 	}
 	
-	footerText = footerText ? footerText : contentEmbeds[contentEmbeds.length - 1].data.footer.text ?? " ";
+	footerText = footerText ? footerText : contentEmbeds[contentEmbeds.length - 1].data.footer?.text ?? " ";
 	//EDIT FOOTER
 	const ZERO_WIDTH = "⠀";
 	const padLen = Math.min(Math.floor(footerText.length * 0.65) ?? 1, 2048);	
