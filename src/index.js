@@ -2014,7 +2014,7 @@ async function handleUiComponent(i, serverIndex) {
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
 	const navMsg = await channel.messages.fetch(cfg.ui.navId);
 	if (isStale(cfg.ui.channelId, gate.token)) return;
-	const footerText = payload.embeds[payload.embeds.length - 1].data.footer.text;
+	const footerText = payload.embeds[payload.embeds.length - 1].data.footer?.text ?? "";
 	await sendMessage(i, cfg, gate, payload.nav, payload.embeds, footerText, payload.pager, payload.files ?? []);
 
 	if (uiCollector) uiCollector.resetTimer({ idle: INACTIVITY_MS });
