@@ -419,71 +419,63 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 	return [embeds, files];
 }
 
-export function formatTopMapEmbed(rows, title = "Top by Rounds Played", offset = 0) {
+export function formatTopMapEmbed(rows, title = "Top by Rounds Played", opts) {
  
-  const embeds = [
-    new EmbedBuilder().setColor(0x32d296).setTitle(title)
-  ];
+	const { thumbnail, offset = 0, footerText } = opts;
 
-  rows.map((r, i) => {
+	const embeds = [];
+	const files = [];
+	const last = rows.length - 1;
+
+	rows.map((r, i) => {
 	   
-    let embed;
+		const template = {};
+		template.color = 0x32d296;
+
+		const absoluteIndex = offset + i;
+		let rankDisplay = `#${absoluteIndex + 1}.`;
+
+
+		template.description = `**${rankDisplay} ${r.label}**`;
+		template.fields =
+			[
+				{
+					name : `Kills`,
+					value : String(r.kills),
+					inline : true
+				},
+				{
+					name : `Suicides`,
+					value : String(r.suicides),
+					inline : true
+				},
+				{
+					name : `Rounds Played`,
+					value : String(r.rounds),
+					inline : true
+				}
+			];
+			
+		if(!thumbnail || thumbnail === DEFAULT_THUMB){
+			//use map thumbnail
+			const thumbname = `thumbnail_${r.label || i}.png`;
+			template.thumbnail = {filename: thumbname, uri: r.thumbnail};
+		
+		} else {
+			//used passed in thumbnail
+			template.thumbnail = {filename: "thumbname", uri: thumbnail};
+		}
+		
+		if(i === last)
+			template.footerText = footerText;
+		
+		embeds.push(buildEmbed(template));
+	});
 	
-	if(i === 0) {
-		
-		embed = embeds[0];
-		
-	} else {
-		
-		embed = new EmbedBuilder()
-			.setColor(0x32d296);
-		embeds.push(embed);
-		
+	if(!rows.length) {
+		embeds.push(buildEmbed({description:"_No weapons found_"}));
 	}
-	
-    const absoluteIndex = offset + i;               // <— absolute rank
-    let rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
-    
-
-    embed.setDescription(`**${rankDisplay} ${r.label}**`);
-    embed.addFields(
-		{
-			name : `Kills`,
-			value : String(r.kills),
-			inline : true
-		},
-		{
-			name : `Suicides`,
-			value : String(r.suicides),
-			inline : true
-		}
-	);	
-		if (typeof r.wins !== "undefined" && typeof r.losses !== "undefined") {
-		  const w = Number(r.wins || 0), l = Number(r.losses || 0);
-		  const gp = w + l;
-		  const pct = gp ? ((w / gp)).toFixed(3) : ".000";
-		  embed.addFields({ name: "W-L (Win%)", value: `${w}-${l} (${pct})`, inline: true });
-		}
-	
-	embed.addFields(
-		{
-			name : `Rounds Played`,
-			value : String(r.rounds),
-			inline : true
-		}
-	);
-	
-	if (r.thumbnail) {
-		embed.setThumbnail(r.thumbnail);
-	}
-  });
-
-  embeds[embeds.length-1].setFooter({ text: "XLRStats • B3" });
-
-  if(!rows.length) {
-	embeds[0].setDescription("_No maps found_");
-  }
-  return embeds;
+	return [embeds, files];
 }
 
 export function formatAwardEmbed(rows, title = "Award Winner", emoji = null, props = [{ name : "Kills", prop : "kills" }], opts = {}) {
@@ -729,17 +721,11 @@ export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
 
 }
 
-export function renderMapsEmbeds({ rows, page }) {
+export function renderMapsEmbeds({ rows, page, thumbnail = null }) {
   const offset = page * 10;
   
-  const embeds = formatTopMapEmbed(rows, `🗺️ Top Maps by Rounds Played`,  offset );
-  // Tag the page in the footer of the last embed (formatTopEmbed already sets a footer)
-  if (embeds.length) {
-    const last = embeds[embeds.length - 1];
-    const footer = last.data.footer?.text || "XLRStats • B3";
-    last.setFooter({ text: `${footer} • Maps page ${page + 1}` });
-  }
-  return embeds;
+  return formatTopMapEmbed(rows, `🗺️ Top Maps by Rounds Played`,  { thumbnail, offset, footerText: `XLRStats • B3 • Weapons page ${page + 1}` });
+
 }
 
 export function formatLoadEmbed() {

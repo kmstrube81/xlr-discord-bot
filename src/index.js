@@ -1355,25 +1355,27 @@ returns discord js message obj
 **************************************************************** */
 async function buildWeaponPlayers(serverIndex,  signal, token, channelId, weaponLabel, playerPage=0, weaponsPage=0) {
   
-  const pageSize = 10;
-  const offset   = playerPage * pageSize;
-  const [rows, total, weaponsRows] = await Promise.all([
-    getPlayerWeaponSlice(serverIndex, weaponLabel, offset, pageSize),
-    getPlayerWeaponCount(serverIndex, weaponLabel),
-    getWeaponsSlice(serverIndex, weaponsPage * pageSize, pageSize),
-  ]);
-  
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  
-  const weap = (rows && rows[0]?.matched_label) || weaponLabel;
-  const emoji = resolveEmoji(weap);
-  const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
-  const embeds = formatTopEmbed(rows, title, { thumbnail: DEFAULT_THUMB, offset });
-  
-  const hasNext = offset + pageSize < total;
-  const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
-  const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPON_PLAYERS, weaponsRows, weaponsPage, weap)];
-  return { embeds: embeds, nav: nav, pager: pager };
+	const pageSize = 10;
+	const offset   = playerPage * pageSize;
+	const [rows, total, weaponsRows] = await Promise.all([
+		getPlayerWeaponSlice(serverIndex, weaponLabel, offset, pageSize),
+		getPlayerWeaponCount(serverIndex, weaponLabel),
+		getWeaponsSlice(serverIndex, weaponsPage * pageSize, pageSize),
+	]);
+
+	if (channelId && token && isStale(channelId, token)) return { stale: true };
+
+	const weap = (rows && rows[0]?.matched_label) || weaponLabel;
+	const emoji = resolveEmoji(weap);
+	const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
+	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
+	
+	const [embeds, files] = formatTopEmbed(rows: rowsWithNames, title, { thumbnail: DEFAULT_THUMB, offset });
+
+	const hasNext = offset + pageSize < total;
+	const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
+	const nav = [navRow(VIEWS.WEAPONS), stringSelectRowForPage(VIEWS.WEAPON_PLAYERS, weaponsRows, weaponsPage, weap)];
+	return { embeds: embeds, nav: nav, pager: pager, files: files };
 }
 
 /* ***************************************************************
@@ -1393,16 +1395,16 @@ returns discord js message obj
 **************************************************************** */
 async function buildMaps(serverIndex,  signal, token, channelId, page=0) {
 
-  const offset = page * 10;
-  const [rows, total] = await Promise.all([
-    getMapsSlice(serverIndex, offset, 10, signal),
-    getMapsCount(serverIndex)
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const embeds = renderMapsEmbeds({ rows, page });
-  const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + 10 < total)];
-  const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS,rows, page, null)];
-  return { embeds, nav, pager};
+	const offset = page * 10;
+	const [rows, total] = await Promise.all([
+		getMapsSlice(serverIndex, offset, 10, signal),
+		getMapsCount(serverIndex)
+	]);
+	if (channelId && token && isStale(channelId, token)) return { stale: true };
+	const embeds = renderMapsEmbeds({ rows, page });
+	const pager = [pagerRow(VIEWS.MAPS, page, page>0, offset + 10 < total)];
+	const nav = [navRow(VIEWS.MAPS), stringSelectRowForPage(VIEWS.MAPS_PLAYERS,rows, page, null)];
+	return { embeds, nav, pager};
 }
 
 /* ***************************************************************
