@@ -866,7 +866,9 @@ async function sendMessage(i, cfg, gate, navComponents, contentEmbeds, footerTex
 		const currFooterText = e.data.footer?.text ?? "";
 		const currFooterLen = Math.min(Math.floor(currFooterText.length * 0.65) ?? 1, 2048);
 		const blankText = ZERO_WIDTH.repeat(padLen - currFooterLen);
-		e.setFooter({ text: `${currFooterText}${blankText}` });
+		const footerText = `${currFooterText}${blankText}`;
+		if(footerText)
+			e.setFooter({ text: footerText });
 	}
 	contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
 	//UPDATE CONTENT

@@ -407,6 +407,9 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 			template.thumbnail = {uri: thumbnail};
 		}
 		
+		if(i === last)
+			template.footerText = footerText;
+		
 		embeds.push(buildEmbed(template));
 	});
 	
