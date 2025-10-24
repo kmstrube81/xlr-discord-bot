@@ -406,7 +406,7 @@ export function formatTopWeaponEmbed(rows, title = "Top by Kills", opts = {}) {
 		} else {
 			template.thumbnail = {uri: thumbnail};
 		}
-	}
+	});
 	if(!rows.length) {
 		embeds.push(buildEmbed({description:"_No weapons found_"}));
 	}
