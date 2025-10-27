@@ -1500,7 +1500,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
 		(async () => {
 			const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]); console.log(data);
 			const richData = await insertPlayerCardDetails(data, serverIndex); console.log(richData);
-			const mapped = await Promise.all(richData.map(async (r, i) => {({ ...r, rank: offset + i + 1 })}));
+			const mapped = await Promise.all(richData.map(async (r, i) => ({ ...r, rank: offset + i + 1 })));
 			return mapped;
 		})(),
 		pageSize,
