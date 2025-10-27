@@ -1494,26 +1494,27 @@ builds the UI award ladder page (sort players by position)
 returns discord js message obj
 **************************************************************** */
 async function buildAward(serverIndex,  signal, token, channelId, award, playerPage=0, awardsPage=0) {
-  const pageSize = 10;
-  const offset   = playerPage * pageSize;
-  const [rows, total] = await Promise.all([
-    (async () => {
-      const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
-      const mapped = await Promise.all(data.map(async (r, i) => ({ ...r, rank: offset + i + 1 , name: (await displayName(r, r.name, serverIndex, true)) || r.name })));
-      return mapped;
-    })(),
-    pageSize,
-  ]);
-  if (channelId && token && isStale(channelId, token)) return { stale: true };
-  const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
-  
-  const [ embeds, files ] = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
-  
-  const hasNext = rows.length === pageSize;
-  const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
-  const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
-  const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
-  return { embeds: embeds, nav: nav, pager: pager, files: files};
+	const pageSize = 10;
+	const offset   = playerPage * pageSize;
+	const [rows, total] = await Promise.all([
+		(async () => {
+			const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
+			const richData = await insertPlayerCardDetails(data, serverIndex);
+			const mapped = await Promise.all(richData.map(async (r, i) => {({ ...r, rank: offset + i + 1 })}));
+			return mapped;
+		})(),
+		pageSize,
+	]);
+	if (channelId && token && isStale(channelId, token)) return { stale: true };
+	const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
+
+	const [ embeds, files ] = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
+
+	const hasNext = rows.length === pageSize;
+	const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
+	const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
+	const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
+	return { embeds: embeds, nav: nav, pager: pager, files: files};
 }
 
 /* ***************************************************************
