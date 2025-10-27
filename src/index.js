@@ -330,10 +330,11 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 			options = rows.map((r, i) => {
     
 				const label = `${String(r.name).slice(0, 100)}`.trim();
+				const value = encodeURIComponent(label);
 				return {
 					label,
-					value: String(i),
-					default: selected != null && String(i) === String(selected),
+					value,
+					default: selected != null && String(value) === String(selected),
 				};
 			});
 			menu = new StringSelectMenuBuilder()
@@ -1513,7 +1514,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
 	const hasNext = rows.length === pageSize;
 	const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
 	const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
-	const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, null)];
+	const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, encodeURIComponent(award.name))];
 	return { embeds: embeds, nav: nav, pager: pager, files: files};
 }
 
