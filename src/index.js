@@ -1183,7 +1183,7 @@ async function buildView(serverIndex, { view, signal, token, channelId, embedPag
   if (view === VIEWS.MAPS_PLAYERS) {
     return await buildMapPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
-  if(view === VIEWS.AWARDS) {
+  if(view === VIEWS.AWARDS) { console.log(label);
 	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => encodeURIComponent(a.name) === encodeURIComponent(label)) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
   }
 }
