@@ -330,7 +330,7 @@ function stringSelectRowForPage(view, rows, embedPage, selected = null) {
 			options = rows.map((r, i) => {
     
 				const label = `${String(r.name).slice(0, 100)}`.trim();
-				const value = encodeURIComponent(label);
+				const value = label;
 				return {
 					label,
 					value,
@@ -1183,8 +1183,8 @@ async function buildView(serverIndex, { view, signal, token, channelId, embedPag
   if (view === VIEWS.MAPS_PLAYERS) {
     return await buildMapPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
-  if(view === VIEWS.AWARDS) { console.log(label);
-	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => { console.log(`${encodeURIComponent(a.name)} === ${encodeURIComponent(label)}`); return encodeURIComponent(a.name) === encodeURIComponent(label); }) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
+  if(view === VIEWS.AWARDS) { 
+	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => a.name === label) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
   }
 }
 
@@ -1514,7 +1514,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
 	const hasNext = rows.length === pageSize;
 	const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
 	const currentAwardsPageRows = awards.slice(awardsPage * 10, awardsPage * 10 + 10);
-	const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, encodeURIComponent(award.name))];
+	const nav = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, currentAwardsPageRows, awardsPage, award.name)];
 	return { embeds: embeds, nav: nav, pager: pager, files: files};
 }
 
