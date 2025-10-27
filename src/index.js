@@ -870,7 +870,7 @@ async function sendMessage(i, cfg, gate, navComponents, contentEmbeds, footerTex
 		if(footerText)
 			e.setFooter({ text: footerText });
 	}
-	contentEmbeds[contentEmbeds.length - 1].data.footer.text = footerText;
+	contentEmbeds[contentEmbeds.length - 1].setFooter({ text: footerText });
 	//UPDATE CONTENT
 	//get the content message id from config
 	const contentMsg = await channel.messages.fetch(cfg.ui.contentId);
@@ -1498,8 +1498,8 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
 	const offset   = playerPage * pageSize;
 	const [rows, total] = await Promise.all([
 		(async () => {
-			const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]); console.log(data);
-			const richData = await insertPlayerCardDetails(data, serverIndex); console.log(richData);
+			const data = await runQueryOn(serverIndex, award.query, [pageSize, offset]);
+			const richData = await insertPlayerCardDetails(data, serverIndex);
 			const mapped = await Promise.all(richData.map(async (r, i) => ({ ...r, rank: offset + i + 1 })));
 			return mapped;
 		})(),
