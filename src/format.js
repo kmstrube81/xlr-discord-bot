@@ -691,7 +691,7 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
 }
 
 export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
-  return formatAwardsEmbed(rows, `🏆 ${title}`, { thumbnail, offset: page * 10, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
+  return formatAwardsEmbed(rows, `🏆 ${title}`, { thumbnail, offset: page * 10, footerText: `XLRStats • B3 • Awards page ${page + 1}` });
 }
 
 function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
