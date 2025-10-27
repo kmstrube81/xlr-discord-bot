@@ -509,7 +509,7 @@ export function formatAwardEmbed(rows, titleText = "Award Winner", emoji = null,
 		  rankDisplay = `#${absoluteIndex + 1}.`;       // e.g., 11, 12, ...
 		}
 
-		template.description = `**${rankDisplay} ${r.name}**`;
+		template.description = [`**${rankDisplay} ${r.name}**`, sanitize(CALLSIGNS[r.cs])].join("\n");
 		template.fields = [];
 		for(let z = 0; z < props.length; z++) {
 			template.fields =
@@ -582,7 +582,7 @@ export function formatAwardsEmbed(rows, titleText = "Awards", opts) {
 	});
 
 	if(!rows.length) {
-		embeds.push(buildEmbed({description:"_No awardss found_"}));
+		embeds.push(buildEmbed({description:"_No awards found_"}));
 	}
 	return [embeds,files];
 }	

@@ -1508,7 +1508,7 @@ async function buildAward(serverIndex,  signal, token, channelId, award, playerP
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
 	const thumbUrl = DEFAULT_THUMB; //(await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
 
-	const [ embeds, files ] = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset });
+	const [ embeds, files ] = formatAwardEmbed(rows, award.name, award.emoji, award.properties, { thumbnail: thumbUrl, offset, footerText: `XLRStats • B3 • Award page ${playerPage + 1}` });
 
 	const hasNext = rows.length === pageSize;
 	const pager   = [pagerRowWithParams(VIEWS.AWARDS, playerPage, playerPage > 0, hasNext, award.name, awardsPage)];
