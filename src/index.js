@@ -1184,7 +1184,7 @@ async function buildView(serverIndex, { view, signal, token, channelId, embedPag
     return await buildMapPlayers(serverIndex,  signal, token, channelId, label, embedPage, stringSelectPage ?? 0);
   }
   if(view === VIEWS.AWARDS) { console.log(label);
-	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => { console.log(a); return encodeURIComponent(a.name) === encodeURIComponent(label); }) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
+	return label ? await buildAward(serverIndex,  signal, token, channelId, awards.find(a => { console.log(`${encodeURIComponent(a.name)} === ${encodeURIComponent(label)}`); return encodeURIComponent(a.name) === encodeURIComponent(label); }) || awards[0], embedPage, stringSelectPage ?? 0) : await buildAwards(serverIndex,  signal, token, channelId, embedPage);
   }
 }
 
