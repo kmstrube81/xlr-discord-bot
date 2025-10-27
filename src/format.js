@@ -101,7 +101,10 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	//Set title
 	if(title && embed.data?.title){
 		if(mode === "append"){
-			embed.setTitle([embed.data.title, title].join("\n"));
+			embed.setTitle([embed.data?.title, title].join("\n"));
+		}
+		else if(mode === "prepend"){
+			embed.setTitle([title, embed.data?.title].join("\n"));
 		}
 		else
 			embed.setTitle(title);
@@ -111,6 +114,9 @@ export function editEmbed(embed, template = {}, mode = "edit")
 		if(mode === "append"){
 			embed.setDescription([embed.data?.description, description].join("\n"));
 		}
+		else if(mode === "prepend"){
+			embed.setDescription([description, embed.data?.description].join("\n"));
+		}
 		else
 			embed.setDescription(description);
 	}
@@ -119,16 +125,44 @@ export function editEmbed(embed, template = {}, mode = "edit")
 		embed.setThumbnail(thumbnail.uri);
 	//set fields
 	if(fields){
-		if(mode !== "append"){
-			embed.data.fields = [];
+		switch(mode){
+			case "append":
+				fields.map((f, i) => {
+					embed.addFields({
+						name: f.name,
+						value: f.value,
+						inline: f.inline
+					});
+				});
+				break;
+			case "prepend":
+				const oldFields = embed.data?.fields;
+				embed.data.fields = [];
+				oldFields.map((f, i) => {
+					embed.addFields({
+						name: f.name,
+						value: f.value,
+						inline: f.inline
+					});
+				});
+				fields.map((f, i) => {
+					embed.addFields({
+						name: f.name,
+						value: f.value,
+						inline: f.inline
+					});
+				});
+				break;
+			default: 
+				embed.data.fields = [];
+				fields.map((f, i) => {
+					embed.addFields({
+						name: f.name,
+						value: f.value,
+						inline: f.inline
+					});
+				});
 		}
-		fields.map((f, i) => {
-			embed.addFields({
-				name: f.name,
-				value: f.value,
-				inline: f.inline
-			});
-		});
 	}
 	//set image
 	if(images){
@@ -142,7 +176,10 @@ export function editEmbed(embed, template = {}, mode = "edit")
 		if(mode === "append"){
 			embed.setFooter({text: [embed.data?.footer.text, footerText].join("\n")});
 		}
-		else 
+		else if(mode === "prepend"){
+			embed.setFooter({text: [footerText, embed.data?.footer.text ].join("\n")});
+		}
+		else
 			embed.setFooter({text: footerText});
 	}
 	return embed;

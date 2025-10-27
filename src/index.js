@@ -24,6 +24,7 @@ import {
 import mysql from "mysql2/promise";
 import { queries } from "./queries.js";
 import {
+  editEmbed,
   formatPlayerEmbed,
   formatTopEmbed,
   formatLastSeenEmbed,
@@ -1813,6 +1814,7 @@ async function handleSlashCommand(i) {
 				details = await insertPlayerCardDetails(details, serverIndex);
 				//generate embed
 				[playerEmbed, files] = await formatPlayerEmbed(details[0]);
+				const template = {};
 				
 				//further enrich embed with award options
 				if (awardOpt) {
@@ -1825,6 +1827,21 @@ async function handleSlashCommand(i) {
 						const playerName = (await displayName({ discord_id: rankRow?.discord_id }, rankRow?.name, serverIndex, true)) || (rankRow?.name ?? name);
 
 						const emote = resolveEmoji(aw.emoji) ?? "";
+						
+						template.description = `${emote} ${aw.name} — ${playerName}`;
+						template.fields = [ { 
+											name: rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "\u200B",
+											value: rankRow?.rank ? `**#${rankRow.rank}**` : "_No placement yet_",
+											inline: true
+											} ];
+						if (rankRow) {
+							for (const p of (aw.properties || [])) {
+								if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
+									template.push({ name: p.name, value: String(rankRow[p.prop]), inline: true });
+								}
+							}
+						}
+						
 						/* TODO insert into existing player page
 						const head = new EmbedBuilder()
 							.setColor(0x32d296)
@@ -1904,6 +1921,7 @@ async function handleSlashCommand(i) {
 					);
 					/* TODO add fields to main embed */
 				}
+				playerEmbed = editEmbed(playerEmbed, template, "prepend");
 				await sendReply(i,[playerEmbed], [], "", files);
 				return;
 				
