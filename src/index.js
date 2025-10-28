@@ -1828,10 +1828,10 @@ async function handleSlashCommand(i) {
 
 						const emote = resolveEmoji(aw.emoji) ?? "";
 						
-						template.description = `${emote} ${aw.name} — ${playerName}`;
+						template.description = `${emote} ${aw.name}`;
 						template.fields = [ { 
-											name: rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "\u200B",
-											value: rankRow?.rank ? `**#${rankRow.rank}**` : "_No placement yet_",
+											name: rankRow?.rank ? `Current place:` : "\u200B",
+											value: rankRow?.rank ? `#${rankRow.rank}` : "_No placement yet_",
 											inline: true
 											} ];
 						if (rankRow) {
@@ -1867,7 +1867,7 @@ async function handleSlashCommand(i) {
 						const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
 						
 						template.description = `Awards`;
-						
+						template.fields = [];
 						if(!top10.length){
 							template.fields = [ { 
 												name: "\u200B",
