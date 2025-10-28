@@ -99,23 +99,31 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	if(color)
 		embed.setColor(color);
 	//Set title
-	if(title && embed.data?.title){
-		if(mode === "append"){
-			embed.setTitle([embed.data?.title, title].join("\n"));
-		}
-		else if(mode === "prepend"){
-			embed.setTitle([title, embed.data?.title].join("\n"));
+	if(title){
+		if(embed.data?.title){
+			if(mode === "append"){
+				embed.setTitle([embed.data.title, title].join("\n"));
+			}
+			else if(mode === "prepend"){
+				embed.setTitle([title, embed.data.title].join("\n"));
+			}
+			else
+				embed.setTitle(title);
 		}
 		else
 			embed.setTitle(title);
 	}
 	//set description
-	if(description && embed.data?.description){
-		if(mode === "append"){
-			embed.setDescription([embed.data?.description, description].join("\n"));
-		}
-		else if(mode === "prepend"){
-			embed.setDescription([description, embed.data?.description].join("\n"));
+	if(description){
+		if(embed.data?.description) {
+			if(mode === "append"){
+				embed.setDescription([embed.data.description, description].join("\n"));
+			}
+			else if(mode === "prepend"){
+				embed.setDescription([description, embed.data.description].join("\n"));
+			}
+			else
+				embed.setDescription(description);
 		}
 		else
 			embed.setDescription(description);
@@ -138,14 +146,14 @@ export function editEmbed(embed, template = {}, mode = "edit")
 			case "prepend":
 				const oldFields = embed.data?.fields;
 				embed.data.fields = [];
-				oldFields.map((f, i) => {
+				fields.map((f, i) => {
 					embed.addFields({
 						name: f.name,
 						value: f.value,
 						inline: f.inline
 					});
 				});
-				fields.map((f, i) => {
+				oldFields.map((f, i) => {
 					embed.addFields({
 						name: f.name,
 						value: f.value,

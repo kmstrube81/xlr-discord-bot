@@ -1841,7 +1841,7 @@ async function handleSlashCommand(i) {
 								}
 							}
 						}
-						
+						template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
 						/* TODO insert into existing player page
 						const head = new EmbedBuilder()
 							.setColor(0x32d296)
@@ -1872,12 +1872,13 @@ async function handleSlashCommand(i) {
 							template.fields = [ { 
 												name: "\u200B",
 												value: "_No placements yet_",
-												inline: true
+												inline: false
 												} ];
 						} else {
 							const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
 							template.fields.push({ name: "\u200B", value: lines.join("\n"), inline: false });
 						}
+						template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
 						/* TODO add fields to main embed
 						if (!top10.length) {
 							emb.setDescription("_No placements yet_");
