@@ -1868,7 +1868,7 @@ async function handleSlashCommand(i) {
 				} //if weapon option specified
 				else if (weaponOpt) {
 					const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
-					const { sql, params } = queries.playerWeaponCard;
+					const sql = queries.playerWeaponCard;
 					rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
 					
 					template.fields = [];
@@ -1876,7 +1876,7 @@ async function handleSlashCommand(i) {
 						template.description = `No weapon stats found for \`${weaponOpt}\`.`;
 					}
 					else {
-						row = rows[0];
+						const row = rows[0];
 						template.description = `**${row.weapon} Stats**`;
 						const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
 						template.fields = [
@@ -1897,7 +1897,7 @@ async function handleSlashCommand(i) {
 						template.description = `No stats found for \`${mapOpt}\`.`;
 					}
 					else {
-						row = rows[0];
+						const row = rows[0];
 						template.description = `**Stats on ${row.map}**`;
 						const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
 						const wins       = Number(row.wins ?? 0);
