@@ -573,8 +573,7 @@ export function formatAwardsEmbed(rows, titleText = "Awards", opts) {
 export function formatLastSeenEmbed(rows, opts = {}) {
 	const { thumbnail } = opts;
 	const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
-	return buildEmbed(
-		new EmbedBuilder(), 
+	return buildEmbed( 
 		{
 			color: 0xffa500,
 			thumbnail,
@@ -714,7 +713,6 @@ export function renderMapsEmbeds({ rows, page, thumbnail = null }) {
 
 export function formatLoadEmbed() {
 	return buildEmbed(
-		new EmbedBuilder(),
 		{
 			color: 0x2b7cff,
 			title: "Please Wait...",
