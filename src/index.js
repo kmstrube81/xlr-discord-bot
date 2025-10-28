@@ -1837,7 +1837,7 @@ async function handleSlashCommand(i) {
 						if (rankRow) {
 							for (const p of (aw.properties || [])) {
 								if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
-									template.push({ name: p.name, value: String(rankRow[p.prop]), inline: true });
+									template.fields.push({ name: p.name, value: String(rankRow[p.prop]), inline: true });
 								}
 							}
 						}
@@ -1866,6 +1866,18 @@ async function handleSlashCommand(i) {
 						}));
 						const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
 						
+						template.description = `Awards`;
+						
+						if(!top10.length){
+							template.fields = [ { 
+												name: "\u200B",
+												value: "_No placements yet_",
+												inline: true
+												} ];
+						} else {
+							const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
+							template.fields.push({ name: "\u200B", value: lines.join("\n"), inline: false });
+						}
 						/* TODO add fields to main embed
 						if (!top10.length) {
 							emb.setDescription("_No placements yet_");
