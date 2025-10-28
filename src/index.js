@@ -1466,8 +1466,6 @@ async function buildAwards(serverIndex,  signal, token, channelId, page=0) {
 	if (channelId && token && isStale(channelId, token)) return { stale: true };
 	const total  = awards.length;
 	
-	console.log(rows);
-	
 	const [ embeds, files ] = renderAwardsEmbeds({ rows, page });
 	const pager  = [pagerRow(VIEWS.AWARDS, page, page > 0, offset + 10 < total)];
 	const nav    = [navRow(VIEWS.AWARDS), stringSelectRowForPage(VIEWS.AWARDS, rows, page, null)];
