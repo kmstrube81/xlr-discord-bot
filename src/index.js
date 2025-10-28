@@ -362,8 +362,6 @@ const PROFILE_IDS = Object.freeze({
   NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
 });
 
-
-
 // --------------------------------------------------------------------------------------
 // Slash Command Definitions
 // --------------------------------------------------------------------------------------
@@ -806,13 +804,13 @@ uses discord.js package to update messages for bot UO
 *************************************************************** */
 async function loadMessage(i, cfg, gate) {
 	
-	const embed = formatLoadEmbed();
+	let embed = formatLoadEmbed();
 	
 	const LOADING_GIF_PATH = path.resolve(process.cwd(), "assets", "load.gif");
 	const filename = 'load.gif';
 	const file = new AttachmentBuilder(LOADING_GIF_PATH, { name: filename });
 
-	embed.setImage(`attachment://${filename}`);
+	embed = editEmbed(embed, { images : [ uri: filename ] });
 
 	const files = [file];
 	
@@ -820,6 +818,7 @@ async function loadMessage(i, cfg, gate) {
 	
 	return;
 }
+
 /* ***************************************************************
 sendMessage( 	i: type-discord interaction [required],
 					cfg: type-obj [required],

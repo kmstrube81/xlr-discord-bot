@@ -571,13 +571,17 @@ export function formatAwardsEmbed(rows, titleText = "Awards", opts) {
 }	
 
 export function formatLastSeenEmbed(rows, opts = {}) {
-  const { thumbnail } = opts;
-  const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
-  return new EmbedBuilder().
-    setColor(0xffa500).
-	setThumbnail(thumbnail).
-    setTitle("🕒 Recently Seen").
-    setDescription(lines.join("\n") || "_No recent players_");
+	const { thumbnail } = opts;
+	const lines = rows.map(r => `**${r.name}** — <t:${r.time_edit}:R>`);
+	return buildEmbed(
+		new EmbedBuilder(), 
+		{
+			color: 0xffa500,
+			thumbnail,
+			title: "🕒 Recently Seen",
+			description: lines.join("\n") || "_No recent players_"
+		}
+	);
 }
 
 export function renderHomeEmbed({ totals }, data, tz, ip, port) {
@@ -709,10 +713,12 @@ export function renderMapsEmbeds({ rows, page, thumbnail = null }) {
 }
 
 export function formatLoadEmbed() {
-	const embed = new EmbedBuilder()
-      .setColor(0x2b7cff)
-      .setTitle("Please Wait...")
-      .setDescription("Loading...");
-	  
-	 return embed;
+	return buildEmbed(
+		new EmbedBuilder(),
+		{
+			color: 0x2b7cff,
+			title: "Please Wait...",
+			description: "Loading..."
+		}
+	);
 }
