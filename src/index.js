@@ -810,7 +810,7 @@ async function loadMessage(i, cfg, gate) {
 	const filename = 'load.gif';
 	const file = new AttachmentBuilder(LOADING_GIF_PATH, { name: filename });
 
-	embed = editEmbed(embed, { images : [ { uri: filename } ] });
+	embed = editEmbed(embed, { images : [ { uri: `attachment:\\${filename}` } ] });
 
 	const files = [file];
 	
