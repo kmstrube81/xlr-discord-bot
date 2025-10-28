@@ -28,9 +28,6 @@ import {
   formatPlayerEmbed,
   formatTopEmbed,
   formatLastSeenEmbed,
-  formatPlayerWeaponEmbed,
-  formatPlayerVsEmbed,
-  formatPlayerMapEmbed,
   formatAwardEmbed,
   renderHomeEmbed,
   renderLadderEmbeds,
@@ -1828,7 +1825,7 @@ async function handleSlashCommand(i) {
 
 						const emote = resolveEmoji(aw.emoji) ?? "";
 						
-						template.description = `${emote} ${aw.name}`;
+						template.description = `**${emote} ${aw.name}**`;
 						template.fields = [ { 
 											name: rankRow?.rank ? `Current place:` : "\u200B",
 											value: rankRow?.rank ? `#${rankRow.rank}` : "_No placement yet_",
@@ -1842,20 +1839,7 @@ async function handleSlashCommand(i) {
 							}
 						}
 						template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
-						/* TODO insert into existing player page
-						const head = new EmbedBuilder()
-							.setColor(0x32d296)
-							.setTitle(`${emote} ${aw.name} — ${playerName}`)
-							.setDescription(rankRow?.rank ? `Current place: **#${rankRow.rank}**` : "_No placement yet_")
-							.setFooter({ text: "XLRStats • B3" });
-						
-						if (rankRow) {
-							for (const p of (aw.properties || [])) {
-								if (Object.prototype.hasOwnProperty.call(rankRow, p.prop)) {
-									head.addFields({ name: p.name, value: String(rankRow[p.prop]), inline: true });
-								}
-							}
-						} */
+					
 					} else {
 						//get top 10 placements instead.
 						// Compute ranks across all awards, pick best 10
@@ -1866,7 +1850,7 @@ async function handleSlashCommand(i) {
 						}));
 						const top10 = ranks.filter(Boolean).sort((a,b) => a.rank - b.rank);
 						
-						template.description = `Awards`;
+						template.description = `**Awards**`;
 						template.fields = [];
 						if(!top10.length){
 							template.fields = [ { 
@@ -1879,45 +1863,66 @@ async function handleSlashCommand(i) {
 							template.fields.push({ name: "\u200B", value: lines.join("\n"), inline: false });
 						}
 						template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
-						/* TODO add fields to main embed
-						if (!top10.length) {
-							emb.setDescription("_No placements yet_");
-						} else {
-							const lines = top10.map(r => `${resolveEmoji(r.emoji) || ""} **${r.name}** — #${r.rank}`);
-							emb.setDescription(lines.join("\n"));
-						}
-						*/
+					
 					}
 				} //if weapon option specified
 				else if (weaponOpt) {
 					const idOrNeg1 = /^\d+$/.test(weaponOpt) ? Number(weaponOpt) : -1;
 					const { sql, params } = queries.playerWeaponCard;
 					rows = await runQueryOn(serverIndex, sql, [ `%${weaponOpt}%`, idOrNeg1, clientId ]);
+					
+					template.fields = [];
 					if (!rows.length){
-						await sendWhisper(i,`No weapon stats found for **${matches[0].name}** matching \`${weaponOpt}\`.`);
-						return;
+						template.description = `No weapon stats found for \`${weaponOpt}\`.`;
 					}
-					/* TODO add fields to main embed */
+					else {
+						row = rows[0];
+						template.description = `**${row.weapon} Stats**`;
+						const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
+						template.fields = [
+							{ name: "Kills", value: String(row.kills ?? 0), inline: true },
+							{ name: "Kill-Death Ratio", value: String(kd), inline: true },
+							{ name: "Killed By", value: String(row.deaths ?? 0), inline: true },
+							{ name: "Suicides By", value: String(row.suicides ?? 0), inline: true } ];
+					}
+					template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
 					
 				} //if map option selected
 				else if (mapOpt) {
 					const idOrNeg1 = /^\d+$/.test(mapOpt) ? Number(mapOpt) : -1;
 					rows = await runQueryOn(serverIndex, queries.playerMapCard, [ `%${mapOpt}%`, idOrNeg1, clientId ]);
+					
+					template.fields = [];
 					if (!rows.length){
-						await sendWhisper( i,`No map stats found for **${matches[0].name}** matching \`${mapOpt}\`.`);
-						return;
+						template.description = `No stats found for \`${mapOpt}\`.`;
 					}
+					else {
+						row = rows[0];
+						template.description = `**Stats on ${row.map}**`;
+						const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
+						const wins       = Number(row.wins ?? 0);
+						const losses     = Number(row.losses ?? 0);
+						const games      = wins + losses;
+						const winPct     = games ? (wins / games).toFixed(3) : ".000";
+						template.fields = [
+							{ name: "Kills", value: String(row.kills ?? 0), inline: true },
+							{ name: "Kill-Death Ratio", value: String(kd), inline: true },
+							{ name: "Deaths", value: String(row.deaths ?? 0), inline: true },
+							{ name: "Suicides", value: String(row.suicides ?? 0), inline: true },
+							{ name: "W-L (Win%)", value: `${wins}-${losses} (${winPct})`, inline: true },
+							{ name: "Rounds Played", value: String(row.rounds ?? 0), inline: true } ];
+					}
+					template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
 				} //if vs option specified
 				else if (vsName) {
 					const opp = await runQueryOn(serverIndex, queries.findPlayer, [`%${vsName}%`, `%${vsName}%`]);
+					template.fields = [];
 					if (!opp.length){
-						await sendWhisper(i,`No opponent found matching **${vsName}**.`);
-						return;
+						template.description = `No opponent found matching **${vsName}**.`;
 					}
 					const opponentId = opp[0].client_id;
 					if (opponentId === clientId){
-						await sendWhisper( i,`Pick a different opponent than the player.`);
-						return;
+						template.description = `Pick a different opponent than the player.`;
 					}
 					rows = await runQueryOn(serverIndex, queries.playerVsCard, [
 						opponentId,
@@ -1926,13 +1931,24 @@ async function handleSlashCommand(i) {
 						clientId
 					]);
 					if (!rows.length){
-						await sendWhisper(i,`No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`);
-						return;
+						template.description = `No opponent stats found between **${matches[0].name}** and **${opp[0].name}**.`;
+					} else {
+						rows = await Promise.all(
+						  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, serverIndex, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, serverIndex, true)) || r.name }))
+						);
+						const row = rows[0];
+						const pWw = Number(row.player_wawa_wins ?? 0);
+						const pWl = Number(row.player_wawa_losses ?? 0);
+						template.description = `**${row.player_name}** vs. **${row.opponent_name}**`;
+						template.fields = [
+							{ name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
+							{ name: "\u200B", value: "\u200B", inline: true },
+							{ name: "Killed By", value: String(row.deaths_vs ?? 0), inline: true },
+							{ name: "Opponent Skill", value: String(row.opp_skill ?? "—"), inline: true },
+							{ name: "\u200B", value: "\u200B", inline: true },
+							{ name: "wawa W-L", value: `${pWw}-${pWl}`, inline: true } ];
 					}
-					rows = await Promise.all(
-					  rows.map(async (r) => ({ ...r, player_name: (await displayName(r, r.player_name, serverIndex, true)) || r.name, opponent_name: (await displayName(r, r.opponent_name, serverIndex, true)) || r.name }))
-					);
-					/* TODO add fields to main embed */
+					template.fields.push({ name: "\u200B", value: `**Career Stats**`, inline: false });
 				}
 				playerEmbed = editEmbed(playerEmbed, template, "prepend");
 				await sendReply(i,[playerEmbed], [], "", files);

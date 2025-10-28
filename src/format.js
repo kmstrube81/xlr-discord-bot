@@ -181,11 +181,15 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	}
 	//set footer text
 	if(footerText){
-		if(mode === "append"){
-			embed.setFooter({text: [embed.data?.footer.text, footerText].join("\n")});
-		}
-		else if(mode === "prepend"){
-			embed.setFooter({text: [footerText, embed.data?.footer.text ].join("\n")});
+		if(embed.data?.footer.text) {
+			if(mode === "append"){
+				embed.setFooter({text: [embed.data?.footer.text, footerText].join("\n")});
+			}
+			else if(mode === "prepend"){
+				embed.setFooter({text: [footerText, embed.data?.footer.text ].join("\n")});
+			}
+			else
+				embed.setFooter({text: footerText});
 		}
 		else
 			embed.setFooter({text: footerText});
@@ -251,72 +255,6 @@ export async function formatPlayerEmbed(p, opts = {}) {
   const footerText = "XLRStats • B3";
   return [ buildEmbed({color,title,fields,images,footerText,thumbnail}),
 	files ];
-}
-
-export function formatPlayerWeaponEmbed(row, opts = {}) {
-  const { thumbnail } = opts;
-  const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
-  const lastSeen = row.time_edit ? dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm") : "—";
-  const weapEmoji = resolveEmoji(row.weapon);
-  const weap = weapEmoji ? `${weapEmoji} ${row.weapon}` : row.weapon;
-  return new EmbedBuilder()
-    .setColor(0x2b7cff)
-    .setDescription(`**${row.name}**`)
-    .addFields(
-      { name: "Skill", value: String(row.skill ?? "—"), inline: true },
-      { name: "Weapon", value: String(weap ?? "—"), inline: true },
-      { name: "Kills", value: String(row.kills ?? 0), inline: true },
-	 // { name: "KDR", value: String(kd), inline: true },
-      { name: "Killed By", value: String(row.deaths ?? 0), inline: true },
-      { name: "Suicides By", value: String(row.suicides ?? 0), inline: true }
-    )
-    .setFooter({ text: "XLRStats • B3" });
-}
-
-export function formatPlayerVsEmbed(row, opts = {}) {
-  const { thumbnail } = opts;
-  const pWw = Number(row.player_wawa_wins ?? 0);
-  const pWl = Number(row.player_wawa_losses ?? 0);
-  return new EmbedBuilder()
-    .setColor(0x2b7cff)
-    .setDescription(`**${row.player_name}** vs. **${row.opponent_name}**`)
-    .addFields(
-      { name: "Kills", value: String(row.kills_vs ?? 0), inline: true },
-      { name: "Skill", value: String(row.player_skill ?? "—"), inline: true },
-      { name: "\u200B", value: "\u200B", inline: true },
-      { name: "Killed By", value: String(row.deaths_vs ?? 0), inline: true },
-      { name: "Opponent Skill", value: String(row.opp_skill ?? "—"), inline: true },
-      { name: "\u200B", value: "\u200B", inline: true },
-	  { name: "wawa W-L", value: `${pWw}-${pWl}`, inline: true },
-    )
-    .setFooter({ text: "XLRStats • B3" });
-}
-
-export function formatPlayerMapEmbed(row, title = null, opts = {}) {
-  const { thumbnail } = opts;
-  const lastSeen = row.time_edit
-    ? (dayjs.unix(row.time_edit).fromNow?.() || dayjs.unix(row.time_edit).format("YYYY-MM-DD HH:mm"))
-    : "—";
-  const kd = row.deaths === 0 ? row.kills : (row.kills / row.deaths).toFixed(2);
-  const wins       = Number(row.wins ?? 0);
-  const losses     = Number(row.losses ?? 0);
-  const games      = wins + losses;
-  const winPct     = games ? (wins / games).toFixed(3) : ".000";
-
-  return new EmbedBuilder()
-    .setColor(0x2b7cff)
-	.setThumbnail(thumbnail)
-    .setDescription(title ?? `**${row.name}** on **${row.map}**`)
-    .addFields(
-      { name: "Skill", value: String(row.skill ?? "—"), inline: true },
-      { name: "Kills", value: String(row.kills ?? 0), inline: true },
-	  { name: "Kill-Death Ratio", value: String(kd), inline: true },
-      { name: "Deaths", value: String(row.deaths ?? 0), inline: true },
-      { name: "Suicides", value: String(row.suicides ?? 0), inline: true },
-	  { name: "W-L (Win%)", value: `${wins}-${losses} (${winPct})`, inline: true },
-      { name: "Rounds Played", value: String(row.rounds ?? 0), inline: true }
-    )
-    .setFooter({ text: "XLRStats • B3 • " + (lastSeen === "—" ? "last seen unknown" : `last seen ${lastSeen}`) });
 }
 
 export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
