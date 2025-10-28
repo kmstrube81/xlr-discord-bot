@@ -174,7 +174,6 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	}
 	//set image
 	if(images){
-		
 		images.map((m,i) => {
 			embed.setImage(m.uri);
 		});
@@ -678,22 +677,6 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
 
 export function renderAwardsEmbeds({ rows, page, title = "Awards", thumbnail = null }) {
   return formatAwardsEmbed(rows, `🏆 ${title}`, { thumbnail, offset: page * 10, footerText: `XLRStats • B3 • Awards page ${page + 1}` });
-}
-
-function chunkedListEmbed({ title, items, page, perPage, unitKey, unitLabel }) {
-  const start = page * perPage;
-  const slice = items.slice(start, start + perPage);
-  const text = slice
-    .map((it, i) => `**${start + i + 1}.** ${it.label} — ${Number(it[unitKey] ?? 0).toLocaleString()} ${unitLabel}`)
-    .join("\n") || "_No data_";
-
-  return [
-    new EmbedBuilder()
-      .setColor(0x2b7cff)
-      .setTitle(title)
-      .setDescription(text)
-      .setFooter({ text: `XLR App • Page ${page + 1}` })
-  ];
 }
 
 export function renderWeaponsEmbeds({ rows, page, thumbnail = null }) {
