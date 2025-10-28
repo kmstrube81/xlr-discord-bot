@@ -483,12 +483,12 @@ client.once(Events.ClientReady, async () => {
 					emojiIndex.set(key, mention);
 				});
 
-				/* TODO: does this do anything, remove if this doesn't break
+				
 				setEmojiResolver((label) => {
 					if (!label) return null;
 					const k = String(label).replace(/:/g, "").toLowerCase().trim();
 					return emojiIndex.get(k) ?? null;
-				}); */
+				}); 
 			
 				if(XLR_DEBUG) console.log(`[emoji] loaded ${emojiIndex.size} emojis from guild ${guild.name}`);
 			}
