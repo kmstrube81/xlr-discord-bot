@@ -175,6 +175,8 @@ export function editEmbed(embed, template = {}, mode = "edit")
 	//set image
 	if(images){
 		images.map((m,i) => {
+			console.log("image");
+			console.log(m);
 			embed.setImage(m.uri);
 		});
 	}
