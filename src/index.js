@@ -1807,12 +1807,12 @@ async function handleSlashCommand(i) {
 					lookup = guid;
 					response = `No player found with GUID **${lookup}**.`;
 					query = queries.findPlayerByGuid;
-					params = [`%${lookup}%`];
+					params = [lookup];
 				} else if(num){
 					lookup = num;
 					response = `Player **#${lookup}** not found.`;
 					query = queries.findPlayerByClientId;
-					params = [`%${lookup}%`];
+					params = [lookup];
 				} else if(name){
 					lookup = name;
 					response = `No player found matching **${lookup}**.`
