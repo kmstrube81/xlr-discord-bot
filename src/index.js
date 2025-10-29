@@ -1749,7 +1749,7 @@ async function handleSlashCommand(i) {
 		const serverIndex = resolveServerIndexFromInteraction(i);
 		const cfg = byIndex.get(serverIndex);
 		
-		let count, rows, clientId, embed, embeds, playerEmbed, files;
+		let count, guid, rows, clientId, embed, embeds, playerEmbed, files;
 		
 		switch(i.commandName){
 			case "xlr-servers":
@@ -1794,7 +1794,7 @@ async function handleSlashCommand(i) {
 				//get options
 				const name = i.options.getString("name");
 				const num = i.options.getInteger("number");
-				const guid = i.options.getInteger("guid");
+				guid = i.options.getInteger("guid");
 				const weaponOpt = i.options.getString("weapon");
 				const mapOpt = i.options.getString("map");
 				const vsName = i.options.getString("vs");
@@ -1992,7 +1992,7 @@ async function handleSlashCommand(i) {
 			
 			case "xlr-register":
 				//get guid from options
-				const guid = i.options.getString("guid", true).trim();
+				guid = i.options.getString("guid", true).trim();
 				//try catch on player lookup
 				try {
 					// Look up client by GUID first,error if not found
