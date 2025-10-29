@@ -1216,6 +1216,31 @@ export const queries = {
     ORDER BY MAX(af.num_used) DESC, MAX(af.time_edit) DESC
     LIMIT 10
   `,
+  
+  // Find a player by exact GUID
+  findPlayerByGuid : `
+  SELECT
+    c.id AS client_id,
+    COALESCE(pa.alias, c.name) AS name,
+    c.discord_id AS discord_id
+  FROM clients c
+  ${preferredAliasJoin("pa", "c.id")}
+  WHERE c.guid = ?
+  LIMIT 10
+  `,
+
+// Find a player by exact client_id
+  findPlayerByClientId : `
+  SELECT
+    c.id AS client_id,
+    COALESCE(pa.alias, c.name) AS name,
+    c.discord_id AS discord_id
+  FROM clients c
+  ${preferredAliasJoin("pa", "c.id")}
+  WHERE c.id = ?
+  LIMIT 10
+  `,
+
 
   // Detailed line for a single player, extended with fav weapon, assists, and nemesis
     playerCard: `

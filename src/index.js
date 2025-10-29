@@ -385,8 +385,10 @@ const commands = [
     .addStringOption(o => o.setName("server").setDescription("Which server to query (name or number)")),
   new SlashCommandBuilder()
     .setName("xlr-player")
-    .setDescription("Lookup a player by name (optionally filter by weapon/map, or compare vs opponent)")
-    .addStringOption(o => o.setName("name").setDescription("Player (partial)").setRequired(true))
+    .setDescription("Lookup a player by name/number/GIOD (optionally filter by weapon/map, or compare vs opponent)")
+    .addStringOption(o => o.setName("name").setDescription("Player Name (partial)"))
+	.addIntegerOption(o => o.setName("number").setDescription("Player Number"))
+	.addIntegerOption(o => o.setName("guid").setDescription("Player GUID"))
     .addStringOption(o => o.setName("weapon").setDescription("Weapon (partial name or exact id)"))
     .addStringOption(o => o.setName("map").setDescription("Map (partial name or exact id)"))
     .addStringOption(o => o.setName("vs").setDescription("Opponent player (partial name)"))
@@ -798,9 +800,9 @@ loadMessage( 	i: type-discord interaction [required],
 					)
 return void
 
-updates the UI for the CODUO Server at given index
+updates the UI to display the loading message
 ---
-uses discord.js package to update messages for bot UO
+uses discord.js package to update loading messages for bot
 *************************************************************** */
 async function loadMessage(i, cfg, gate) {
 	
@@ -831,9 +833,9 @@ sendMessage( 	i: type-discord interaction [required],
 					)
 return void
 
-updates the UI for the CODUO Server at given index
+updates bot UI
 ---
-uses discord.js package to update messages for bot UO
+uses discord.js package to update bot UI
 **************************************************************** */
 async function sendMessage(i, cfg, gate, navComponents, contentEmbeds, footerText = "", contentComponents = [], files = []) {
 
@@ -1790,7 +1792,9 @@ async function handleSlashCommand(i) {
 				return;
 			case "xlr-player":
 				//get options
-				const name = i.options.getString("name", true);
+				const name = i.options.getString("name");
+				const num = i.options.getInteger("number");
+				const guid = i.options.getInteger("guid");
 				const weaponOpt = i.options.getString("weapon");
 				const mapOpt = i.options.getString("map");
 				const vsName = i.options.getString("vs");
@@ -1798,8 +1802,31 @@ async function handleSlashCommand(i) {
 				//init award var
 				let aw;
 				//lookup player
-			    const matches = await runQueryOn(serverIndex, queries.findPlayer, [`%${name}%`, `%${name}%`]);
-			    if (!matches.length) return i.editReply(`No player found matching **${name}**.`);
+				let response, query, lookup, params;
+				if(guid){
+					lookup = guid;
+					response = `No player found with GUID **${lookup}**.`;
+					query = queries.findPlayerByGuid;
+					params = [`%${lookup}%`];
+				} else if(num){
+					lookup = num;
+					response = `Player **#${lookup}** not found.`;
+					query = queries.findPlayerByClientId;
+					params = [`%${lookup}%`];
+				} else if(name){
+					lookup = name;
+					response = `No player found matching **${lookup}**.`
+					query = queries.findPlayer;
+					params = [`%${lookup}%`, `%${lookup}%`];
+				} else {
+					sendWhisper(i,`You have to specify a player name, number, or guid.`);
+					return;					
+				}
+			    const matches = await runQueryOn(serverIndex, query, params);
+			    if (!matches.length) {
+					sendWhisper(i,response);
+					return;
+				}
 			    clientId = matches[0].client_id;
 				//load stats
 				let details = await runQueryOn(serverIndex, queries.playerCard, [clientId, clientId, clientId]);

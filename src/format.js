@@ -207,11 +207,11 @@ export async function formatPlayerEmbed(p, opts = {}) {
   const wins       = Number(p.wins ?? 0);
   const losses     = Number(p.losses ?? 0);
   const games      = wins + losses;
-  const winPct     = games ? ((wins / games) * 100).toFixed(1) : ".000";
+  const winPct     = games ? ((wins / games) * 100).toFixed(3) : ".000";
   const wawaWins   = Number(p.wawa_wins ?? 0);
   const wawaLosses = Number(p.wawa_losses ?? 0);
   const wagames    = wawaWins + wawaLosses;
-  const wawinPct   = wagames ? (wawaWins / wagames).toFixed(31) : ".000";
+  const wawinPct   = wagames ? (wawaWins / wagames).toFixed(3) : ".000";
   
   const bg = Number(p?.bg ?? 0) || 0;
   const em = Number(p?.em ?? 0) || 0;
