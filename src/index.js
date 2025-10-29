@@ -1824,6 +1824,8 @@ async function handleSlashCommand(i) {
 				}
 			    const matches = await runQueryOn(serverIndex, query, params);
 			    if (!matches.length) {
+					console.log(query);
+					console.log(matches);
 					sendWhisper(i,response);
 					return;
 				}
