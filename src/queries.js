@@ -1238,7 +1238,7 @@ export const queries = {
     c.discord_id AS discord_id
   FROM clients c
   ${preferredAliasJoin("pa", "c.id")}
-  WHERE c.client_id = ?
+  WHERE c.id = ?
   LIMIT 10
   `,
 
