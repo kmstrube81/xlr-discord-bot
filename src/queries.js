@@ -1221,6 +1221,7 @@ export const queries = {
   findPlayerByGuid : `
   SELECT
     c.id AS client_id,
+	c.guid,
     COALESCE(pa.alias, c.name) AS name,
     c.discord_id AS discord_id
   FROM clients c
@@ -1237,7 +1238,7 @@ export const queries = {
     c.discord_id AS discord_id
   FROM clients c
   ${preferredAliasJoin("pa", "c.id")}
-  WHERE c.id = ?
+  WHERE c.client_id = ?
   LIMIT 10
   `,
 
