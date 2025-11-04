@@ -264,7 +264,7 @@ export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}
 	const files = [];
 	const last = rows.length - 1;
 	
-	rows.map((r, i) => {
+	rows.map(async (r, i) => {
 		
 		const template = {};
 		template.color = 0x32d296;
