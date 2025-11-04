@@ -808,7 +808,7 @@ async function loadMessage(i, cfg, gate) {
 	
 	let embed = formatLoadEmbed();
 	
-	const LOADING_GIF_PATH = path.resolve(process.cwd(), "assets", "load.gif");
+	const LOADING_GIF_PATH = path.resolve(process.cwd(), "assets/gfx", "load.gif");
 	const filename = 'load.gif';
 	const file = new AttachmentBuilder(LOADING_GIF_PATH, { name: filename });
 	const images = [ { filename: filename, uri: `attachment://${filename}` }];

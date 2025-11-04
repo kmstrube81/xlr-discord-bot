@@ -1,0 +1,76 @@
+// Note to translators:
+// If a sentence is the same in your language then please change it to "#same"
+//
+// eg:
+// LANG_ENGLISH  "HALT"
+// LANG_GERMAN   "#same"
+//
+// (This is so we can tell which strings have been signed-off as ok to be the same words for QA
+//  and because we do not store duplicate strings, which will then get exported again next time
+//  as being untranslated.)
+//
+VERSION             "1"
+CONFIG              "C:\COD\bin\StringEd\StringEd.cfg"
+FILENOTES           ""
+
+REFERENCE           CALLSIGN0
+LANG_ENGLISH        "New Pugger"
+
+REFERENCE           CALLSIGN1
+LANG_ENGLISH        "DSR"
+
+REFERENCE           CALLSIGN2
+LANG_ENGLISH        "Cracked Aiming Legend"
+
+REFERENCE           CALLSIGN3
+LANG_ENGLISH        "SJ LEAG Player"
+
+REFERENCE           CALLSIGN4
+LANG_ENGLISH        "AVG CODUO Player"
+
+REFERENCE           CALLSIGN5
+LANG_ENGLISH        "Euro Player"
+
+REFERENCE           CALLSIGN6
+LANG_ENGLISH        "Pug Star"
+
+REFERENCE           CALLSIGN7
+LANG_ENGLISH        "Corgi Fan"
+
+REFERENCE           CALLSIGN8
+LANG_ENGLISH        "girthquake"
+
+REFERENCE           CALLSIGN9
+LANG_ENGLISH        "dienasty"
+
+REFERENCE           CALLSIGN10
+LANG_ENGLISH        ".EXE"
+
+REFERENCE           CALLSIGN11
+LANG_ENGLISH        "Probably a Camper"
+
+REFERENCE           CALLSIGN12
+LANG_ENGLISH        "Touch Grass"
+
+REFERENCE           CALLSIGN13
+LANG_ENGLISH        "John Stockton"
+
+REFERENCE           CALLSIGN14
+LANG_ENGLISH        "Crete2438g"
+
+REFERENCE           CALLSIGN15
+LANG_ENGLISH        "Multiple Personality Disorder"
+
+REFERENCE           CALLSIGN16
+LANG_ENGLISH        "Green Thumb"
+
+REFERENCE           CALLSIGN17
+LANG_ENGLISH        "Ninja Defuser"
+
+REFERENCE           CALLSIGN18
+LANG_ENGLISH        "Target(+)Master"
+
+REFERENCE           CALLSIGN19
+LANG_ENGLISH        "Mrs. Bert 55"
+
+ENDMARKER
