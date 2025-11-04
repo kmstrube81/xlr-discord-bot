@@ -151,31 +151,6 @@ export async function loadDDS(imgPath, load = true) {
 export const BACKGROUNDS = loadAssetList("assets/gfx/backgrounds");
 export const EMBLEMS     = loadAssetList("assets/gfx/emblems");
 
-// still fine to keep your callsigns hard-coded
-export const CALLSIGNS = [
-  "New Pugger",
-  "DSR",
-  "Cracked Aiming Legend",
-  "SJ LEAG Player",
-  "AVG CODUO Gamer",
-  "Euro Player",
-  "Pug Star",
-  "Corgi Fan",
-  "girthquake",
-  "dienasty",
-  ".EXE",
-  "Probably a Camper",
-  "Touch Grass",
-  "John Stockton",
-  "Crete2438g",
-  "Multiple Personality Disorder",
-  "Green Thumb",
-  "Ninja Defuser",
-  "Target(+)Master",
-  "Mrs. Bert 55"
-];
-
-
 export const CALLSIGNS = [
 	"New Pugger",
 	"DSR",
