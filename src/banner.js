@@ -19,7 +19,7 @@ export async function loadDDS(imgPath) {
   // --- DDS path ---
   // Convert DDS -> PNG (to stdout) using ImageMagick
   // `magick input.dds png:-`  -> outputs PNG bytes to stdout
-  const { stdout } = await execFileAsync("/bin/magick", [imgPath, "png:-"], {
+  const { stdout } = await execFileAsync("bin/magick", [imgPath, "png:-"], {
     encoding: "buffer",
   });
 
