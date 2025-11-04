@@ -2,32 +2,120 @@ import { Canvas, loadImage, FontLibrary } from "skia-canvas";
 import { Resvg } from "@resvg/resvg-js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 
 const execFileAsync = promisify(execFile);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const TMP_ROOT = path.resolve("tmp");
 
-export async function loadDDS(imgPath) {
-  const ext = path.extname(imgPath).toLowerCase();
-
-  // If it's already png/jpg/svg, just load it like normal
-  if (ext !== ".dds") {
-    return loadImage(imgPath);
+function getBundledMagickPath() {
+  if (os.platform() === "win32") {
+    return path.join(__dirname, "bin", "magick.exe");
   }
-
-  // --- DDS path ---
-  // Convert DDS -> PNG (to stdout) using ImageMagick
-  // `magick input.dds png:-`  -> outputs PNG bytes to stdout
-  const { stdout } = await execFileAsync("bin/magick", [imgPath, "png:-"], {
-    encoding: "buffer",
-  });
-
-  // now stdout is a PNG Buffer that skia-canvas *can* read
-  return loadImage(stdout);
+  return path.join(__dirname, "bin", "magick");
 }
 
 
+/**
+ * Try to run ImageMagick (bundled → system magick → system convert)
+ * and return a PNG buffer, or null if all methods fail.
+ */
+async function ddsToPngBuffer(inputAbsPath) {
+  const candidates = [
+    getBundledMagickPath(),
+    "magick",
+    "convert"
+  ];
+
+  for (const cmd of candidates) {
+    try {
+      const { stdout } = await execFileAsync(cmd, [inputAbsPath, "png:-"], {
+        encoding: "buffer",
+      });
+      return stdout; // Buffer
+    } catch (err) {
+      // just try the next one
+    }
+  }
+
+  // all failed
+  return null;
+}
+
+/**
+ * Load any image. If it's DDS, check tmp cache first, otherwise convert and cache.
+ * Returns:
+ *  - skia-canvas Image on success
+ *  - null if we couldn't convert/load
+ */
+export async function loadDDS(imgPath) {
+  const ext = path.extname(imgPath).toLowerCase();
+
+  // non-DDS → just load directly
+  if (ext !== ".dds") {
+    try {
+      // allow relative paths
+      const abs = path.resolve(imgPath);
+      return await loadImage(abs);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // DDS → we want tmp/{same structure}/file.png
+  const absInput = path.resolve(imgPath);
+  const relDir = path.dirname(imgPath);            // e.g. assets/gfx/backgrounds
+  const baseName = path.basename(imgPath, ".dds"); // e.g. hud@usa-flag
+  const tmpDir = path.join(TMP_ROOT, relDir);      // tmp/assets/gfx/backgrounds
+  const tmpPngPath = path.join(tmpDir, baseName + ".png");
+
+  // 1) if we already converted it, just load it
+  try {
+    if (fs.existsSync(tmpPngPath)) {
+      return await loadImage(tmpPngPath);
+    }
+  } catch {
+    // fall through to convert
+  }
+
+  // 2) ensure tmp dir exists
+  try {
+    await fsp.mkdir(tmpDir, { recursive: true });
+  } catch (e) {
+    // if we can't make the dir, we won't be able to cache; we'll still try convert
+  }
+
+  // 3) convert DDS → PNG (buffer)
+  const pngBuf = await ddsToPngBuffer(absInput);
+  if (!pngBuf) {
+    // conversion totally failed
+    return null;
+  }
+
+  // 4) write to tmp path so we don't convert again next time
+  try {
+    await fsp.writeFile(tmpPngPath, pngBuf);
+  } catch (e) {
+    // even if write fails, we can still load from buffer
+  }
+
+  // 5) finally load it into skia
+  try {
+    // prefer loading from file (so next runs don't call magick)
+    if (fs.existsSync(tmpPngPath)) {
+      return await loadImage(tmpPngPath);
+    }
+    // fallback: load from buffer
+    return await loadImage(pngBuf);
+  } catch (e) {
+    return null;
+  }
+}
 
 /**
  * Configure your asset lists here.
