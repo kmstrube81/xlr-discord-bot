@@ -264,7 +264,8 @@ export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}
 	const files = [];
 	const last = rows.length - 1;
 	
-	rows.map(async (r, i) => {
+	for (let i = 0; i < rows.length; i++) {
+		const r = rows[i];
 		
 		const template = {};
 		template.color = 0x32d296;
@@ -328,7 +329,6 @@ export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}
 		
 		if(!thumbnail || thumbnail === DEFAULT_THUMB){
 			const thumbpath = await loadDDS(EMBLEMS[r.em], false);
-			console.log(thumbpath);
 			const abs = path.resolve(process.cwd(), thumbpath);
 			const thumbname = `emblem_${r.client_id || i}.png`;
 			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};

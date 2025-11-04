@@ -79,7 +79,8 @@ export async function loadDDS(imgPath, load = true) {
     try {
       // allow relative paths
       const abs = path.resolve(imgPath);
-      return await loadImage(abs);
+      if(load) return await loadImage(abs);
+	  return abs;
     } catch (e) {
       return null;
     }
