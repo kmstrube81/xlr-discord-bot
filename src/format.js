@@ -338,7 +338,7 @@ export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}
 			template.thumbnail = {filename: "thumbname", uri: thumbnail};
 		}
 		embeds.push(buildEmbed(template));
-	});
+	}
   
 	if(!rows.length) {
 		embeds.push(buildEmbed({description:"_No players found_"}));
