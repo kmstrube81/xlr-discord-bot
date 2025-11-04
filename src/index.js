@@ -1276,7 +1276,7 @@ async function buildLadder(serverIndex,  signal, token, channelId, page=0) {
 
 	// PRE-ENRICH: fetch Discord username for titles/labels
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
-	const [embeds, files] = await renderLadderEmbeds({ rows: rowsWithNames, page });
+	const [embeds, files] = await renderLadderEmbeds({ rows: rowsWithNames, page }); console.log(embeds);
 	const pager = [pagerRow(VIEWS.LADDER, page, page>0, offset + 10 < total)];
 	const nav   = [navRow(VIEWS.LADDER), stringSelectRowForPage(VIEWS.PLAYER, rowsWithNames, page, null)];
 
