@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { EmbedBuilder, AttachmentBuilder } from "discord.js";
 import {
   generateBanner,
+  loadDDS,
   DEFAULT_THUMB,
   BACKGROUNDS,
   EMBLEMS,
@@ -327,7 +328,7 @@ export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 		
 		if(!thumbnail || thumbnail === DEFAULT_THUMB){
 			const thumbpath = EMBLEMS[r.em];
-			const abs = path.resolve(process.cwd(), thumbpath);
+			const abs = await loadDDS(thumbpath);
 			const thumbname = `emblem_${r.client_id || i}.png`;
 			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
 			const file = new AttachmentBuilder(abs, { name: thumbname });

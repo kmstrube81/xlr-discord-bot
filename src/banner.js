@@ -1,8 +1,33 @@
 import { Canvas, loadImage, FontLibrary } from "skia-canvas";
 import { Resvg } from "@resvg/resvg-js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+
+const execFileAsync = promisify(execFile);
+
+export async function loadDDS(imgPath) {
+  const ext = path.extname(imgPath).toLowerCase();
+
+  // If it's already png/jpg/svg, just load it like normal
+  if (ext !== ".dds") {
+    return loadImage(imgPath);
+  }
+
+  // --- DDS path ---
+  // Convert DDS -> PNG (to stdout) using ImageMagick
+  // `magick input.dds png:-`  -> outputs PNG bytes to stdout
+  const { stdout } = await execFileAsync("magick", [imgPath, "png:-"], {
+    encoding: "buffer",
+  });
+
+  // now stdout is a PNG Buffer that skia-canvas *can* read
+  return loadImage(stdout);
+}
+
+
 
 /**
  * Configure your asset lists here.
@@ -257,7 +282,7 @@ export async function generateBanner(opts) {
   const name   = sanitize(playerName);
 
   // Load images
-  const [bgImg, emblemImg] = await Promise.all([loadImage(bgPath), loadImage(emPath)]);
+  const [bgImg, emblemImg] = await Promise.all([loadDDS(bgPath), loadDDS(emPath)]);
 
   // Canvas
   const canvas = new Canvas(WIDTH, HEIGHT);
