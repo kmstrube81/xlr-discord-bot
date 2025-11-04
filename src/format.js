@@ -671,7 +671,7 @@ export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill",
   
 	const offset = page * 10;
 
-	const [embeds, files] = formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
+	const [embeds, files] = await formatTopEmbed(rows, `🏆 ${title}`, { thumbnail, offset, footerText: `XLRStats • B3 • Ladder page ${page + 1}` });
 
 	return [embeds, files];
 }
