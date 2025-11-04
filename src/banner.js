@@ -20,6 +20,24 @@ function getBundledMagickPath() {
   return path.join(__dirname, "bin", "magick");
 }
 
+// helper: load all image files in a directory into an array of *relative* paths
+function loadAssetList(relDir) {
+  const absDir = path.resolve(relDir);
+  if (!fs.existsSync(absDir)) {
+    return []; // directory doesn't exist → no assets
+  }
+
+  const files = fs.readdirSync(absDir, { withFileTypes: true });
+
+  // accept DDS (most important for you) and also PNG/JPG in case you drop any in
+  const exts = [".dds", ".png", ".jpg", ".jpeg", ".webp"];
+
+  return files
+    .filter((entry) => entry.isFile())
+    .filter((entry) => exts.includes(path.extname(entry.name).toLowerCase()))
+    // return path in the same style your code already uses
+    .map((entry) => path.join(relDir, entry.name).replace(/\\/g, "/"));
+}
 
 /**
  * Try to run ImageMagick (bundled → system magick → system convert)
@@ -53,7 +71,7 @@ async function ddsToPngBuffer(inputAbsPath) {
  *  - skia-canvas Image on success
  *  - null if we couldn't convert/load
  */
-export async function loadDDS(imgPath) {
+export async function loadDDS(imgPath, load = true) {
   const ext = path.extname(imgPath).toLowerCase();
 
   // non-DDS → just load directly
@@ -77,7 +95,8 @@ export async function loadDDS(imgPath) {
   // 1) if we already converted it, just load it
   try {
     if (fs.existsSync(tmpPngPath)) {
-      return await loadImage(tmpPngPath);
+		if(load) return await loadImage(tmpPngPath);
+		return tmpPngPath;
     }
   } catch {
     // fall through to convert
@@ -108,10 +127,12 @@ export async function loadDDS(imgPath) {
   try {
     // prefer loading from file (so next runs don't call magick)
     if (fs.existsSync(tmpPngPath)) {
-      return await loadImage(tmpPngPath);
+		if(load) return await loadImage(tmpPngPath);
+		return tmpPngPath;
     }
     // fallback: load from buffer
-    return await loadImage(pngBuf);
+	if(load) return await loadImage(pngBuf);
+	return pngBuf;
   } catch (e) {
     return null;
   }
@@ -126,65 +147,34 @@ export async function loadDDS(imgPath) {
  * You can keep these as relative paths from your project root or absolute paths.
  * Use whatever folder you already store these in.
  */
-export const BACKGROUNDS = [
-	"assets/gfx/backgrounds/hud@uo_mp.dds",
-	"assets/gfx/backgrounds/hud@vcod-american.dds",
-	"assets/gfx/backgrounds/hud@vcod-british.dds",
-	"assets/gfx/backgrounds/hud@vcod-russian.dds",
-	"assets/gfx/backgrounds/hud@usa-flag.dds"
+// auto-discovered assets
+export const BACKGROUNDS = loadAssetList("assets/gfx/backgrounds");
+export const EMBLEMS     = loadAssetList("assets/gfx/emblems");
+
+// still fine to keep your callsigns hard-coded
+export const CALLSIGNS = [
+  "New Pugger",
+  "DSR",
+  "Cracked Aiming Legend",
+  "SJ LEAG Player",
+  "AVG CODUO Gamer",
+  "Euro Player",
+  "Pug Star",
+  "Corgi Fan",
+  "girthquake",
+  "dienasty",
+  ".EXE",
+  "Probably a Camper",
+  "Touch Grass",
+  "John Stockton",
+  "Crete2438g",
+  "Multiple Personality Disorder",
+  "Green Thumb",
+  "Ninja Defuser",
+  "Target(+)Master",
+  "Mrs. Bert 55"
 ];
 
-export const EMBLEMS = [
-	"assets/gfx/emblems/hud@bazooka_mp.dds",
-	"assets/gfx/emblems/hud@binoculars_mp.dds",
-	"assets/gfx/emblems/hud@bren_mp.dds",
-	"assets/gfx/emblems/hud@brutalamish.dds",
-	"assets/gfx/emblems/hud@camper.dds",
-	"assets/gfx/emblems/hud@colt_mp.dds",
-	"assets/gfx/emblems/hud@emoji57.dds",
-	"assets/gfx/emblems/hud@empire.dds",
-	"assets/gfx/emblems/hud@enfield_mp.dds",
-	"assets/gfx/emblems/hud@fg42_mp.dds",
-	"assets/gfx/emblems/hud@flamethrower_mp.dds",
-	"assets/gfx/emblems/hud@fraggrenade_mp.dds",
-	"assets/gfx/emblems/hud@gay69.dds",
-	"assets/gfx/emblems/hud@gewehr_mp.dds",
-	"assets/gfx/emblems/hud@greenthumb.dds",
-	"assets/gfx/emblems/hud@jumpman.dds",
-	"assets/gfx/emblems/hud@kar98k_mp.dds",
-	"assets/gfx/emblems/hud@kar98k_sniper_mp.dds",
-	"assets/gfx/emblems/hud@luger_mp.dds",
-	"assets/gfx/emblems/hud@m1carbine_mp.dds",
-	"assets/gfx/emblems/hud@m1garand_mp.dds",
-	"assets/gfx/emblems/hud@mg34_mp.dds",
-	"assets/gfx/emblems/hud@mg42_mp.dds",
-	"assets/gfx/emblems/hud@mk1britishfrag_mp.dds",
-	"assets/gfx/emblems/hud@mod_melee.dds",
-	"assets/gfx/emblems/hud@mosin_nagant_mp.dds",
-	"assets/gfx/emblems/hud@mosin_nagant_sniper_mp.dds",
-	"assets/gfx/emblems/hud@mp40_mp.dds",
-	"assets/gfx/emblems/hud@mp44_mp.dds",
-	"assets/gfx/emblems/hud@ninja.dds",
-	"assets/gfx/emblems/hud@none.dds",
-	"assets/gfx/emblems/hud@panzerfaust_mp.dds",
-	"assets/gfx/emblems/hud@panzerschreck_mp.dds",
-	"assets/gfx/emblems/hud@ppsh_mp.dds",
-	"assets/gfx/emblems/hud@ra.dds",
-	"assets/gfx/emblems/hud@ratcumfarmer.dds",
-	"assets/gfx/emblems/hud@rgd-33russianfrag_mp.dds",
-	"assets/gfx/emblems/hud@satchelcharge_mp.dds",
-	"assets/gfx/emblems/hud@silenced_sten_mp.dds",
-	"assets/gfx/emblems/hud@springfield_mp.dds",
-	"assets/gfx/emblems/hud@steilhandgrenate_mp.dds",
-	"assets/gfx/emblems/hud@sten_mp.dds",
-	"assets/gfx/emblems/hud@svt40_mp.dds",
-	"assets/gfx/emblems/hud@targetmaster.dds",
-	"assets/gfx/emblems/hud@thompson_mp.dds",
-	"assets/gfx/emblems/hud@touchgrass.dds",
-	"assets/gfx/emblems/hud@tt33_mp.dds",
-	"assets/gfx/emblems/hud@webley_mp.dds",
-	"assets/gfx/emblems/hud@sipsOJ.dds"
-];
 
 export const CALLSIGNS = [
 	"New Pugger",

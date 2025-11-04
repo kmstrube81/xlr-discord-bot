@@ -327,8 +327,8 @@ export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}
 			template.footerText = footerText;
 		
 		if(!thumbnail || thumbnail === DEFAULT_THUMB){
-			const thumbpath = EMBLEMS[r.em];
-			const abs = await loadDDS(thumbpath);
+			const thumbpath = loadDDS(EMBLEMS[r.em], false);
+			const abs = path.resolve(process.cwd(), thumbpath);
 			const thumbname = `emblem_${r.client_id || i}.png`;
 			template.thumbnail = {filename: thumbname, uri: `attachment://${thumbname}`};
 			const file = new AttachmentBuilder(abs, { name: thumbname });
