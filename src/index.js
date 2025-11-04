@@ -1371,7 +1371,7 @@ async function buildWeaponPlayers(serverIndex,  signal, token, channelId, weapon
 	const title = `Top Players by Weapon: ${emoji ? `${emoji} ${weap}` : weap}`;
 	const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
 	
-	const [embeds, files] = formatTopEmbed(rowsWithNames, title, { thumbnail: DEFAULT_THUMB, offset, footerText: `XLRStats • B3 • ${weaponLabel} players page ${playerPage + 1}` });
+	const [embeds, files] = await formatTopEmbed(rowsWithNames, title, { thumbnail: DEFAULT_THUMB, offset, footerText: `XLRStats • B3 • ${weaponLabel} players page ${playerPage + 1}` });
 
 	const hasNext = offset + pageSize < total;
 	const pager   = [pagerRowWithParams(VIEWS.WEAPON_PLAYERS, playerPage, playerPage > 0, hasNext, weap, weaponsPage)];
@@ -1435,7 +1435,7 @@ async function buildMapPlayers(serverIndex,  signal, token, channelId, mapLabel,
   if (channelId && token && isStale(channelId, token)) return { stale: true };
   const thumbUrl = (await getMapImageUrl(mapLabel, signal)) || DEFAULT_THUMB;
   const rowsWithNames = await insertPlayerCardDetails(rows, serverIndex);
-  const [embeds, files] = formatTopEmbed(rowsWithNames, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset, footerText: `XLRStats • B3 • ${mapLabel} players page ${playerPage + 1}` });
+  const [embeds, files] = await formatTopEmbed(rowsWithNames, `Top Players by Map: ${mapLabel}`, { thumbnail: thumbUrl, offset, footerText: `XLRStats • B3 • ${mapLabel} players page ${playerPage + 1}` });
 
   const hasNext = offset + pageSize < total;
   const pager   = [pagerRowWithParams(VIEWS.MAPS_PLAYERS, playerPage, playerPage > 0, hasNext, mapLabel, mapsPage)];
@@ -1786,7 +1786,7 @@ async function handleSlashCommand(i) {
 				//insert playerCardDetails
 				rows = await insertPlayerCardDetails(rows, serverIndex);
 				//format data
-				[embeds, files] = formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
+				[embeds, files] = await formatTopEmbed(rows, title, { thumbnail: thumbUrl, offset: 0 });
 				const embedArr = Array.isArray(embeds) ? embeds : [embeds];
 				await sendReply(i, embedArr,[],"",files);
 				return;

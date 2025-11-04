@@ -257,7 +257,7 @@ export async function formatPlayerEmbed(p, opts = {}) {
 	files ];
 }
 
-export function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
+export async function formatTopEmbed(rows, titleText = "Top by Skill", opts = {}) {
 	const { thumbnail, offset = 0, footerText } = opts;
 
 	const embeds = [];
