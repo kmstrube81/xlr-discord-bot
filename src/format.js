@@ -667,7 +667,7 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 	return embeds;
 }
 
-export function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
+export async function renderLadderEmbeds({ rows, page, title = "Top Players by Skill", thumbnail = null }) {
   
 	const offset = page * 10;
 
