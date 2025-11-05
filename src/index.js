@@ -360,6 +360,7 @@ const PROFILE_IDS = Object.freeze({
   PAGE_EM:         (si, pid, dir, pg) => `profile:page:em:${si}:${pid}:${pg}:${dir}`,
   PAGE_CS:         (si, pid, dir, pg) => `profile:page:cs:${si}:${pid}:${pg}:${dir}`,
   NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
+  CANCEL:		   (si, pid) => `profile:cancel:${si},${pid}`,
 });
 
 // --------------------------------------------------------------------------------------
@@ -1609,10 +1610,16 @@ async function handleProfileButton(i) {
 	//explode customId on semicolon - profile:edit:name:si:pid or profile:edit:bg:si:pid:page
 	const parts = i.customId.split(":");
 	//get variables from exploded custom id parts
-    const [, action, sub, siStr, pidStr, pageStr, dir, cur] = parts;
+    const [, action, sub, siStr, pidStr, pageStr, dir] = parts;
 	//cast variables to number
     const si = Number(siStr), pid = Number(pidStr);
     const page = Number(pageStr || 0);
+	//cancel current interaction
+	if(action === "cancel") {
+		const rows = buildDmNavRow(si, pid);
+		await sendDM(i, [], rows);
+		return;
+	}
 	//edit preferred_name interaction
     if (action === "edit" && sub === "name") {
 		//create name text entry modal
@@ -1643,15 +1650,11 @@ async function handleProfileButton(i) {
 		const total   = sub === "bg" ? BACKGROUNDS.length
 						: sub === "em" ? EMBLEMS.length
 									  : CALLSIGNS.length;
-		//25 items per select page
-		const per     = 25;
-		//calculate the last page
-		const maxPage = Math.max(0, Math.ceil(total / per) - 1);
+
 		//calculate whether there is a next or previous page or not
 		const next    = dir === "prev" ? cur - 1 : cur + 1;
-		const clamped = Math.min(maxPage, Math.max(0, next));
 
-		const rows = buildDmPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, page);
+		const rows = buildDmPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, next);
 		await sendDM(i, [], rows);
 		return;
 	}
@@ -2116,7 +2119,7 @@ return array
 handles building buttons at the top of profile edit DMs
 
 **************************************************************** */
-function buildDmNavRow(serverIndex, clientId, page) {
+function buildDmNavRow(serverIndex, clientId) {
 	const rowButtons = new ActionRowBuilder().addComponents(
 		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_NAME_BTN(serverIndex, clientId)).setLabel("Edit Preferred Name").setStyle(ButtonStyle.Primary),
 		new ButtonBuilder().setCustomId(PROFILE_IDS.EDIT_BG_BTN(serverIndex, clientId, 0)).setLabel("Edit Background").setStyle(ButtonStyle.Secondary),
@@ -2156,6 +2159,11 @@ function buildDmPickerRow(kind, serverIndex, playerId, page) {
 	const row1 = new ActionRowBuilder().addComponents(select);
 	//create pager buttons
 	const row2 = new ActionRowBuilder().addComponents(
+		//create previous button
+		new ButtonBuilder()
+			.setCustomId(PROFILE_IDS.CANCEL(serverIndex, playerId))
+			.setLabel("Cancel")
+			.setStyle(ButtonStyle.Secondary),
 		//create previous button
 		new ButtonBuilder()
 			.setCustomId(kind==="bg" ? PROFILE_IDS.PAGE_BG(serverIndex, playerId, "prev", page) :
