@@ -1652,7 +1652,7 @@ async function handleProfileButton(i) {
 									  : CALLSIGNS.length;
 
 		//calculate whether there is a next or previous page or not
-		const next    = dir === "prev" ? cur - 1 : cur + 1;
+		const next    = dir === "prev" ? page - 1 : page + 1;
 
 		const rows = buildDmPickerRow(sub === "bg" ? "bg" : sub === "em" ? "em" : "cs", si, pid, next);
 		await sendDM(i, [], rows);
