@@ -40,7 +40,7 @@ function loadAssetList(relDir) {
 }
 
 // try to load CALLSIGN strings from a CoD-style .str file
-function loadLocalizedStrings(strPath, dentifier) {
+function loadLocalizedStrings(strPath, identifier) {
   const absPath = path.resolve(strPath);
   if (!fs.existsSync(absPath)) {
     return null; // let caller fall back
