@@ -1616,6 +1616,7 @@ async function handleProfileButton(i) {
     const page = Number(pageStr || 0);
 	//cancel current interaction
 	if(action === "cancel") {
+		console.log("debug: go back");
 		const rows = buildDmNavRow(si, pid);
 		await sendDM(i, [], rows);
 		return;
