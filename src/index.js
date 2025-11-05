@@ -360,7 +360,7 @@ const PROFILE_IDS = Object.freeze({
   PAGE_EM:         (si, pid, dir, pg) => `profile:page:em:${si}:${pid}:${pg}:${dir}`,
   PAGE_CS:         (si, pid, dir, pg) => `profile:page:cs:${si}:${pid}:${pg}:${dir}`,
   NAME_MODAL:      (si, pid) => `profile:name:${si}:${pid}`,
-  CANCEL:		   (si, pid) => `profile:cancel:${si}:${pid}`,
+  CANCEL:		   (si, pid) => `profile:cancel:na:${si}:${pid}`,
 });
 
 // --------------------------------------------------------------------------------------
