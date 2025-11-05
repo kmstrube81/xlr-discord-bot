@@ -39,6 +39,48 @@ function loadAssetList(relDir) {
     .map((entry) => path.join(relDir, entry.name).replace(/\\/g, "/"));
 }
 
+// try to load CALLSIGN strings from a CoD-style .str file
+function loadLocalizedStrings(strPath, dentifier) {
+  const absPath = path.resolve(strPath);
+  if (!fs.existsSync(absPath)) {
+    return null; // let caller fall back
+  }
+
+  const raw = fs.readFileSync(absPath, "utf8");
+  const lines = raw.split(/\r?\n/);
+
+  const callsigns = [];
+  let currentRef = null;
+
+  for (const line of lines) {
+    // REFERENCE ""
+    const refMatch = line.match(/^\s*REFERENCE\s+(\S+)/i);
+    if (refMatch) {
+      currentRef = refMatch[1];
+      continue;
+    }
+
+    // LANG_ENGLISH ""
+    const langMatch = line.match(/^\s*LANG_ENGLISH\s+"([^"]*)"/i);
+    if (langMatch && currentRef) {
+      const value = langMatch[1];
+      if (currentRef.toUpperCase().startsWith(identifier)) {
+        const idx = parseInt(currentRef.replace(/[^0-9]/g, ""), 10);
+        if (!Number.isNaN(idx) && value !== "#same" && value !== "") {
+		  callsigns[idx] = value;
+		}
+      }
+      // done with this reference
+      currentRef = null;
+    }
+  }
+
+  // if file existed but didn't actually contain callsigns, return null to fall back
+  const compact = callsigns.filter((v) => v != null);
+  return compact.length ? compact : null;
+}
+
+
 /**
  * Try to run ImageMagick (bundled → system magick → system convert)
  * and return a PNG buffer, or null if all methods fail.
@@ -152,28 +194,7 @@ export async function loadDDS(imgPath, load = true) {
 export const BACKGROUNDS = loadAssetList("assets/gfx/backgrounds");
 export const EMBLEMS     = loadAssetList("assets/gfx/emblems");
 
-export const CALLSIGNS = [
-	"New Pugger",
-	"DSR",
-	"Cracked Aiming Legend",
-	"SJ LEAG Player",
-	"AVG CODUO Gamer",
-	"Euro Player",
-	"Pug Star",
-	"Corgi Fan",
-	"girthquake",
-	"dienasty",
-	".EXE",
-	"Probably a Camper",
-	"Touch Grass",
-	"John Stockton",
-	"Crete2438g",
-	"Multiple Personality Disorder",
-	"Green Thumb",
-	"Ninja Defuser",
-	"Target(+)Master",
-	"Mrs. Bert 55"
-];
+export const CALLSIGNS = loadLocalizedStrings("assets/localizedstrings/english/pc.str", 'CALLSIGN');
 
 export const DEFAULT_THUMB = "https://cod.pm/mp_maps/unknown.png";
 
