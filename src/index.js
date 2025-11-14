@@ -713,7 +713,8 @@ function readEnvSet(env, n = 1) {
 }
 
 /* ***************************************************************
-upsertEnv( 	key: type-string [required],
+upsertEnvForServer( 	index: type int [required],
+			key: type-string [required],
 			value: type-string [required]
 			)
 return void
@@ -722,7 +723,11 @@ inserts new value into env file
 ---
 matches a key value pair and replaces it in env file
 **************************************************************** */
-function upsertEnv(key, value) {
+function upsertEnvForServer(serverIndex, key, value) {
+	
+	const n = serverIndex + 1;
+	
+	key = n === 1 ? key : `${key}_${n}`;
 	//load env file
 	const ENV_PATH = path.resolve(process.cwd(), ".env");
 	//match new lines
@@ -1030,7 +1035,7 @@ async function ensureUIForServer(serverIndex) {
 	let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
 	if (!navMsg) {
 		//If Nav Message couldn't load, it must not exist, recreate it and update env
-		upsertEnvForServer(cfg.n, "UI_NAV_MESSAGE_ID", navMsg.id);
+		upsertEnvForServer(serverIndex, "UI_NAV_MESSAGE_ID", navMsg.id);
 		cfg.ui.navId = navMsg.id;
 	}
 
@@ -1038,7 +1043,7 @@ async function ensureUIForServer(serverIndex) {
 	let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
 	if (!contentMsg) {
 		//If content Message couldn't load, it must not exist, recreate it and update env
-		upsertEnvForServer(cfg.n, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
+		upsertEnvForServer(serverIndex, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
 		cfg.ui.contentId = contentMsg.id;
 	}
     //Send message
