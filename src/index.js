@@ -1030,10 +1030,10 @@ async function ensureUIForServer(serverIndex) {
 	});
 	if (initial?.stale) return; // superseded before finishing
 
-
 	// Load Nav Message
 	let navMsg = cfg.ui.navId ? await channel.messages.fetch(cfg.ui.navId).catch(()=>null) : null;
 	if (!navMsg) {
+		navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
 		//If Nav Message couldn't load, it must not exist, recreate it and update env
 		upsertEnvForServer(serverIndex, "UI_NAV_MESSAGE_ID", navMsg.id);
 		cfg.ui.navId = navMsg.id;
@@ -1042,6 +1042,7 @@ async function ensureUIForServer(serverIndex) {
 	//Load Content Message
 	let contentMsg = cfg.ui.contentId ? await channel.messages.fetch(cfg.ui.contentId).catch(()=>null) : null;
 	if (!contentMsg) {
+		contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
 		//If content Message couldn't load, it must not exist, recreate it and update env
 		upsertEnvForServer(serverIndex, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
 		cfg.ui.contentId = contentMsg.id;
