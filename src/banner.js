@@ -124,6 +124,7 @@ export async function loadDDS(imgPath, load = true) {
       if(load) return await loadImage(abs);
 	  return abs;
     } catch (e) {
+		console.log("Non DDS image, loading directly");
       return null;
     }
   }
@@ -143,6 +144,7 @@ export async function loadDDS(imgPath, load = true) {
     }
   } catch {
     // fall through to convert
+	console.log("Converting Image...");
   }
 
   // 2) ensure tmp dir exists
@@ -150,12 +152,14 @@ export async function loadDDS(imgPath, load = true) {
     await fsp.mkdir(tmpDir, { recursive: true });
   } catch (e) {
     // if we can't make the dir, we won't be able to cache; we'll still try convert
+	console.log("Temporary Storage for converted file not available");
   }
 
   // 3) convert DDS → PNG (buffer)
   const pngBuf = await ddsToPngBuffer(absInput);
   if (!pngBuf) {
     // conversion totally failed
+	console.log("couldn't convert file to pdf");
     return null;
   }
 
@@ -164,6 +168,7 @@ export async function loadDDS(imgPath, load = true) {
     await fsp.writeFile(tmpPngPath, pngBuf);
   } catch (e) {
     // even if write fails, we can still load from buffer
+	console.log("Failed to Save to temporary storage")
   }
 
   // 5) finally load it into skia
@@ -177,6 +182,7 @@ export async function loadDDS(imgPath, load = true) {
 	if(load) return await loadImage(pngBuf);
 	return pngBuf;
   } catch (e) {
+	  console.log("Couldn't load image from temporary storage or buffer");
     return null;
   }
 }
