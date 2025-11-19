@@ -9,16 +9,16 @@ import path from "node:path";
 import os from "node:os";
 
 const execFileAsync = promisify(execFile);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const TMP_ROOT = path.resolve("tmp");
 
 function getBundledMagickPath() {
+  const root = path.resolve("bin"); // /opt/xlrbot
   if (os.platform() === "win32") {
-    return path.join(__dirname, "bin", "magick.exe");
+    return path.join(root, "magick.exe");
   }
-  return path.join(__dirname, "bin", "magick");
+  return path.join(root, "magick");
 }
+
 
 // helper: load all image files in a directory into an array of *relative* paths
 function loadAssetList(relDir) {
