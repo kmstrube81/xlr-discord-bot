@@ -100,6 +100,7 @@ async function ddsToPngBuffer(inputAbsPath) {
       return stdout; // Buffer
     } catch (err) {
       // just try the next one
+	  console.log("Couldn't convert using " + cmd);
     }
   }
 
@@ -159,7 +160,7 @@ export async function loadDDS(imgPath, load = true) {
   const pngBuf = await ddsToPngBuffer(absInput);
   if (!pngBuf) {
     // conversion totally failed
-	console.log("couldn't convert file to pdf");
+	console.log("couldn't convert file to png");
     return null;
   }
 
