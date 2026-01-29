@@ -138,6 +138,8 @@ const {
   XLR_DEFAULT_IMAGE //link to a default image to use when thumbnails fail to load
 } = process.env;
 
+const UI_MESSAGE_ID_CFG = loadUiMessageIdConfig();
+
 const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
 
 // Apply any explicit env overrides (if set) back into the local config
@@ -780,10 +782,14 @@ function readEnvSet(env, n = 1) {
 		name: get("XLR_SERVER_NAME") || null,
 	};
 	//store discord server related vars to ui object
+	const envNav = get("UI_NAV_MESSAGE_ID") || null;
+	const envContent = get("UI_CONTENT_MESSAGE_ID") || null;
+	const cfgKey = String(n);
+	const persisted = UI_MESSAGE_ID_CFG?.servers?.[cfgKey] || {};
 	const ui = {
 		channelId: get("CHANNEL_ID") || null,
-		navId: get("UI_NAV_MESSAGE_ID") || null,
-		contentId: get("UI_CONTENT_MESSAGE_ID") || null,
+		navId: envNav || persisted.navId || null,
+		contentId: envContent || persisted.contentId || null,
 	};
 	//set flag if any of these vars are set.
 	const hasAny = db.name || db.user || db.pass || db.host || rcon.ip || rcon.port || ui.channelId || rcon.name;
