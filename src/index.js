@@ -1319,7 +1319,7 @@ async function buildHome(serverIndex, signal, token, channelId) {
 	try {
 		status = await fetchServerStatus(cfg.rcon.ip, cfg.rcon.port, signal);
 		//server status loaded but returned error - set error flag
-		if (status && status.error) hadError = true;
+		if (status && status.error != 0) hadError = true;
 	} catch (e) {
 		console.warn("[home] error getting server status");
 		// If this was canceled by a newer click, just return "stale" when we have a ctx
