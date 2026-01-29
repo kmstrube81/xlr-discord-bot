@@ -585,12 +585,12 @@ export function formatLastSeenEmbed(rows, opts = {}) {
 }
 
 export function renderHomeEmbed({ totals }, data, tz, ip, port) {
-	const { serverinfo, playerinfo, time_retrieved, mapimage } = data;
+	const { serverinfo, playerinfo, time_retrieved, mapimage, error } = data;
 	const { totalPlayers, totalKills, totalRounds, favoriteWeapon, favoriteMap } = totals;
 
 	const map = serverinfo?.mapname || "unknown";
 	const mode = serverinfo?.g_gametype || "N/A";
-	const hostname = serverinfo?.sv_hostname || "Unnamed Server";
+	const hostname = serverinfo?.sv_hostname || error;
 	const playerCount = playerinfo?.length || 0;
 	const maxPlayers = serverinfo?.sv_maxclients || "?";
 

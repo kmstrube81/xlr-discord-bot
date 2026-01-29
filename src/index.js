@@ -51,7 +51,82 @@ import fs from "node:fs";
 
 /* *******************************************************
 END IMPORTS
-**********************************************************
+******************************************************** */
+/* ***************************************************************
+UI MESSAGE ID CONFIG (local container config)
+---
+We no longer attempt to write back into the bind-mounted .env file.
+Instead we persist per-server UI message IDs (nav/content) to a JSON
+file inside the container.
+
+Env behavior:
+- If UI_NAV_MESSAGE_ID[_N] / UI_CONTENT_MESSAGE_ID[_N] are set (non-empty),
+  they overwrite the local config on boot.
+- If env vars are blank/undefined, we keep whatever is in the local config.
+**************************************************************** */
+const UI_MSG_CONFIG_PATH =
+  process.env.UI_MSG_CONFIG_PATH ||
+  path.resolve(process.cwd(), "cfg", "ui-message-ids.json");
+
+function loadUiMessageIdConfig() {
+  try {
+    if (!fs.existsSync(UI_MSG_CONFIG_PATH)) return { version: 1, servers: {} };
+    const raw = fs.readFileSync(UI_MSG_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return { version: 1, servers: {} };
+    parsed.version ||= 1;
+    parsed.servers ||= {};
+    return parsed;
+  } catch (e) {
+    console.warn(`[ui-config] failed to read ${UI_MSG_CONFIG_PATH}:`, e?.message || e);
+    return { version: 1, servers: {} };
+  }
+}
+
+function saveUiMessageIdConfig(cfg) {
+  try {
+    const dir = path.dirname(UI_MSG_CONFIG_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(UI_MSG_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf8");
+  } catch (e) {
+    console.warn(`[ui-config] failed to write ${UI_MSG_CONFIG_PATH}:`, e?.message || e);
+  }
+}
+
+function getEnvForServerKey(key, serverIndex) {
+  const n = serverIndex + 1;
+  const envKey = n === 1 ? key : `${key}_${n}`;
+  const v = process.env[envKey];
+  const s = v == null ? "" : String(v).trim();
+  return s.length ? s : null;
+}
+
+function applyEnvOverridesToUiConfig(uiCfg, serverCount) {
+  let dirty = false;
+  for (let i = 0; i < serverCount; i++) {
+    const envNav = getEnvForServerKey("UI_NAV_MESSAGE_ID", i);
+    const envContent = getEnvForServerKey("UI_CONTENT_MESSAGE_ID", i);
+    if (!envNav && !envContent) continue;
+
+    const key = String(i + 1);
+    uiCfg.servers[key] ||= {};
+    if (envNav) uiCfg.servers[key].navId = envNav;
+    if (envContent) uiCfg.servers[key].contentId = envContent;
+    dirty = true;
+  }
+  if (dirty) saveUiMessageIdConfig(uiCfg);
+  return uiCfg;
+}
+
+function upsertUiMessageIdsForServer(serverIndex, patch) {
+  const key = String(serverIndex + 1);
+  UI_MESSAGE_ID_CFG.servers[key] ||= {};
+  if (patch?.navId) UI_MESSAGE_ID_CFG.servers[key].navId = String(patch.navId);
+  if (patch?.contentId) UI_MESSAGE_ID_CFG.servers[key].contentId = String(patch.contentId);
+  saveUiMessageIdConfig(UI_MESSAGE_ID_CFG);
+}
+
+/* *****************************************************
 START CONSTANTS
 ******************************************************** */
 const {
@@ -64,6 +139,9 @@ const {
 } = process.env;
 
 const SERVER_CONFIGS = collectServerConfigs(process.env); //parse .env file to get servers
+
+// Apply any explicit env overrides (if set) back into the local config
+applyEnvOverridesToUiConfig(UI_MESSAGE_ID_CFG, SERVER_CONFIGS.length);
 
 if(XLR_DEBUG) console.log(SERVER_CONFIGS);
 
@@ -1035,7 +1113,7 @@ async function ensureUIForServer(serverIndex) {
 	if (!navMsg) {
 		navMsg = await channel.send({ content: "", embeds: [], components: initial.nav });
 		//If Nav Message couldn't load, it must not exist, recreate it and update env
-		upsertEnvForServer(serverIndex, "UI_NAV_MESSAGE_ID", navMsg.id);
+		upsertUiMessageIdsForServer(serverIndex, { navId: navMsg.id });
 		cfg.ui.navId = navMsg.id;
 	}
 
@@ -1044,7 +1122,7 @@ async function ensureUIForServer(serverIndex) {
 	if (!contentMsg) {
 		contentMsg = await channel.send({ embeds: initial.embeds, components: initial.pager });
 		//If content Message couldn't load, it must not exist, recreate it and update env
-		upsertEnvForServer(serverIndex, "UI_CONTENT_MESSAGE_ID", contentMsg.id);
+		upsertUiMessageIdsForServer(serverIndex, { contentId: contentMsg.id });
 		cfg.ui.contentId = contentMsg.id;
 	}
     //Send message
