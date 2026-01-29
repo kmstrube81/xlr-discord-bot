@@ -1330,12 +1330,12 @@ async function buildHome(serverIndex, signal, token, channelId) {
 		hadError = true;
 		// set status to error
 		status = { error: summarizeAxiosError(e) };
-		console.warn(status.stringify());
+		console.warn(status);
 	}
 	
 	if(hadError){
 		console.warn("[home] error getting server status");
-		console.warn(status.stringify());
+		console.warn(status);
 	}
 
 	// Only do staleness checks if a ctx was provided
