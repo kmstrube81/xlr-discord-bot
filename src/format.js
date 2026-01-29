@@ -590,7 +590,7 @@ export function renderHomeEmbed({ totals }, data, tz, ip, port) {
 
 	const map = serverinfo?.mapname || "unknown";
 	const mode = serverinfo?.g_gametype || "N/A";
-	const hostname = serverinfo?.sv_hostname || error;
+	const hostname = serverinfo?.sv_hostname || "Unknown Server";
 	const playerCount = playerinfo?.length || 0;
 	const maxPlayers = serverinfo?.sv_maxclients || "?";
 

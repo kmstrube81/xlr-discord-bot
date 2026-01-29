@@ -1321,6 +1321,7 @@ async function buildHome(serverIndex, signal, token, channelId) {
 		//server status loaded but returned error - set error flag
 		if (status && status.error) hadError = true;
 	} catch (e) {
+		console.warn("[home] error getting server status");
 		// If this was canceled by a newer click, just return "stale" when we have a ctx
 		if ((e?.name === "CanceledError" || e?.code === "ERR_CANCELED")) {
 			return { stale: true };
@@ -1329,6 +1330,12 @@ async function buildHome(serverIndex, signal, token, channelId) {
 		hadError = true;
 		// set status to error
 		status = { error: summarizeAxiosError(e) };
+		console.warn(status.stringify());
+	}
+	
+	if(hadError){
+		console.warn("[home] error getting server status");
+		console.warn(status.stringify());
 	}
 
 	// Only do staleness checks if a ctx was provided
